@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>werejugo-backend</Name>
+  <Repository>ghcr.io/phlurblepoot/werejugo-backend:latest</Repository>
+  <Registry>https://github.com/phlurblepoot/werejugo/pkgs/container/werejugo-backend</Registry>
+  <Network>werejugo</Network>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Overview>Werejugo API server (Fastify). Runs DB migrations and seeds on start. Start after the database. Must share the custom "werejugo" network. Not exposed to the host — the frontend proxies to it.</Overview>
+  <Category>Other:</Category>
+  <WebUI/>
+  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/claude/laughing-edison-sTVtG/frontend/public/icon.svg</Icon>
+  <ExtraParams/>
+  <Description>Werejugo API server. Self-runs migrations + seed on startup.</Description>
+  <Networking>
+    <Mode>werejugo</Mode>
+  </Networking>
+  <Config Name="DATABASE_URL" Target="DATABASE_URL" Default="postgres://werejugo:CHANGE_ME@werejugo-db:5432/werejugo" Mode="" Description="Connection string. Host must match the db container name (werejugo-db). Password must match POSTGRES_PASSWORD." Type="Variable" Display="always" Required="true" Mask="false">postgres://werejugo:CHANGE_ME@werejugo-db:5432/werejugo</Config>
+  <Config Name="JWT_SECRET" Target="JWT_SECRET" Default="" Mode="" Description="Long random string used to sign login tokens." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="JWT_EXPIRES_IN" Target="JWT_EXPIRES_IN" Default="30d" Mode="" Description="Login session length." Type="Variable" Display="advanced" Required="false" Mask="false">30d</Config>
+  <Config Name="BACKEND_PORT" Target="BACKEND_PORT" Default="4000" Mode="" Description="Internal listen port (not published)." Type="Variable" Display="advanced" Required="false" Mask="false">4000</Config>
+  <Config Name="CRUISE_LOOKUP_ENABLED" Target="CRUISE_LOOKUP_ENABLED" Default="true" Mode="" Description="Best-effort CruiseMapper lookup." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="AERODATABOX_RAPIDAPI_KEY" Target="AERODATABOX_RAPIDAPI_KEY" Default="" Mode="" Description="Optional. Enables flight-number lookup." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="NOMINATIM_URL" Target="NOMINATIM_URL" Default="https://nominatim.openstreetmap.org" Mode="" Description="Geocoder for place/port search." Type="Variable" Display="advanced" Required="false" Mask="false">https://nominatim.openstreetmap.org</Config>
+  <Config Name="Uploads" Target="/app/uploads" Default="/mnt/user/appdata/werejugo/uploads" Mode="rw" Description="Stored photos/videos. BACK THIS UP." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/werejugo/uploads</Config>
+</Container>

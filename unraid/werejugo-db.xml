@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>werejugo-db</Name>
+  <Repository>postgis/postgis:16-3.4</Repository>
+  <Registry>https://hub.docker.com/r/postgis/postgis</Registry>
+  <Network>werejugo</Network>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Overview>PostgreSQL + PostGIS database for Werejugo. Start this container first. It must share the custom "werejugo" Docker network with the backend and frontend.</Overview>
+  <Category>Other:</Category>
+  <WebUI/>
+  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/claude/laughing-edison-sTVtG/frontend/public/icon.svg</Icon>
+  <ExtraParams/>
+  <Description>PostgreSQL + PostGIS database for Werejugo. Share the custom "werejugo" network with the other two containers.</Description>
+  <Networking>
+    <Mode>werejugo</Mode>
+  </Networking>
+  <Config Name="POSTGRES_USER" Target="POSTGRES_USER" Default="werejugo" Mode="" Description="Database user." Type="Variable" Display="always" Required="true" Mask="false">werejugo</Config>
+  <Config Name="POSTGRES_PASSWORD" Target="POSTGRES_PASSWORD" Default="" Mode="" Description="Database password. Use the SAME value in the backend's DATABASE_URL." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="POSTGRES_DB" Target="POSTGRES_DB" Default="werejugo" Mode="" Description="Database name." Type="Variable" Display="always" Required="true" Mask="false">werejugo</Config>
+  <Config Name="Data" Target="/var/lib/postgresql/data" Default="/mnt/user/appdata/werejugo/db" Mode="rw" Description="Database storage." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/werejugo/db</Config>
+</Container>

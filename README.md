@@ -112,6 +112,46 @@ service in `docker-compose.yml`.)
 
 ---
 
+## Install on unraid via the Add Container menu
+
+unraid's *Add Container* installs prebuilt images, so the backend and frontend are
+published to GitHub Container Registry by the
+[`publish-images`](.github/workflows/publish-images.yml) workflow. You then add
+three containers individually on a shared network.
+
+**One-time prep:**
+
+1. **Publish the images.** Push to the repo (or run the *Publish container images*
+   workflow from the Actions tab). Then make both packages public:
+   GitHub → Packages → `werejugo-backend` and `werejugo-frontend` →
+   Package settings → Change visibility → **Public**.
+2. **Create a shared network** (so the containers can find each other by name).
+   On the unraid console:
+   ```bash
+   docker network create werejugo
+   ```
+
+**Add the three containers** (drop-in templates are in [`unraid/`](unraid/), or fill
+the form manually). Set every container's **Network** to `werejugo`.
+
+| # | Name | Repository | Port | Key variables |
+|---|------|------------|------|----------------|
+| 1 | `werejugo-db` | `postgis/postgis:16-3.4` | — | `POSTGRES_USER=werejugo`, `POSTGRES_PASSWORD=<pw>`, `POSTGRES_DB=werejugo` · volume `/var/lib/postgresql/data` → `/mnt/user/appdata/werejugo/db` |
+| 2 | `werejugo-backend` | `ghcr.io/phlurblepoot/werejugo-backend:latest` | — | `DATABASE_URL=postgres://werejugo:<pw>@werejugo-db:5432/werejugo`, `JWT_SECRET=<random>` · volume `/app/uploads` → `/mnt/user/appdata/werejugo/uploads` |
+| 3 | `werejugo` (frontend) | `ghcr.io/phlurblepoot/werejugo-frontend:latest` | `8080:80` | `BACKEND_HOST=werejugo-backend`, `BACKEND_PORT=4000` |
+
+Start them in order (db → backend → frontend), then open `http://<unraid-ip>:8080`.
+
+Notes:
+- The `<pw>` in `DATABASE_URL` **must match** `POSTGRES_PASSWORD`.
+- The frontend's `BACKEND_HOST` **must equal the backend container's Name**; the
+  `DATABASE_URL` host **must equal the db container's Name**. Rename freely as long
+  as those line up.
+- Only the frontend publishes a port. The other two stay internal to the network.
+- Back up `/mnt/user/appdata/werejugo/uploads` — your photos/videos live there.
+
+---
+
 ## Configuration reference
 
 See `.env.example` for the full list. Highlights:

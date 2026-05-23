@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>werejugo</Name>
+  <Repository>ghcr.io/phlurblepoot/werejugo-frontend:latest</Repository>
+  <Registry>https://github.com/phlurblepoot/werejugo/pkgs/container/werejugo-frontend</Registry>
+  <Network>werejugo</Network>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Overview>Werejugo web app (nginx). Serves the UI and proxies /api + /uploads to the backend. This is the only container you expose. Open the WebUI to use the app. Start it last. Must share the custom "werejugo" network.</Overview>
+  <Category>Other:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/claude/laughing-edison-sTVtG/frontend/public/icon.svg</Icon>
+  <ExtraParams/>
+  <Description>Werejugo web app. The single container you expose; proxies the API internally.</Description>
+  <Networking>
+    <Mode>werejugo</Mode>
+  </Networking>
+  <Config Name="WebUI Port" Target="80" Default="8080" Mode="tcp" Description="Host port to open the app on." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="BACKEND_HOST" Target="BACKEND_HOST" Default="werejugo-backend" Mode="" Description="Name of the backend container on the shared network." Type="Variable" Display="always" Required="true" Mask="false">werejugo-backend</Config>
+  <Config Name="BACKEND_PORT" Target="BACKEND_PORT" Default="4000" Mode="" Description="Backend listen port." Type="Variable" Display="advanced" Required="true" Mask="false">4000</Config>
+</Container>

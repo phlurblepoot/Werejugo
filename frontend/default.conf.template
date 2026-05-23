@@ -1,0 +1,43 @@
+# Rendered at container start by nginx's envsubst entrypoint. BACKEND_HOST and
+# BACKEND_PORT come from the environment (defaults: backend / 4000), so the
+# backend container can be named anything and reached over a shared network.
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Allow photo / icon / overlay uploads (backend caps at 25 MB).
+  client_max_body_size 30m;
+
+  # Reverse-proxy the API. Using a variable + Docker's embedded DNS resolver
+  # (127.0.0.11) means nginx tolerates the backend starting later or moving IP.
+  location ^~ /api/ {
+    resolver 127.0.0.11 valid=30s;
+    set $api_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_pass $api_upstream$request_uri;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # User-uploaded media is served by the backend.
+  location ^~ /uploads/ {
+    resolver 127.0.0.11 valid=30s;
+    set $uploads_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_pass $uploads_upstream$request_uri;
+    proxy_set_header Host $host;
+  }
+
+  # SPA fallback.
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  location ~* \.(js|css|png|jpg|jpeg|gif|svg|woff2?)$ {
+    expires 7d;
+    add_header Cache-Control "public";
+  }
+}
