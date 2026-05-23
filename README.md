@@ -38,12 +38,15 @@ Everything runs on your own hardware via Docker. No third-party account required
 | Deploy   | Docker Compose (db + backend + frontend)                        |
 
 ```
-┌────────────┐      ┌────────────┐      ┌──────────────────┐
-│  frontend  │─────▶│  backend   │─────▶│ postgres+postgis │
-│ (nginx SPA)│ HTTP │ (Fastify)  │  SQL │                  │
-└────────────┘      └────────────┘      └──────────────────┘
-       │                   │
-       └─ vector tiles     └─ optional: flight/geocode/cruise lookups
+              one exposed port (8080)
+                       │
+┌──────────────────────────────────┐      ┌──────────────────┐
+│  frontend (nginx)                 │      │ postgres+postgis │
+│  • serves the SPA                 │      │                  │
+│  • proxies /api + /uploads ──────▶│ ───▶ │  (internal)      │
+└──────────────────────────────────┘ HTTP └──────────────────┘
+       │                    backend (Fastify, internal)
+       └─ vector tiles            └─ optional: flight/geocode/cruise lookups
           (OpenFreeMap)
 ```
 
@@ -66,17 +69,17 @@ Everything runs on your own hardware via Docker. No third-party account required
 The backend automatically runs database migrations and seeds reference data
 (airports, ports, built-in themes) on first start.
 
-### Important config
+### Single origin — only one port to expose
 
-If you access the app from anything other than `localhost`, set these in `.env`
-**before building** (the frontend bakes them in at build time):
+The frontend's nginx reverse-proxies `/api` and `/uploads` to the backend, so the
+**whole app lives behind one port** (`8080` by default). That means:
 
-```ini
-VITE_API_URL=http://<server-ip>:4000
-CORS_ORIGIN=http://<server-ip>:8080
-```
+- You only expose `FRONTEND_PORT`. The backend stays internal to the compose network.
+- No `VITE_API_URL` or `CORS_ORIGIN` to configure — it works at whatever
+  IP/hostname/reverse-proxy you put in front of it, with no rebuild needed.
 
-Then rebuild: `docker compose up -d --build`.
+(Want the API published for debugging? Uncomment the `ports` block on the `backend`
+service in `docker-compose.yml`.)
 
 ---
 
@@ -88,9 +91,10 @@ See `.env.example` for the full list. Highlights:
 | -------------------------- | -------------------------------------------------------------------- |
 | `JWT_SECRET`               | **Change this.** Signs login tokens.                                 |
 | `POSTGRES_PASSWORD`        | **Change this.** Database password (also update `DATABASE_URL`).     |
-| `VITE_API_URL`             | URL the browser uses to reach the backend.                           |
+| `FRONTEND_PORT`            | The single port the app is served on (default `8080`).               |
+| `VITE_API_URL`             | Leave blank for the default single-origin proxy setup.               |
 | `VITE_MAP_STYLE_URL`       | Vector tile style. Defaults to OpenFreeMap (free, no key).           |
-| `CORS_ORIGIN`              | Allowed origin(s) for the API, comma-separated.                      |
+| `CORS_ORIGIN`              | Only used if you publish the backend on its own origin.              |
 | `AERODATABOX_RAPIDAPI_KEY` | Optional. Enables flight-number → route lookup.                      |
 | `NOMINATIM_URL`            | Geocoder for place/port search. Defaults to public OSM Nominatim.    |
 | `CRUISE_LOOKUP_ENABLED`    | Toggle the best-effort CruiseMapper scraper.                         |
@@ -149,7 +153,7 @@ DATABASE_URL=postgres://user:pass@localhost:5432/werejugo JWT_SECRET=dev-secret 
 # frontend (separate terminal)
 cd frontend
 npm install
-VITE_API_URL=http://localhost:4000 npm run dev
+npm run dev   # Vite proxies /api and /uploads to localhost:4000 for you
 ```
 
 ## Roadmap ideas
