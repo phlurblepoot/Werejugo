@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# build output
+dist/
+build/
+**/dist/
+**/build/
+
+# env
+.env
+*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# uploads (user content) — persisted via docker volume, not committed
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# downloaded datasets (large, fetched at build/seed time)
+backend/src/data/airports.full.csv
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
