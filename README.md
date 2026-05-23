@@ -22,12 +22,37 @@ Everything runs on your own hardware via Docker. No third-party account required
   ship name via a best-effort CruiseMapper lookup (see caveats below).
 - **Road trips** are drawn through stops you search for.
 - **Themes & custom icons** — use the built-in icon set or upload your own images.
-- **Photos per item** — attach photos (with captions) to any pin; the first one
-  previews in the map popup. Upload straight from your phone's camera roll.
-- **Drag to reposition** — toggle "Move pins" and drag any point or route waypoint
-  to a new spot; routes recompute and changes save automatically.
 - **Custom base map** — replace the standard vector map with your own uploaded image
   overlay (e.g. a hand-drawn or fantasy map), positioned by geographic bounds.
+
+### Scrapbook & media
+- **Photos, video & audio per item** — attach media (with captions) to any pin.
+  Images get auto-generated thumbnails; the first photo previews in the map popup.
+- **Photo lightbox & gallery** — browse an item's media full-screen, or every photo
+  across a map set.
+- **EXIF auto-placement** — drop in a photo and place the pin from its embedded GPS,
+  filling the date too.
+- **Markdown notes** and **comments** — write rich notes per item; family members
+  can comment, and each item shows who added it.
+
+### Organising & exploring
+- **Trips** — group items into a vacation/outing with dates, colour and cover.
+- **Search & filters** — by text, item type, or trip.
+- **Timeline playback** — scrub or play through items by date to relive a journey.
+- **Legend / layer toggles** — show or hide item types on the map.
+- **Stats dashboard** — counts and total distance by travel mode (computed in PostGIS).
+- **Passport map** — highlight every country you've set foot in, with a count.
+- **Marker clustering** — dense areas collapse into clusters that expand on zoom.
+
+### Sharing, import & backup
+- **Read-only share links** — send relatives a `/s/<token>` URL; no account needed.
+- **Import GPX / KML / GeoJSON** — backfill tracks and places from other apps.
+- **Export** — download a full JSON backup of your family's data.
+
+### Anywhere
+- **Drag to reposition** — toggle "Move pins" and drag any point or route waypoint;
+  routes recompute and changes save automatically.
+- **Installable PWA** — add to your phone's home screen; responsive layout for mobile.
 
 ---
 
@@ -118,6 +143,10 @@ See `.env.example` for the full list. Highlights:
   usage policy, or point `NOMINATIM_URL` at your own instance for heavy use.
 - The bundled airport/port datasets cover major hubs. You can extend them in
   `backend/src/data/`.
+- **The passport map uses low-resolution country borders**, so pins right on a
+  coastline can occasionally miss the country. Inland points resolve reliably.
+- **Export is a JSON metadata backup** (includes media URLs, not the binary files).
+  Your uploaded media lives in the `uploads` Docker volume — back that up too.
 
 ---
 
@@ -162,6 +191,7 @@ npm run dev   # Vite proxies /api and /uploads to localhost:4000 for you
 
 ## Roadmap ideas
 
-- More modules beyond the map (timelines, recipe book, etc.).
-- A gallery / lightbox view of all photos across a map set.
-- Per-item attribution and filtering by family member.
+- Additional modules beyond the map (recipe book, family timeline, etc.).
+- Higher-resolution country borders for the passport map.
+- Filtering and colouring items by family member.
+- A printable "photo book" export of a trip.

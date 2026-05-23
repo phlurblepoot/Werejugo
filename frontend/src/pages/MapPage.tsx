@@ -4,6 +4,7 @@ import { api, type Item, type ItemKind, type MapSet, type Photo, type Theme } fr
 import { useAuth } from "../lib/auth";
 import { resolveItemStyle } from "../lib/style";
 import { buildRoutePath, type LngLat } from "../lib/geo";
+import { loadCountries, visitedCountryIds, type CountryCollection } from "../lib/countries";
 import { MapView } from "../components/MapView";
 import { Sidebar } from "../components/Sidebar";
 import { ItemEditor } from "../components/ItemEditor";
@@ -81,6 +82,33 @@ export function MapPage() {
       setTimelineOn(false);
     }
   }
+
+  // Passport: visited-countries highlight (lazy-loads bundled country polygons).
+  const [passportOn, setPassportOn] = useState(false);
+  const [visitedGeo, setVisitedGeo] = useState<{ type: "FeatureCollection"; features: unknown[] } | null>(null);
+  const [visitedCount, setVisitedCount] = useState(0);
+  const countriesRef = useRef<CountryCollection | null>(null);
+
+  async function computeVisited() {
+    if (!countriesRef.current) countriesRef.current = await loadCountries();
+    const ids = visitedCountryIds(items, countriesRef.current);
+    const features = countriesRef.current.features.filter((f) => ids.has(f.id ?? f.properties.name));
+    setVisitedGeo({ type: "FeatureCollection", features });
+    setVisitedCount(ids.size);
+  }
+  async function togglePassport() {
+    if (passportOn) {
+      setPassportOn(false);
+      setVisitedGeo(null);
+      return;
+    }
+    setPassportOn(true);
+    await computeVisited();
+  }
+  useEffect(() => {
+    if (passportOn) computeVisited();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, passportOn]);
 
   // Selection / modals
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -202,6 +230,7 @@ export function MapPage() {
               getStyle={(item) => resolveItemStyle(item, themesById)}
               pickMode={pickActive}
               editMode={editMode}
+              visitedGeo={visitedGeo}
               onPick={handlePick}
               onSelectItem={selectItem}
               onMovePoint={moveItemPoint}
@@ -213,6 +242,9 @@ export function MapPage() {
                   {editMode ? "✓ Done moving" : "✋ Move pins"}
                 </button>
                 <button className={timelineOn ? "primary" : ""} onClick={toggleTimeline}>🕐 Timeline</button>
+                <button className={passportOn ? "primary" : ""} onClick={togglePassport}>
+                  🌍 Passport{passportOn ? ` (${visitedCount})` : ""}
+                </button>
               </div>
             )}
             {editMode && <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>}

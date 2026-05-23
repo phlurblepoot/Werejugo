@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl, { type StyleSpecification } from "maplibre-gl";
+import Supercluster from "supercluster";
 import type { Item, MapSet } from "../api/client";
 import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
@@ -20,6 +21,7 @@ interface Props {
   getStyle: (item: Item) => ItemStyle;
   pickMode: boolean;
   editMode: boolean;
+  visitedGeo?: { type: "FeatureCollection"; features: unknown[] } | null;
   onPick: (lng: number, lat: number) => void;
   onSelectItem: (id: string) => void;
   onMovePoint: (item: Item, lng: number, lat: number) => void;
@@ -60,7 +62,7 @@ function styleFor(mapSet: MapSet): string | StyleSpecification {
 }
 
 export function MapView(props: Props) {
-  const { mapSet, items, selectedItemId, pickMode, editMode } = props;
+  const { mapSet, items, selectedItemId, pickMode, editMode, visitedGeo } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -86,6 +88,10 @@ export function MapView(props: Props) {
       if (pickRef.current) onPickRef(e.lngLat.lng, e.lngLat.lat);
     });
     map.on("load", () => renderAll());
+    // Re-cluster markers as the viewport changes.
+    map.on("moveend", () => {
+      if (mapRef.current?.isStyleLoaded()) renderMarkers(mapRef.current);
+    });
 
     return () => {
       markersRef.current.forEach((m) => m.remove());
@@ -115,7 +121,7 @@ export function MapView(props: Props) {
   useEffect(() => {
     renderAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, selectedItemId, editMode]);
+  }, [items, selectedItemId, editMode, visitedGeo]);
 
   // Fly to an item when it becomes selected.
   useEffect(() => {
@@ -130,8 +136,25 @@ export function MapView(props: Props) {
   function renderAll() {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
+    renderVisited(map);
     renderRoutes(map);
     renderMarkers(map);
+  }
+
+  function renderVisited(map: maplibregl.Map) {
+    const data = dataRef.current.visitedGeo ?? { type: "FeatureCollection", features: [] };
+    const existing = map.getSource("visited") as maplibregl.GeoJSONSource | undefined;
+    if (existing) {
+      existing.setData(data as never);
+    } else {
+      map.addSource("visited", { type: "geojson", data: data as never });
+      map.addLayer({
+        id: "visited-fill",
+        type: "fill",
+        source: "visited",
+        paint: { "fill-color": "#2563eb", "fill-opacity": 0.3, "fill-outline-color": "#60a5fa" },
+      });
+    }
   }
 
   function routeFeatures(override?: { itemId: string; coords: LngLat[] }) {
@@ -174,33 +197,59 @@ export function MapView(props: Props) {
 
   function renderMarkers(map: maplibregl.Map) {
     const { items, getStyle, onSelectItem, onMovePoint, onMoveWaypoint } = dataRef.current;
+    const handlers = { onSelectItem, onMoveWaypoint, onMovePoint };
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
+    // Route waypoints are always shown (not clustered).
     for (const item of items) {
-      const style = getStyle(item);
-
-      // Point items: a single draggable marker representing the geometry.
-      if (item.geometry?.type === "Point") {
-        const c = item.geometry.coordinates as number[];
-        const marker = makeMarker(map, item, style, [c[0], c[1]], null, {
-          onSelectItem,
-          onMoveWaypoint,
-          onMovePoint,
-        });
-        markersRef.current.push(marker);
-      }
-
-      // Route items: a draggable marker per waypoint.
+      if (item.geometry?.type === "Point") continue;
       item.waypoints.forEach((wp, index) => {
-        const marker = makeMarker(map, item, style, [wp.lng, wp.lat], index, {
-          onSelectItem,
-          onMoveWaypoint,
-          onMovePoint,
-        });
-        markersRef.current.push(marker);
+        markersRef.current.push(makeMarker(map, item, getStyle(item), [wp.lng, wp.lat], index, handlers));
       });
     }
+
+    // Point items are clustered by viewport + zoom.
+    const pointItems = items.filter((i) => i.geometry?.type === "Point");
+    const byId = new Map(pointItems.map((i) => [i.id, i]));
+    const index = new Supercluster<{ itemId: string }>({ radius: 50, maxZoom: 16 });
+    index.load(
+      pointItems.map((i) => {
+        const c = i.geometry!.coordinates as number[];
+        return {
+          type: "Feature" as const,
+          properties: { itemId: i.id },
+          geometry: { type: "Point" as const, coordinates: [c[0], c[1]] },
+        };
+      }),
+    );
+    const b = map.getBounds();
+    const bbox: [number, number, number, number] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    for (const c of index.getClusters(bbox, Math.round(map.getZoom()))) {
+      const [lng, lat] = c.geometry.coordinates as [number, number];
+      const props = c.properties as { cluster?: boolean; point_count?: number; cluster_id?: number; itemId?: string };
+      if (props.cluster) {
+        const el = buildClusterBadge(props.point_count ?? 0);
+        el.addEventListener("click", () => {
+          const z = Math.min(index.getClusterExpansionZoom(props.cluster_id!), 18);
+          map.easeTo({ center: [lng, lat], zoom: z });
+        });
+        markersRef.current.push(new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map));
+      } else {
+        const item = byId.get(props.itemId!);
+        if (item) markersRef.current.push(makeMarker(map, item, getStyle(item), [lng, lat], null, handlers));
+      }
+    }
+  }
+
+  function buildClusterBadge(count: number): HTMLDivElement {
+    const el = document.createElement("div");
+    el.textContent = String(count);
+    el.style.cssText =
+      "width:34px;height:34px;border-radius:50%;background:#1e293b;color:#e2e8f0;" +
+      "display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;" +
+      "border:2px solid #60a5fa;box-shadow:0 1px 6px rgba(0,0,0,0.5);";
+    return el;
   }
 
   function makeMarker(
