@@ -16,6 +16,7 @@ import { statsRoutes } from "./routes/stats.js";
 import { exifRoutes } from "./routes/exif.js";
 import { importRoutes } from "./routes/import.js";
 import { exportRoutes } from "./routes/export.js";
+import { shareRoutes } from "./routes/share.js";
 
 async function main(): Promise<void> {
   await mkdir(config.uploadsDir, { recursive: true });
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
   await app.register(exifRoutes);
   await app.register(importRoutes);
   await app.register(exportRoutes);
+  await app.register(shareRoutes);
 
   await app.listen({ host: "0.0.0.0", port: config.port });
 }

@@ -85,6 +85,20 @@ export interface Comment {
   author?: string | null;
 }
 
+export interface ShareLink {
+  id: string;
+  token: string;
+  createdAt: string;
+}
+
+export interface SharePayload {
+  mapSet: Omit<MapSet, "id" | "createdAt">;
+  trips: Array<Pick<Trip, "id" | "name" | "color" | "startDate" | "endDate">>;
+  items: Array<
+    Pick<Item, "id" | "kind" | "title" | "notes" | "color" | "icon" | "occurredOn" | "tripId" | "geometry" | "waypoints" | "photos">
+  >;
+}
+
 export interface Stats {
   items: number;
   photos: number;
@@ -253,6 +267,13 @@ export const api = {
     });
   },
   exportData: () => request<unknown>("/api/export"),
+
+  // share links
+  listShares: (mapSetId: string) => request<ShareLink[]>(`/api/map-sets/${mapSetId}/shares`),
+  createShare: (mapSetId: string) =>
+    request<ShareLink>(`/api/map-sets/${mapSetId}/shares`, { method: "POST", body: body({}) }),
+  deleteShare: (id: string) => request<void>(`/api/shares/${id}`, { method: "DELETE" }),
+  getShare: (token: string) => request<SharePayload>(`/api/share/${token}`),
 
   // themes
   listThemes: () => request<Theme[]>("/api/themes"),

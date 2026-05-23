@@ -14,6 +14,8 @@ import { TripsPanel } from "../components/TripsPanel";
 import { StatsPanel } from "../components/StatsPanel";
 import { GalleryPanel } from "../components/GalleryPanel";
 import { Lightbox } from "../components/Lightbox";
+import { TimelineBar } from "../components/TimelineBar";
+import { Legend } from "../components/Legend";
 
 export function MapPage() {
   const { user, family, logout } = useAuth();
@@ -53,6 +55,8 @@ export function MapPage() {
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<ItemKind[]>([]);
   const [tripFilter, setTripFilter] = useState("");
+  const [timelineOn, setTimelineOn] = useState(false);
+  const [timelineCursor, setTimelineCursor] = useState<string | null>(null);
   const toggleKind = (k: ItemKind) =>
     setKindFilter((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
 
@@ -63,9 +67,20 @@ export function MapPage() {
       if (kindFilter.length && !kindFilter.includes(i.kind)) return false;
       if (tripFilter === "none" && i.tripId) return false;
       if (tripFilter && tripFilter !== "none" && i.tripId !== tripFilter) return false;
+      if (timelineOn && timelineCursor && !(i.occurredOn && i.occurredOn <= timelineCursor)) return false;
       return true;
     });
-  }, [items, search, kindFilter, tripFilter]);
+  }, [items, search, kindFilter, tripFilter, timelineOn, timelineCursor]);
+
+  function toggleTimeline() {
+    if (!timelineOn) {
+      const dated = items.map((i) => i.occurredOn).filter(Boolean).sort() as string[];
+      setTimelineCursor(dated.length ? dated[dated.length - 1] : null);
+      setTimelineOn(true);
+    } else {
+      setTimelineOn(false);
+    }
+  }
 
   // Selection / modals
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -193,11 +208,23 @@ export function MapPage() {
               onMoveWaypoint={moveItemWaypoint}
             />
             {!pickActive && (
-              <button className={`map-edit-toggle ${editMode ? "primary" : ""}`} onClick={() => setEditMode((v) => !v)}>
-                {editMode ? "✓ Done moving" : "✋ Move pins"}
-              </button>
+              <div className="map-tools">
+                <button className={editMode ? "primary" : ""} onClick={() => setEditMode((v) => !v)}>
+                  {editMode ? "✓ Done moving" : "✋ Move pins"}
+                </button>
+                <button className={timelineOn ? "primary" : ""} onClick={toggleTimeline}>🕐 Timeline</button>
+              </div>
             )}
             {editMode && <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>}
+            <Legend items={items} kindFilter={kindFilter} onToggleKind={toggleKind} />
+            {timelineOn && (
+              <TimelineBar
+                items={items}
+                cursor={timelineCursor}
+                onCursor={setTimelineCursor}
+                onClose={() => setTimelineOn(false)}
+              />
+            )}
           </>
         ) : (
           <div className="centered">Create a map set to get started.</div>

@@ -299,10 +299,43 @@ textarea { resize: vertical; min-height: 60px; }
 .lightbox-nav.left { left: 12px; }
 .lightbox-nav.right { right: 12px; }
 
+/* ---- Map tools / legend / timeline ---- */
+.map-tools { position: absolute; top: 12px; left: 12px; z-index: 5; display: flex; gap: 6px; }
+.map-tools button { box-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+.legend {
+  position: absolute; bottom: 12px; left: 12px; z-index: 5;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px; max-width: 180px; box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+}
+.legend-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; cursor: pointer; border-radius: 4px; font-size: 12px; }
+.legend-row:hover { background: var(--panel-2); }
+.legend-row.off { opacity: 0.4; }
+.legend-swatch { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; }
+.legend-label { flex: 1; }
+.legend-count { color: var(--muted); }
+.timeline-bar {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 6;
+  width: min(640px, 90%); display: flex; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+  padding: 8px 14px; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.timeline-date { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 88px; text-align: right; }
+
 /* ---- Map edit mode ---- */
 .map-edit-toggle {
   position: absolute; top: 12px; left: 12px; z-index: 5;
   box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+}
+
+/* ---- Responsive (phones) ---- */
+@media (max-width: 720px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 52px 45vh 1fr;
+    grid-template-areas: "header" "map" "sidebar";
+  }
+  .sidebar { border-right: none; border-top: 1px solid var(--border); }
+  .app-header .who { display: none; }
 }
 .map-edit-banner {
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5;
