@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
-  API_URL,
   type CustomIcon,
   type Geometry,
   type Item,
@@ -15,6 +14,7 @@ import {
 import { KIND_DEFAULTS, KIND_LABELS } from "../lib/style";
 import { StylePicker } from "./StylePicker";
 import { PlaceSearch } from "./PlaceSearch";
+import { MediaThumb } from "./MediaThumb";
 
 interface Props {
   mapSet: MapSet;
@@ -200,7 +200,12 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
         </div>
 
         {isPoint ? (
-          <PointFields point={point} onPick={pickOnMap} onSelect={(lng, lat, label) => { setPoint([lng, lat]); if (!title) setTitle(label); }} />
+          <PointFields
+            point={point}
+            onPick={pickOnMap}
+            onSelect={(lng, lat, label) => { setPoint([lng, lat]); if (!title) setTitle(label); }}
+            onPhotoLocation={(lat, lng, date) => { setPoint([lng, lat]); if (date && !occurredOn) setOccurredOn(date); }}
+          />
         ) : kind === "flight" ? (
           <FlightFields setResult={(r) => applyLookup(r, setTitle, setStops, setPath, setWarnings, title)} />
         ) : kind === "cruise" ? (
@@ -265,7 +270,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
           <div className="photo-grid">
             {existingPhotos.map((p) => (
               <div key={p.id} className="photo-tile">
-                <img src={`${API_URL}${p.url}`} alt={p.caption} />
+                <MediaThumb photo={p} />
                 <button type="button" className="photo-remove" onClick={() => deleteExisting(p.id)}>✕</button>
                 <input
                   className="photo-caption"
@@ -277,7 +282,11 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
             ))}
             {pendingPhotos.map((p, i) => (
               <div key={i} className="photo-tile">
-                <img src={p.preview} alt="" />
+                {p.file.type.startsWith("image") ? (
+                  <img src={p.preview} alt="" />
+                ) : (
+                  <div className="media-placeholder">{p.file.type.startsWith("video") ? "▶" : "🎵"}</div>
+                )}
                 <button type="button" className="photo-remove" onClick={() => removePending(i)}>✕</button>
                 <input
                   className="photo-caption"
@@ -292,7 +301,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
           </div>
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,video/*,audio/*"
             multiple
             style={{ marginTop: 8 }}
             onChange={(e) => e.target.files && addFiles(e.target.files)}
@@ -343,20 +352,43 @@ function PointFields({
   point,
   onPick,
   onSelect,
+  onPhotoLocation,
 }: {
   point: [number, number] | null;
   onPick: () => void;
   onSelect: (lng: number, lat: number, label: string) => void;
+  onPhotoLocation: (lat: number, lng: number, date: string | null) => void;
 }) {
+  const [exifMsg, setExifMsg] = useState<string | null>(null);
+
+  async function fromPhoto(file: File) {
+    setExifMsg("Reading photo…");
+    try {
+      const { lat, lng, date } = await api.readExif(file);
+      if (lat != null && lng != null) {
+        onPhotoLocation(lat, lng, date);
+        setExifMsg("Placed from photo GPS ✓");
+      } else {
+        setExifMsg("No GPS found in that photo.");
+      }
+    } catch {
+      setExifMsg("Could not read that photo.");
+    }
+  }
+
   return (
     <div className="field">
       <label>Location</label>
       <PlaceSearch placeholder="Search a place or address…" search={api.searchPlaces} onSelect={(s) => onSelect(s.lng, s.lat, s.label)} />
       <div className="row" style={{ marginTop: 8, alignItems: "center" }}>
         <button type="button" onClick={onPick}>📍 Pick on map</button>
-        <div style={{ fontSize: 12, color: "var(--muted)" }}>
-          {point ? `${point[1].toFixed(4)}, ${point[0].toFixed(4)}` : "No location set"}
-        </div>
+        <label className="filebtn" style={{ margin: 0 }}>
+          📷 From photo
+          <input type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && fromPhoto(e.target.files[0])} />
+        </label>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
+        {exifMsg ?? (point ? `${point[1].toFixed(4)}, ${point[0].toFixed(4)}` : "No location set")}
       </div>
     </div>
   );

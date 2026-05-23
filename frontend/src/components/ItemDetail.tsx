@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, API_URL, type Item, type Trip, type User } from "../api/client";
+import { api, type Item, type Trip, type User } from "../api/client";
 import { KIND_LABELS } from "../lib/style";
 import { renderMarkdown } from "../lib/markdown";
+import { MediaThumb } from "./MediaThumb";
 
 interface Props {
   item: Item;
@@ -57,7 +58,7 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
           <div className="photo-grid" style={{ marginBottom: 12 }}>
             {item.photos.map((p, i) => (
               <div key={p.id} className="photo-tile" onClick={() => onOpenLightbox(i)} style={{ cursor: "pointer" }}>
-                <img src={`${API_URL}${p.url}`} alt={p.caption} />
+                <MediaThumb photo={p} />
               </div>
             ))}
           </div>

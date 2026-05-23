@@ -1,4 +1,5 @@
-import { API_URL, type Item, type Photo } from "../api/client";
+import { type Item, type Photo } from "../api/client";
+import { MediaThumb } from "./MediaThumb";
 
 interface Props {
   items: Item[];
@@ -19,7 +20,7 @@ export function GalleryPanel({ items, onClose, onOpen }: Props) {
           <div className="photo-grid">
             {photos.map((p, i) => (
               <div key={p.id} className="photo-tile" style={{ cursor: "pointer" }} onClick={() => onOpen(photos, i)}>
-                <img src={`${API_URL}${p.url}`} alt={p.caption} />
+                <MediaThumb photo={p} />
               </div>
             ))}
           </div>

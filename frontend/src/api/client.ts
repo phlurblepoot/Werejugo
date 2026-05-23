@@ -35,9 +35,13 @@ export interface Geometry {
   coordinates: number[] | number[][];
 }
 
+export type MediaType = "image" | "video" | "audio";
+
 export interface Photo {
   id: string;
   url: string;
+  thumbUrl: string | null;
+  mediaType: MediaType;
   caption: string;
   seq: number;
 }
@@ -230,6 +234,25 @@ export const api = {
 
   // stats
   getStats: (mapSetId: string) => request<Stats>(`/api/map-sets/${mapSetId}/stats`),
+
+  // exif / import / export
+  readExif: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ lat: number | null; lng: number | null; date: string | null }>("/api/exif", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  importFile: (mapSetId: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ imported: number; skipped: number }>(`/api/map-sets/${mapSetId}/import`, {
+      method: "POST",
+      body: fd,
+    });
+  },
+  exportData: () => request<unknown>("/api/export"),
 
   // themes
   listThemes: () => request<Theme[]>("/api/themes"),

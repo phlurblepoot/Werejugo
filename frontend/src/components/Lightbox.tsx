@@ -38,7 +38,16 @@ export function Lightbox({ photos, index, onIndex, onClose }: Props) {
         </button>
       )}
       <figure className="lightbox-figure" onClick={(e) => e.stopPropagation()}>
-        <img src={`${API_URL}${photo.url}`} alt={photo.caption} />
+        {photo.mediaType === "video" ? (
+          <video src={`${API_URL}${photo.url}`} controls autoPlay style={{ maxWidth: "92vw", maxHeight: "84vh" }} />
+        ) : photo.mediaType === "audio" ? (
+          <div style={{ padding: 40 }}>
+            <div style={{ fontSize: 64 }}>🎵</div>
+            <audio src={`${API_URL}${photo.url}`} controls autoPlay />
+          </div>
+        ) : (
+          <img src={`${API_URL}${photo.url}`} alt={photo.caption} />
+        )}
         {photo.caption && <figcaption>{photo.caption}</figcaption>}
         {photos.length > 1 && (
           <div className="lightbox-count">{index + 1} / {photos.length}</div>

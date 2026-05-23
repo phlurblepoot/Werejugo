@@ -125,6 +125,17 @@ export function MapPage() {
     refreshItems();
   }
 
+  async function exportData() {
+    const data = await api.exportData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `werejugo-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -137,6 +148,7 @@ export function MapPage() {
           </span>
         )}
         <span className="who">{user?.displayName}</span>
+        <button onClick={exportData} title="Download a JSON backup of your family's data">⬇ Export</button>
         <button onClick={logout}>Sign out</button>
       </header>
 
@@ -223,6 +235,7 @@ export function MapPage() {
           onClose={() => setMapSetEditor({ open: false, mapSet: null })}
           onSaved={(m) => { setMapSetEditor({ open: false, mapSet: null }); setCurrentMapSetId(m.id); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
           onDeleted={(id) => { setMapSetEditor({ open: false, mapSet: null }); if (currentMapSetId === id) setCurrentMapSetId(null); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
+          onImported={() => { if (mapSetEditor.mapSet) qc.invalidateQueries({ queryKey: ["items", mapSetEditor.mapSet.id] }); }}
         />
       )}
 

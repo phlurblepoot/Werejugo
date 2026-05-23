@@ -6,10 +6,24 @@ interface Props {
   onClose: () => void;
   onSaved: (m: MapSet) => void;
   onDeleted: (id: string) => void;
+  onImported: () => void;
 }
 
-export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted }: Props) {
+export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }: Props) {
   const editing = Boolean(mapSet);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  async function importFile(file: File) {
+    if (!mapSet) return;
+    setImportMsg("Importing…");
+    try {
+      const { imported, skipped } = await api.importFile(mapSet.id, file);
+      setImportMsg(`Imported ${imported} item(s)${skipped ? `, skipped ${skipped}` : ""}.`);
+      onImported();
+    } catch (e) {
+      setImportMsg(e instanceof Error ? e.message : "Import failed");
+    }
+  }
   const [name, setName] = useState(mapSet?.name ?? "");
   const [description, setDescription] = useState(mapSet?.description ?? "");
   const [baseKind, setBaseKind] = useState<"vector" | "custom">(mapSet?.baseKind ?? "vector");
@@ -124,6 +138,22 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted }: Props) {
                 These tell the map where to place your image (corner longitudes/latitudes).
               </div>
             </div>
+          </>
+        )}
+
+        {editing && (
+          <>
+            <div className="section-title"><span>Import items</span></div>
+            <label className="filebtn">
+              Choose GPX / KML / GeoJSON file…
+              <input
+                type="file"
+                accept=".gpx,.kml,.geojson,.json,application/json"
+                hidden
+                onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])}
+              />
+            </label>
+            {importMsg && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{importMsg}</div>}
           </>
         )}
 

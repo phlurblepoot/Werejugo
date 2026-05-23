@@ -16,11 +16,15 @@
     "@fastify/jwt": "^9.0.1",
     "@fastify/multipart": "^9.0.1",
     "@fastify/static": "^8.0.3",
+    "@tmcw/togeojson": "^7.1.2",
+    "@xmldom/xmldom": "^0.9.10",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.0.0",
+    "exifr": "^7.1.3",
     "fastify": "^5.1.0",
     "nanoid": "^5.0.9",
     "pg": "^8.13.1",
+    "sharp": "^0.34.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {

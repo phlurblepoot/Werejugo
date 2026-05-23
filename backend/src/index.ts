@@ -13,6 +13,9 @@ import { uploadRoutes } from "./routes/uploads.js";
 import { lookupRoutes } from "./routes/lookup.js";
 import { tripRoutes } from "./routes/trips.js";
 import { statsRoutes } from "./routes/stats.js";
+import { exifRoutes } from "./routes/exif.js";
+import { importRoutes } from "./routes/import.js";
+import { exportRoutes } from "./routes/export.js";
 
 async function main(): Promise<void> {
   await mkdir(config.uploadsDir, { recursive: true });
@@ -37,6 +40,9 @@ async function main(): Promise<void> {
   await app.register(lookupRoutes);
   await app.register(tripRoutes);
   await app.register(statsRoutes);
+  await app.register(exifRoutes);
+  await app.register(importRoutes);
+  await app.register(exportRoutes);
 
   await app.listen({ host: "0.0.0.0", port: config.port });
 }
