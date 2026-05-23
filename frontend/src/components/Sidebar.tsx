@@ -76,6 +76,7 @@ export function Sidebar(props: Props) {
                 {KIND_LABELS[item.kind]}
                 {item.occurredOn ? ` · ${item.occurredOn}` : ""}
                 {item.waypoints.length ? <span className="tag">{item.waypoints.length} stops</span> : null}
+                {item.photos.length ? <span className="tag">📷 {item.photos.length}</span> : null}
               </div>
             </div>
             <button className="ghost" onClick={(e) => { e.stopPropagation(); props.onEditItem(item); }}>✎</button>

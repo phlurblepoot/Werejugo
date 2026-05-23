@@ -221,3 +221,35 @@ textarea { resize: vertical; min-height: 60px; }
   background: var(--panel-2); color: var(--muted); margin-left: 6px;
 }
 .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+/* ---- Photos ---- */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.photo-tile { position: relative; }
+.photo-tile img {
+  width: 100%; height: 72px; object-fit: cover;
+  border-radius: var(--radius); border: 1px solid var(--border); display: block;
+}
+.photo-tile .photo-remove {
+  position: absolute; top: 2px; right: 2px;
+  width: 20px; height: 20px; padding: 0; border-radius: 50%;
+  background: rgba(0,0,0,0.65); border: none; font-size: 11px; line-height: 1;
+}
+.photo-tile .photo-caption {
+  margin-top: 4px; padding: 4px 6px; font-size: 11px;
+}
+
+/* ---- Map edit mode ---- */
+.map-edit-toggle {
+  position: absolute; top: 12px; left: 12px; z-index: 5;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+}
+.map-edit-banner {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5;
+  background: var(--panel); border: 1px solid var(--accent);
+  color: var(--text); font-size: 12px; padding: 6px 12px; border-radius: 999px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+}

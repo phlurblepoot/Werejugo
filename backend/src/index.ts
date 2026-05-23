@@ -22,7 +22,7 @@ async function main(): Promise<void> {
     credentials: true,
   });
   await app.register(jwt, { secret: config.jwtSecret, sign: { expiresIn: config.jwtExpiresIn } });
-  await app.register(multipart, { limits: { fileSize: 15 * 1024 * 1024 } });
+  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
   await app.register(fastifyStatic, { root: config.uploadsDir, prefix: "/uploads/" });
 
   app.get("/api/health", async () => ({ ok: true }));

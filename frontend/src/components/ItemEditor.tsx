@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
+  API_URL,
   type CustomIcon,
   type Geometry,
   type Item,
   type ItemKind,
   type MapSet,
+  type Photo,
   type Theme,
   type Waypoint,
 } from "../api/client";
@@ -47,11 +49,46 @@ export function ItemEditor({ mapSet, item, themes, customIcons, onRequestPick, o
   const [path, setPath] = useState<number[][]>(initialPath);
   const [warnings, setWarnings] = useState<string[]>([]);
 
+  const [existingPhotos, setExistingPhotos] = useState<Photo[]>(item?.photos ?? []);
+  const [pendingPhotos, setPendingPhotos] = useState<{ file: File; caption: string; preview: string }[]>([]);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
 
   const isPoint = POINT_KINDS.includes(kind);
+
+  // Release object URLs for staged previews when the editor unmounts.
+  useEffect(() => {
+    return () => pendingPhotos.forEach((p) => URL.revokeObjectURL(p.preview));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function addFiles(files: FileList) {
+    const next = Array.from(files).map((file) => ({
+      file,
+      caption: "",
+      preview: URL.createObjectURL(file),
+    }));
+    setPendingPhotos((prev) => [...prev, ...next]);
+  }
+
+  function removePending(index: number) {
+    setPendingPhotos((prev) => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  async function deleteExisting(id: string) {
+    await api.deletePhoto(id);
+    setExistingPhotos((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  async function saveCaption(id: string, caption: string) {
+    setExistingPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
+    await api.updatePhoto(id, caption);
+  }
 
   function applyKind(k: ItemKind) {
     setKind(k);
@@ -114,8 +151,12 @@ export function ItemEditor({ mapSet, item, themes, customIcons, onRequestPick, o
 
     setBusy(true);
     try {
-      if (editing && item) await api.updateItem(item.id, payload);
-      else await api.createItem(mapSet.id, payload);
+      const saved =
+        editing && item ? await api.updateItem(item.id, payload) : await api.createItem(mapSet.id, payload);
+      // Upload any staged photos against the saved item.
+      for (const p of pendingPhotos) {
+        await api.uploadItemPhoto(saved.id, p.file, p.caption);
+      }
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
@@ -203,6 +244,50 @@ export function ItemEditor({ mapSet, item, themes, customIcons, onRequestPick, o
         <div className="field">
           <label>Notes</label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Photos</label>
+          <div className="photo-grid">
+            {existingPhotos.map((p) => (
+              <div key={p.id} className="photo-tile">
+                <img src={`${API_URL}${p.url}`} alt={p.caption} />
+                <button type="button" className="photo-remove" onClick={() => deleteExisting(p.id)}>✕</button>
+                <input
+                  className="photo-caption"
+                  defaultValue={p.caption}
+                  placeholder="Caption…"
+                  onBlur={(e) => e.target.value !== p.caption && saveCaption(p.id, e.target.value)}
+                />
+              </div>
+            ))}
+            {pendingPhotos.map((p, i) => (
+              <div key={i} className="photo-tile">
+                <img src={p.preview} alt="" />
+                <button type="button" className="photo-remove" onClick={() => removePending(i)}>✕</button>
+                <input
+                  className="photo-caption"
+                  value={p.caption}
+                  placeholder="Caption…"
+                  onChange={(e) =>
+                    setPendingPhotos((prev) => prev.map((x, j) => (j === i ? { ...x, caption: e.target.value } : x)))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ marginTop: 8 }}
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
+          />
+          {pendingPhotos.length > 0 && (
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+              {pendingPhotos.length} photo(s) will upload when you save.
+            </div>
+          )}
         </div>
 
         {error && <div className="error-text">{error}</div>}

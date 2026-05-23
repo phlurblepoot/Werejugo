@@ -35,6 +35,13 @@ export interface Geometry {
   coordinates: number[] | number[][];
 }
 
+export interface Photo {
+  id: string;
+  url: string;
+  caption: string;
+  seq: number;
+}
+
 export interface Item {
   id: string;
   mapSetId: string;
@@ -47,6 +54,7 @@ export interface Item {
   occurredOn: string | null;
   geometry: Geometry | null;
   waypoints: Waypoint[];
+  photos: Photo[];
   createdBy: string | null;
   createdAt: string;
 }
@@ -161,6 +169,17 @@ export const api = {
   updateItem: (id: string, data: Partial<Item>) =>
     request<Item>(`/api/items/${id}`, { method: "PATCH", body: body(data) }),
   deleteItem: (id: string) => request<void>(`/api/items/${id}`, { method: "DELETE" }),
+
+  // photos
+  uploadItemPhoto: (itemId: string, file: File, caption = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("caption", caption);
+    return request<Photo>(`/api/items/${itemId}/photos`, { method: "POST", body: fd });
+  },
+  updatePhoto: (id: string, caption: string) =>
+    request<Photo>(`/api/photos/${id}`, { method: "PATCH", body: body({ caption }) }),
+  deletePhoto: (id: string) => request<void>(`/api/photos/${id}`, { method: "DELETE" }),
 
   // themes
   listThemes: () => request<Theme[]>("/api/themes"),

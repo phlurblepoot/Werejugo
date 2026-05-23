@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Item, type MapSet, type Theme } from "../api/client";
 import { useAuth } from "../lib/auth";
 import { resolveItemStyle } from "../lib/style";
+import { buildRoutePath, type LngLat } from "../lib/geo";
 import { MapView } from "../components/MapView";
 import { Sidebar } from "../components/Sidebar";
 import { ItemEditor } from "../components/ItemEditor";
@@ -45,6 +46,7 @@ export function MapPage() {
     mapSet: null,
   });
   const [showManage, setShowManage] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   // Map "pick a location" coordination.
   const [pickActive, setPickActive] = useState(false);
@@ -64,6 +66,22 @@ export function MapPage() {
   }
 
   const refreshItems = () => qc.invalidateQueries({ queryKey: ["items", currentMapSetId] });
+
+  async function moveItemPoint(item: Item, lng: number, lat: number) {
+    await api.updateItem(item.id, { geometry: { type: "Point", coordinates: [lng, lat] } });
+    refreshItems();
+  }
+
+  async function moveItemWaypoint(item: Item, index: number, lng: number, lat: number) {
+    const waypoints = item.waypoints.map((w, i) => (i === index ? { ...w, lng, lat } : w));
+    const coords = waypoints.map((w) => [w.lng, w.lat] as LngLat);
+    const path = buildRoutePath(item.kind, coords);
+    await api.updateItem(item.id, {
+      waypoints,
+      geometry: { type: "LineString", coordinates: path },
+    });
+    refreshItems();
+  }
 
   return (
     <div className="app">
@@ -103,15 +121,31 @@ export function MapPage() {
 
       <div className="map-area">
         {currentMapSet ? (
-          <MapView
-            mapSet={currentMapSet}
-            items={items}
-            selectedItemId={selectedItemId}
-            getStyle={(item) => resolveItemStyle(item, themesById)}
-            pickMode={pickActive}
-            onPick={handlePick}
-            onSelectItem={setSelectedItemId}
-          />
+          <>
+            <MapView
+              mapSet={currentMapSet}
+              items={items}
+              selectedItemId={selectedItemId}
+              getStyle={(item) => resolveItemStyle(item, themesById)}
+              pickMode={pickActive}
+              editMode={editMode}
+              onPick={handlePick}
+              onSelectItem={setSelectedItemId}
+              onMovePoint={moveItemPoint}
+              onMoveWaypoint={moveItemWaypoint}
+            />
+            {!pickActive && (
+              <button
+                className={`map-edit-toggle ${editMode ? "primary" : ""}`}
+                onClick={() => setEditMode((v) => !v)}
+              >
+                {editMode ? "✓ Done moving" : "✋ Move pins"}
+              </button>
+            )}
+            {editMode && (
+              <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>
+            )}
+          </>
         ) : (
           <div className="centered">Create a map set to get started.</div>
         )}

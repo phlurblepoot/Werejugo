@@ -22,6 +22,10 @@ Everything runs on your own hardware via Docker. No third-party account required
   ship name via a best-effort CruiseMapper lookup (see caveats below).
 - **Road trips** are drawn through stops you search for.
 - **Themes & custom icons** — use the built-in icon set or upload your own images.
+- **Photos per item** — attach photos (with captions) to any pin; the first one
+  previews in the map popup. Upload straight from your phone's camera roll.
+- **Drag to reposition** — toggle "Move pins" and drag any point or route waypoint
+  to a new spot; routes recompute and changes save automatically.
 - **Custom base map** — replace the standard vector map with your own uploaded image
   overlay (e.g. a hand-drawn or fantasy map), positioned by geographic bounds.
 
@@ -158,7 +162,6 @@ npm run dev   # Vite proxies /api and /uploads to localhost:4000 for you
 
 ## Roadmap ideas
 
-- Drag-to-edit waypoints directly on the map.
-- Photo attachments per item (the scrapbook angle).
 - More modules beyond the map (timelines, recipe book, etc.).
-- Self-hosted offline map tiles option.
+- A gallery / lightbox view of all photos across a map set.
+- Per-item attribution and filtering by family member.

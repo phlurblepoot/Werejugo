@@ -4,6 +4,7 @@ import type { Item, MapSet } from "../api/client";
 import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
+import { buildRoutePath, type LngLat } from "../lib/geo";
 
 export interface ItemStyle {
   color: string;
@@ -18,8 +19,11 @@ interface Props {
   selectedItemId: string | null;
   getStyle: (item: Item) => ItemStyle;
   pickMode: boolean;
+  editMode: boolean;
   onPick: (lng: number, lat: number) => void;
   onSelectItem: (id: string) => void;
+  onMovePoint: (item: Item, lng: number, lat: number) => void;
+  onMoveWaypoint: (item: Item, index: number, lng: number, lat: number) => void;
 }
 
 function absoluteUrl(url: string): string {
@@ -55,18 +59,18 @@ function styleFor(mapSet: MapSet): string | StyleSpecification {
   return mapSet.styleUrl || MAP_STYLE_URL;
 }
 
-export function MapView({ mapSet, items, selectedItemId, getStyle, pickMode, onPick, onSelectItem }: Props) {
+export function MapView(props: Props) {
+  const { mapSet, items, selectedItemId, pickMode, editMode } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const pickRef = useRef(pickMode);
   pickRef.current = pickMode;
 
-  // Latest data, read inside event handlers without re-binding.
-  const dataRef = useRef({ items, getStyle, selectedItemId, onSelectItem });
-  dataRef.current = { items, getStyle, selectedItemId, onSelectItem };
+  // Latest props for use inside long-lived event handlers.
+  const dataRef = useRef(props);
+  dataRef.current = props;
 
-  // Initialise the map once.
   useEffect(() => {
     if (!containerRef.current) return;
     const map = new maplibregl.Map({
@@ -79,7 +83,7 @@ export function MapView({ mapSet, items, selectedItemId, getStyle, pickMode, onP
     mapRef.current = map;
 
     map.on("click", (e) => {
-      if (pickRef.current) onPick(e.lngLat.lng, e.lngLat.lat);
+      if (pickRef.current) onPickRef(e.lngLat.lng, e.lngLat.lat);
     });
     map.on("load", () => renderAll());
 
@@ -92,7 +96,8 @@ export function MapView({ mapSet, items, selectedItemId, getStyle, pickMode, onP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-apply the base style when the map set's base changes.
+  const onPickRef = (lng: number, lat: number) => dataRef.current.onPick(lng, lat);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -101,18 +106,16 @@ export function MapView({ mapSet, items, selectedItemId, getStyle, pickMode, onP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapSet.id, mapSet.baseKind, mapSet.overlayUrl, mapSet.styleUrl, JSON.stringify(mapSet.overlayBounds)]);
 
-  // Cursor feedback for pick mode.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     map.getCanvas().style.cursor = pickMode ? "crosshair" : "";
   }, [pickMode]);
 
-  // Re-render features when items or selection change.
   useEffect(() => {
     renderAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, selectedItemId]);
+  }, [items, selectedItemId, editMode]);
 
   function renderAll() {
     const map = mapRef.current;
@@ -121,17 +124,25 @@ export function MapView({ mapSet, items, selectedItemId, getStyle, pickMode, onP
     renderMarkers(map);
   }
 
-  function renderRoutes(map: maplibregl.Map) {
+  function routeFeatures(override?: { itemId: string; coords: LngLat[] }) {
     const { items, getStyle } = dataRef.current;
-    const features = items
+    return items
       .filter((it) => it.geometry?.type === "LineString")
-      .map((it) => ({
-        type: "Feature" as const,
-        properties: { color: getStyle(it).lineColor, width: getStyle(it).lineWidth },
-        geometry: it.geometry!,
-      }));
-    const data = { type: "FeatureCollection" as const, features };
+      .map((it) => {
+        const coords =
+          override && override.itemId === it.id
+            ? override.coords
+            : (it.geometry!.coordinates as number[][]);
+        return {
+          type: "Feature" as const,
+          properties: { color: getStyle(it).lineColor, width: getStyle(it).lineWidth },
+          geometry: { type: "LineString" as const, coordinates: coords },
+        };
+      });
+  }
 
+  function renderRoutes(map: maplibregl.Map, override?: { itemId: string; coords: LngLat[] }) {
+    const data = { type: "FeatureCollection" as const, features: routeFeatures(override) };
     const existing = map.getSource("routes") as maplibregl.GeoJSONSource | undefined;
     if (existing) {
       existing.setData(data as never);
@@ -152,38 +163,92 @@ export function MapView({ mapSet, items, selectedItemId, getStyle, pickMode, onP
   }
 
   function renderMarkers(map: maplibregl.Map) {
-    const { items, getStyle, onSelectItem } = dataRef.current;
+    const { items, getStyle, onSelectItem, onMovePoint, onMoveWaypoint } = dataRef.current;
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     for (const item of items) {
       const style = getStyle(item);
-      const points: Array<{ lng: number; lat: number; label?: string }> = [];
 
+      // Point items: a single draggable marker representing the geometry.
       if (item.geometry?.type === "Point") {
         const c = item.geometry.coordinates as number[];
-        points.push({ lng: c[0], lat: c[1] });
-      }
-      for (const wp of item.waypoints) {
-        points.push({ lng: wp.lng, lat: wp.lat, label: wp.label });
-      }
-      // A point item with no geometry/waypoints can't be placed.
-      for (const p of points) {
-        const el = buildBadge(style);
-        const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([p.lng, p.lat])
-          .setPopup(
-            new maplibregl.Popup({ offset: 18 }).setHTML(
-              `<div class="title">${escapeHtml(item.title)}</div>` +
-                (p.label ? `<div class="sub">${escapeHtml(p.label)}</div>` : "") +
-                (item.occurredOn ? `<div class="sub">${escapeHtml(item.occurredOn)}</div>` : ""),
-            ),
-          )
-          .addTo(map);
-        el.addEventListener("click", () => onSelectItem(item.id));
+        const marker = makeMarker(map, item, style, [c[0], c[1]], null, {
+          onSelectItem,
+          onMoveWaypoint,
+          onMovePoint,
+        });
         markersRef.current.push(marker);
       }
+
+      // Route items: a draggable marker per waypoint.
+      item.waypoints.forEach((wp, index) => {
+        const marker = makeMarker(map, item, style, [wp.lng, wp.lat], index, {
+          onSelectItem,
+          onMoveWaypoint,
+          onMovePoint,
+        });
+        markersRef.current.push(marker);
+      });
     }
+  }
+
+  function makeMarker(
+    map: maplibregl.Map,
+    item: Item,
+    style: ItemStyle,
+    lngLat: LngLat,
+    waypointIndex: number | null,
+    handlers: {
+      onSelectItem: (id: string) => void;
+      onMoveWaypoint: (item: Item, index: number, lng: number, lat: number) => void;
+      onMovePoint: (item: Item, lng: number, lat: number) => void;
+    },
+  ): maplibregl.Marker {
+    const el = buildBadge(style);
+    const wp = waypointIndex !== null ? item.waypoints[waypointIndex] : null;
+    const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode })
+      .setLngLat(lngLat)
+      .setPopup(buildPopup(item, wp?.label))
+      .addTo(map);
+
+    let dragged = false;
+    marker.on("dragstart", () => {
+      dragged = false;
+    });
+    marker.on("drag", () => {
+      dragged = true;
+      // Live-update the route line as a waypoint is dragged.
+      if (waypointIndex !== null) {
+        const ll = marker.getLngLat();
+        const coords: LngLat[] = item.waypoints.map((w, i) =>
+          i === waypointIndex ? [ll.lng, ll.lat] : [w.lng, w.lat],
+        );
+        renderRoutes(map, { itemId: item.id, coords: buildRoutePath(item.kind, coords) });
+      }
+    });
+    marker.on("dragend", () => {
+      const ll = marker.getLngLat();
+      if (waypointIndex !== null) handlers.onMoveWaypoint(item, waypointIndex, ll.lng, ll.lat);
+      else handlers.onMovePoint(item, ll.lng, ll.lat);
+    });
+    el.addEventListener("click", () => {
+      if (!dragged) handlers.onSelectItem(item.id);
+    });
+    return marker;
+  }
+
+  function buildPopup(item: Item, label?: string): maplibregl.Popup {
+    const photo = item.photos[0];
+    const html =
+      (photo
+        ? `<img src="${absoluteUrl(photo.url)}" style="width:100%;max-height:140px;object-fit:cover;border-radius:4px;margin-bottom:6px;" />`
+        : "") +
+      `<div class="title">${escapeHtml(item.title)}</div>` +
+      (label ? `<div class="sub">${escapeHtml(label)}</div>` : "") +
+      (item.occurredOn ? `<div class="sub">${escapeHtml(item.occurredOn)}</div>` : "") +
+      (item.photos.length > 1 ? `<div class="sub">${item.photos.length} photos</div>` : "");
+    return new maplibregl.Popup({ offset: 18, maxWidth: "260px" }).setHTML(html);
   }
 
   function buildBadge(style: ItemStyle): HTMLDivElement {

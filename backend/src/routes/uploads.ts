@@ -1,30 +1,13 @@
-import { createWriteStream } from "node:fs";
-import { mkdir } from "node:fs/promises";
-import { extname, join } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { customAlphabet } from "nanoid";
 import type { FastifyInstance } from "fastify";
-import { config } from "../config.js";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-
-const fileId = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
-const ALLOWED = new Set([".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp"]);
+import { saveUpload } from "../lib/upload.js";
 
 // Built-in icon names the frontend knows how to render.
 export const BUILTIN_ICONS = [
   "pin", "plane", "ship", "car", "utensils", "home", "star", "camera",
   "heart", "flag", "mountain", "tree", "beach", "hotel", "coffee", "wine",
 ];
-
-async function saveUpload(part: { filename: string; file: NodeJS.ReadableStream }): Promise<string> {
-  const ext = extname(part.filename).toLowerCase();
-  if (!ALLOWED.has(ext)) throw new Error("UNSUPPORTED_TYPE");
-  await mkdir(config.uploadsDir, { recursive: true });
-  const name = `${fileId()}${ext}`;
-  await pipeline(part.file, createWriteStream(join(config.uploadsDir, name)));
-  return `/uploads/${name}`;
-}
 
 export async function uploadRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);

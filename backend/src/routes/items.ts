@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { deleteUploadFile, saveUpload } from "../lib/upload.js";
 
 const geometrySchema = z
   .object({
@@ -65,6 +66,10 @@ async function loadItem(itemId: string) {
      FROM item_waypoints WHERE item_id = $1 ORDER BY seq ASC`,
     [itemId],
   );
+  const photos = await query<any>(
+    `SELECT id, url, caption, seq FROM item_photos WHERE item_id = $1 ORDER BY seq ASC, created_at ASC`,
+    [itemId],
+  );
   return {
     id: r.id,
     mapSetId: r.map_set_id,
@@ -89,7 +94,22 @@ async function loadItem(itemId: string) {
       arriveAt: w.arrive_at,
       departAt: w.depart_at,
     })),
+    photos: photos.rows.map((p) => ({ id: p.id, url: p.url, caption: p.caption, seq: p.seq })),
   };
+}
+
+async function ownsPhoto(
+  familyId: string,
+  photoId: string,
+): Promise<{ itemId: string; url: string } | null> {
+  const { rows } = await query<{ item_id: string; url: string }>(
+    `SELECT p.item_id, p.url FROM item_photos p
+     JOIN items i ON i.id = p.item_id
+     JOIN map_sets m ON m.id = i.map_set_id
+     WHERE p.id = $1 AND m.family_id = $2`,
+    [photoId, familyId],
+  );
+  return rows[0] ? { itemId: rows[0].item_id, url: rows[0].url } : null;
 }
 
 async function insertWaypoints(
@@ -219,6 +239,63 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: "Not found" });
     }
     await query("DELETE FROM items WHERE id = $1", [id]);
+    return reply.code(204).send();
+  });
+
+  // --- Photos ---
+
+  app.post("/api/items/:id/photos", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ownsItem(req.user.familyId, id))) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    let url: string | null = null;
+    let caption = "";
+    for await (const part of req.parts()) {
+      if (part.type === "file") {
+        try {
+          url = await saveUpload(part);
+        } catch {
+          return reply.code(400).send({ error: "Unsupported file type" });
+        }
+      } else if (part.fieldname === "caption" && typeof part.value === "string") {
+        caption = part.value.slice(0, 500);
+      }
+    }
+    if (!url) return reply.code(400).send({ error: "No file provided" });
+
+    const seqRes = await query<{ seq: number }>(
+      "SELECT COALESCE(MAX(seq), -1) + 1 AS seq FROM item_photos WHERE item_id = $1",
+      [id],
+    );
+    const { rows } = await query<{ id: string; url: string; caption: string; seq: number }>(
+      `INSERT INTO item_photos (item_id, url, caption, seq, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, url, caption, seq`,
+      [id, url, caption, seqRes.rows[0].seq, req.user.id],
+    );
+    return reply.code(201).send(rows[0]);
+  });
+
+  app.patch("/api/photos/:id", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ownsPhoto(req.user.familyId, id))) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    const caption = z.object({ caption: z.string().max(500) }).safeParse(req.body);
+    if (!caption.success) return reply.code(400).send({ error: caption.error.flatten() });
+    const { rows } = await query<{ id: string; url: string; caption: string; seq: number }>(
+      "UPDATE item_photos SET caption = $2 WHERE id = $1 RETURNING id, url, caption, seq",
+      [id, caption.data.caption],
+    );
+    return rows[0];
+  });
+
+  app.delete("/api/photos/:id", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const owned = await ownsPhoto(req.user.familyId, id);
+    if (!owned) return reply.code(404).send({ error: "Not found" });
+    await query("DELETE FROM item_photos WHERE id = $1", [id]);
+    await deleteUploadFile(owned.url);
     return reply.code(204).send();
   });
 }
