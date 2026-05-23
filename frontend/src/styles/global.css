@@ -242,6 +242,52 @@ textarea { resize: vertical; min-height: 60px; }
   margin-top: 4px; padding: 4px 6px; font-size: 11px;
 }
 
+/* ---- Toolbar / filters ---- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; }
+.toolbar button { flex: 1; padding: 6px 4px; font-size: 12px; white-space: nowrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.chip { padding: 4px 10px; font-size: 12px; border-radius: 999px; }
+.chip.active { background: var(--accent); border-color: var(--accent); }
+
+/* ---- Comments ---- */
+.comment { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.comment-body { font-size: 13px; white-space: pre-wrap; }
+.comment-meta { font-size: 11px; color: var(--muted); margin-top: 2px; display: flex; gap: 8px; align-items: center; }
+.comment-meta button { padding: 0 4px; font-size: 11px; }
+
+/* ---- Stats ---- */
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.stat-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+.stat-n { font-size: 24px; font-weight: 700; }
+.stat-l { font-size: 12px; color: var(--muted); }
+
+/* ---- Markdown ---- */
+.markdown { font-size: 14px; line-height: 1.5; }
+.markdown p { margin: 0 0 8px; }
+.markdown h1, .markdown h2, .markdown h3 { margin: 8px 0 4px; }
+.markdown a { color: #93c5fd; }
+.markdown ul, .markdown ol { margin: 0 0 8px; padding-left: 20px; }
+.markdown code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.markdown img { max-width: 100%; border-radius: var(--radius); }
+
+/* ---- Lightbox ---- */
+.lightbox {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,0.92);
+  display: flex; align-items: center; justify-content: center;
+}
+.lightbox-figure { margin: 0; max-width: 92vw; max-height: 92vh; text-align: center; }
+.lightbox-figure img { max-width: 92vw; max-height: 84vh; object-fit: contain; border-radius: 6px; }
+.lightbox-figure figcaption { color: #e2e8f0; margin-top: 8px; font-size: 14px; }
+.lightbox-count { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.lightbox-close { position: absolute; top: 16px; right: 16px; font-size: 18px; }
+.lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 32px; padding: 4px 16px; background: rgba(0,0,0,0.4); border: none;
+}
+.lightbox-nav.left { left: 12px; }
+.lightbox-nav.right { right: 12px; }
+
 /* ---- Map edit mode ---- */
 .map-edit-toggle {
   position: absolute; top: 12px; left: 12px; z-index: 5;

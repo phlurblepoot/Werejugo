@@ -9,6 +9,7 @@ import {
   type MapSet,
   type Photo,
   type Theme,
+  type Trip,
   type Waypoint,
 } from "../api/client";
 import { KIND_DEFAULTS, KIND_LABELS } from "../lib/style";
@@ -19,6 +20,7 @@ interface Props {
   mapSet: MapSet;
   item: Item | null;
   themes: Theme[];
+  trips: Trip[];
   customIcons: CustomIcon[];
   onRequestPick: () => Promise<[number, number]>;
   onClose: () => void;
@@ -27,13 +29,14 @@ interface Props {
 
 const POINT_KINDS: ItemKind[] = ["place", "food", "custom"];
 
-export function ItemEditor({ mapSet, item, themes, customIcons, onRequestPick, onClose, onSaved }: Props) {
+export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved }: Props) {
   const editing = Boolean(item);
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? "place");
   const [title, setTitle] = useState(item?.title ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [occurredOn, setOccurredOn] = useState(item?.occurredOn ?? "");
   const [themeId, setThemeId] = useState<string | null>(item?.themeId ?? null);
+  const [tripId, setTripId] = useState<string | null>(item?.tripId ?? null);
   const [color, setColor] = useState(item?.color ?? KIND_DEFAULTS[item?.kind ?? "place"].color);
   const [icon, setIcon] = useState(item?.icon ?? KIND_DEFAULTS[item?.kind ?? "place"].icon);
 
@@ -142,6 +145,7 @@ export function ItemEditor({ mapSet, item, themes, customIcons, onRequestPick, o
       title: title.trim(),
       notes,
       themeId,
+      tripId,
       color,
       icon,
       occurredOn: occurredOn || null,
@@ -235,6 +239,16 @@ export function ItemEditor({ mapSet, item, themes, customIcons, onRequestPick, o
               <option key={t.id} value={t.id}>
                 {t.name} {t.isBuiltin ? "" : "(yours)"}
               </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Trip</label>
+          <select value={tripId ?? ""} onChange={(e) => setTripId(e.target.value || null)}>
+            <option value="">— No trip —</option>
+            {trips.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
         </div>

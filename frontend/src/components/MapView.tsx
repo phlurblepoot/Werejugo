@@ -117,6 +117,16 @@ export function MapView(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, selectedItemId, editMode]);
 
+  // Fly to an item when it becomes selected.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedItemId) return;
+    const item = items.find((i) => i.id === selectedItemId);
+    const center = item && firstCoord(item);
+    if (center) map.flyTo({ center, zoom: Math.max(map.getZoom(), 4), speed: 0.8 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItemId]);
+
   function renderAll() {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -270,6 +280,19 @@ export function MapView(props: Props) {
   }
 
   return <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />;
+}
+
+function firstCoord(item: Item): LngLat | null {
+  if (item.geometry?.type === "Point") {
+    const c = item.geometry.coordinates as number[];
+    return [c[0], c[1]];
+  }
+  if (item.waypoints.length) return [item.waypoints[0].lng, item.waypoints[0].lat];
+  if (item.geometry?.type === "LineString") {
+    const c = (item.geometry.coordinates as number[][])[0];
+    return [c[0], c[1]];
+  }
+  return null;
 }
 
 function escapeHtml(s: string): string {

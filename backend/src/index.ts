@@ -11,6 +11,8 @@ import { itemRoutes } from "./routes/items.js";
 import { themeRoutes } from "./routes/themes.js";
 import { uploadRoutes } from "./routes/uploads.js";
 import { lookupRoutes } from "./routes/lookup.js";
+import { tripRoutes } from "./routes/trips.js";
+import { statsRoutes } from "./routes/stats.js";
 
 async function main(): Promise<void> {
   await mkdir(config.uploadsDir, { recursive: true });
@@ -33,6 +35,8 @@ async function main(): Promise<void> {
   await app.register(themeRoutes);
   await app.register(uploadRoutes);
   await app.register(lookupRoutes);
+  await app.register(tripRoutes);
+  await app.register(statsRoutes);
 
   await app.listen({ host: "0.0.0.0", port: config.port });
 }

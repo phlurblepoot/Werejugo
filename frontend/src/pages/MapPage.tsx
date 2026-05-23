@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Item, type MapSet, type Theme } from "../api/client";
+import { api, type Item, type ItemKind, type MapSet, type Photo, type Theme } from "../api/client";
 import { useAuth } from "../lib/auth";
 import { resolveItemStyle } from "../lib/style";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { MapView } from "../components/MapView";
 import { Sidebar } from "../components/Sidebar";
 import { ItemEditor } from "../components/ItemEditor";
+import { ItemDetail } from "../components/ItemDetail";
 import { MapSetEditor } from "../components/MapSetEditor";
 import { ManagePanel } from "../components/ManagePanel";
+import { TripsPanel } from "../components/TripsPanel";
+import { StatsPanel } from "../components/StatsPanel";
+import { GalleryPanel } from "../components/GalleryPanel";
+import { Lightbox } from "../components/Lightbox";
 
 export function MapPage() {
   const { user, family, logout } = useAuth();
@@ -30,25 +35,53 @@ export function MapPage() {
     queryFn: () => api.listItems(currentMapSetId!),
     enabled: Boolean(currentMapSetId),
   });
+  const tripsQuery = useQuery({
+    queryKey: ["trips", currentMapSetId],
+    queryFn: () => api.listTrips(currentMapSetId!),
+    enabled: Boolean(currentMapSetId),
+  });
 
   const themes = themesQuery.data ?? [];
   const themesById = useMemo(() => new Map<string, Theme>(themes.map((t) => [t.id, t])), [themes]);
   const customIcons = iconsQuery.data?.custom ?? [];
   const items = itemsQuery.data ?? [];
+  const trips = tripsQuery.data ?? [];
   const mapSets = mapSetsQuery.data ?? [];
   const currentMapSet = mapSets.find((m) => m.id === currentMapSetId) ?? null;
 
+  // Filters
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<ItemKind[]>([]);
+  const [tripFilter, setTripFilter] = useState("");
+  const toggleKind = (k: ItemKind) =>
+    setKindFilter((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((i) => {
+      if (q && !(`${i.title} ${i.notes}`.toLowerCase().includes(q))) return false;
+      if (kindFilter.length && !kindFilter.includes(i.kind)) return false;
+      if (tripFilter === "none" && i.tripId) return false;
+      if (tripFilter && tripFilter !== "none" && i.tripId !== tripFilter) return false;
+      return true;
+    });
+  }, [items, search, kindFilter, tripFilter]);
+
+  // Selection / modals
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [detailItemId, setDetailItemId] = useState<string | null>(null);
+  const detailItem = items.find((i) => i.id === detailItemId) ?? null;
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorItem, setEditorItem] = useState<Item | null>(null);
-  const [mapSetEditor, setMapSetEditor] = useState<{ open: boolean; mapSet: MapSet | null }>({
-    open: false,
-    mapSet: null,
-  });
+  const [mapSetEditor, setMapSetEditor] = useState<{ open: boolean; mapSet: MapSet | null }>({ open: false, mapSet: null });
   const [showManage, setShowManage] = useState(false);
+  const [showTrips, setShowTrips] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [lightbox, setLightbox] = useState<{ photos: Photo[]; index: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
 
-  // Map "pick a location" coordination.
+  // Pick-on-map coordination
   const [pickActive, setPickActive] = useState(false);
   const pickResolver = useRef<((c: [number, number]) => void) | null>(null);
   function requestPick(): Promise<[number, number]> {
@@ -66,20 +99,29 @@ export function MapPage() {
   }
 
   const refreshItems = () => qc.invalidateQueries({ queryKey: ["items", currentMapSetId] });
+  const refreshTrips = () => qc.invalidateQueries({ queryKey: ["trips", currentMapSetId] });
+
+  function selectItem(id: string) {
+    setSelectedItemId(id);
+    setDetailItemId(id);
+  }
 
   async function moveItemPoint(item: Item, lng: number, lat: number) {
     await api.updateItem(item.id, { geometry: { type: "Point", coordinates: [lng, lat] } });
     refreshItems();
   }
-
   async function moveItemWaypoint(item: Item, index: number, lng: number, lat: number) {
     const waypoints = item.waypoints.map((w, i) => (i === index ? { ...w, lng, lat } : w));
     const coords = waypoints.map((w) => [w.lng, w.lat] as LngLat);
     const path = buildRoutePath(item.kind, coords);
-    await api.updateItem(item.id, {
-      waypoints,
-      geometry: { type: "LineString", coordinates: path },
-    });
+    await api.updateItem(item.id, { waypoints, geometry: { type: "LineString", coordinates: path } });
+    refreshItems();
+  }
+
+  async function deleteItem(id: string) {
+    if (!confirm("Delete this item?")) return;
+    await api.deleteItem(id);
+    setDetailItemId(null);
     refreshItems();
   }
 
@@ -101,22 +143,26 @@ export function MapPage() {
       <Sidebar
         mapSets={mapSets}
         currentMapSetId={currentMapSetId}
-        items={items}
+        items={filteredItems}
+        trips={trips}
         themesById={themesById}
         selectedItemId={selectedItemId}
+        search={search}
+        kindFilter={kindFilter}
+        tripFilter={tripFilter}
+        onSearch={setSearch}
+        onToggleKind={toggleKind}
+        onTripFilter={setTripFilter}
         onSelectMapSet={setCurrentMapSetId}
         onNewMapSet={() => setMapSetEditor({ open: true, mapSet: null })}
         onEditMapSet={(m) => setMapSetEditor({ open: true, mapSet: m })}
-        onAddItem={() => {
-          setEditorItem(null);
-          setEditorOpen(true);
-        }}
-        onSelectItem={setSelectedItemId}
-        onEditItem={(item) => {
-          setEditorItem(item);
-          setEditorOpen(true);
-        }}
+        onAddItem={() => { setEditorItem(null); setEditorOpen(true); }}
+        onSelectItem={selectItem}
+        onEditItem={(item) => { setEditorItem(item); setEditorOpen(true); }}
         onManage={() => setShowManage(true)}
+        onTrips={() => setShowTrips(true)}
+        onStats={() => setShowStats(true)}
+        onGallery={() => setShowGallery(true)}
       />
 
       <div className="map-area">
@@ -124,27 +170,22 @@ export function MapPage() {
           <>
             <MapView
               mapSet={currentMapSet}
-              items={items}
+              items={filteredItems}
               selectedItemId={selectedItemId}
               getStyle={(item) => resolveItemStyle(item, themesById)}
               pickMode={pickActive}
               editMode={editMode}
               onPick={handlePick}
-              onSelectItem={setSelectedItemId}
+              onSelectItem={selectItem}
               onMovePoint={moveItemPoint}
               onMoveWaypoint={moveItemWaypoint}
             />
             {!pickActive && (
-              <button
-                className={`map-edit-toggle ${editMode ? "primary" : ""}`}
-                onClick={() => setEditMode((v) => !v)}
-              >
+              <button className={`map-edit-toggle ${editMode ? "primary" : ""}`} onClick={() => setEditMode((v) => !v)}>
                 {editMode ? "✓ Done moving" : "✋ Move pins"}
               </button>
             )}
-            {editMode && (
-              <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>
-            )}
+            {editMode && <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>}
           </>
         ) : (
           <div className="centered">Create a map set to get started.</div>
@@ -156,13 +197,23 @@ export function MapPage() {
           mapSet={currentMapSet}
           item={editorItem}
           themes={themes}
+          trips={trips}
           customIcons={customIcons}
           onRequestPick={requestPick}
           onClose={() => setEditorOpen(false)}
-          onSaved={() => {
-            setEditorOpen(false);
-            refreshItems();
-          }}
+          onSaved={() => { setEditorOpen(false); refreshItems(); }}
+        />
+      )}
+
+      {detailItem && !editorOpen && user && (
+        <ItemDetail
+          item={detailItem}
+          trips={trips}
+          user={user}
+          onEdit={() => { setEditorItem(detailItem); setEditorOpen(true); }}
+          onDelete={() => deleteItem(detailItem.id)}
+          onClose={() => setDetailItemId(null)}
+          onOpenLightbox={(index) => setLightbox({ photos: detailItem.photos, index })}
         />
       )}
 
@@ -170,16 +221,8 @@ export function MapPage() {
         <MapSetEditor
           mapSet={mapSetEditor.mapSet}
           onClose={() => setMapSetEditor({ open: false, mapSet: null })}
-          onSaved={(m) => {
-            setMapSetEditor({ open: false, mapSet: null });
-            setCurrentMapSetId(m.id);
-            qc.invalidateQueries({ queryKey: ["mapSets"] });
-          }}
-          onDeleted={(id) => {
-            setMapSetEditor({ open: false, mapSet: null });
-            if (currentMapSetId === id) setCurrentMapSetId(null);
-            qc.invalidateQueries({ queryKey: ["mapSets"] });
-          }}
+          onSaved={(m) => { setMapSetEditor({ open: false, mapSet: null }); setCurrentMapSetId(m.id); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
+          onDeleted={(id) => { setMapSetEditor({ open: false, mapSet: null }); if (currentMapSetId === id) setCurrentMapSetId(null); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
         />
       )}
 
@@ -188,10 +231,37 @@ export function MapPage() {
           themes={themes}
           customIcons={customIcons}
           onClose={() => setShowManage(false)}
-          onChanged={() => {
-            qc.invalidateQueries({ queryKey: ["themes"] });
-            qc.invalidateQueries({ queryKey: ["icons"] });
-          }}
+          onChanged={() => { qc.invalidateQueries({ queryKey: ["themes"] }); qc.invalidateQueries({ queryKey: ["icons"] }); }}
+        />
+      )}
+
+      {showTrips && currentMapSetId && (
+        <TripsPanel
+          mapSetId={currentMapSetId}
+          trips={trips}
+          onClose={() => setShowTrips(false)}
+          onChanged={refreshTrips}
+        />
+      )}
+
+      {showStats && currentMapSetId && (
+        <StatsPanel mapSetId={currentMapSetId} onClose={() => setShowStats(false)} />
+      )}
+
+      {showGallery && (
+        <GalleryPanel
+          items={filteredItems}
+          onClose={() => setShowGallery(false)}
+          onOpen={(photos, index) => setLightbox({ photos, index })}
+        />
+      )}
+
+      {lightbox && (
+        <Lightbox
+          photos={lightbox.photos}
+          index={lightbox.index}
+          onIndex={(index) => setLightbox((lb) => (lb ? { ...lb, index } : lb))}
+          onClose={() => setLightbox(null)}
         />
       )}
     </div>

@@ -24,8 +24,9 @@ const waypointSchema = z.object({
 const itemSchema = z.object({
   kind: z.enum(["place", "food", "flight", "cruise", "drive", "custom"]),
   title: z.string().min(1).max(200),
-  notes: z.string().max(5000).optional(),
+  notes: z.string().max(20000).optional(),
   themeId: z.string().uuid().nullish(),
+  tripId: z.string().uuid().nullish(),
   color: z.string().max(40).nullish(),
   icon: z.string().max(200).nullish(),
   occurredOn: z.string().nullish(),
@@ -53,10 +54,11 @@ async function ownsItem(familyId: string, itemId: string): Promise<string | null
 
 async function loadItem(itemId: string) {
   const { rows } = await query<any>(
-    `SELECT i.id, i.map_set_id, i.kind, i.title, i.notes, i.theme_id, i.color, i.icon,
+    `SELECT i.id, i.map_set_id, i.kind, i.title, i.notes, i.theme_id, i.trip_id, i.color, i.icon,
             i.occurred_on, i.properties, i.created_by, i.created_at,
+            u.display_name AS created_by_name,
             ST_AsGeoJSON(i.geom) AS geom
-     FROM items i WHERE i.id = $1`,
+     FROM items i LEFT JOIN users u ON u.id = i.created_by WHERE i.id = $1`,
     [itemId],
   );
   if (!rows[0]) return null;
@@ -77,11 +79,13 @@ async function loadItem(itemId: string) {
     title: r.title,
     notes: r.notes,
     themeId: r.theme_id,
+    tripId: r.trip_id,
     color: r.color,
     icon: r.icon,
     occurredOn: r.occurred_on,
     properties: r.properties,
     createdBy: r.created_by,
+    createdByName: r.created_by_name,
     createdAt: r.created_at,
     geometry: r.geom ? JSON.parse(r.geom) : null,
     waypoints: wps.rows.map((w) => ({
@@ -155,10 +159,10 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     const id = await tx(async (client) => {
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
       const res = await client.query<{ id: string }>(
-        `INSERT INTO items (map_set_id, kind, title, notes, theme_id, color, icon, occurred_on, geom, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
-           CASE WHEN $9::text IS NULL THEN NULL ELSE ST_SetSRID(ST_GeomFromGeoJSON($9), 4326) END,
-           $10)
+        `INSERT INTO items (map_set_id, kind, title, notes, theme_id, trip_id, color, icon, occurred_on, geom, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+           CASE WHEN $10::text IS NULL THEN NULL ELSE ST_SetSRID(ST_GeomFromGeoJSON($10), 4326) END,
+           $11)
          RETURNING id`,
         [
           mapSetId,
@@ -166,6 +170,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
           b.title,
           b.notes ?? "",
           b.themeId ?? null,
+          b.tripId ?? null,
           b.color ?? null,
           b.icon ?? null,
           b.occurredOn ?? null,
@@ -205,6 +210,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
            geom = CASE WHEN $13::boolean THEN
               (CASE WHEN $14::text IS NULL THEN NULL ELSE ST_SetSRID(ST_GeomFromGeoJSON($14), 4326) END)
               ELSE geom END,
+           trip_id = CASE WHEN $15::boolean THEN $16 ELSE trip_id END,
            updated_at = now()
          WHERE id = $1`,
         [
@@ -222,6 +228,8 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
           b.occurredOn ?? null,
           geomProvided,
           geomJson,
+          Object.prototype.hasOwnProperty.call(b, "tripId"),
+          b.tripId ?? null,
         ],
       );
       if (b.waypoints) {
@@ -296,6 +304,57 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     if (!owned) return reply.code(404).send({ error: "Not found" });
     await query("DELETE FROM item_photos WHERE id = $1", [id]);
     await deleteUploadFile(owned.url);
+    return reply.code(204).send();
+  });
+
+  // --- Comments ---
+
+  app.get("/api/items/:id/comments", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ownsItem(req.user.familyId, id))) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    const { rows } = await query<any>(
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name AS author
+       FROM item_comments c LEFT JOIN users u ON u.id = c.user_id
+       WHERE c.item_id = $1 ORDER BY c.created_at ASC`,
+      [id],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      body: r.body,
+      createdAt: r.created_at,
+      userId: r.user_id,
+      author: r.author,
+    }));
+  });
+
+  app.post("/api/items/:id/comments", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ownsItem(req.user.familyId, id))) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    const parsed = z.object({ body: z.string().min(1).max(4000) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const { rows } = await query<any>(
+      `INSERT INTO item_comments (item_id, user_id, body) VALUES ($1, $2, $3)
+       RETURNING id, body, created_at, user_id`,
+      [id, req.user.id, parsed.data.body],
+    );
+    const r = rows[0];
+    return reply.code(201).send({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id });
+  });
+
+  app.delete("/api/comments/:id", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    // Only the author may delete their comment, and only within their family's data.
+    const res = await query(
+      `DELETE FROM item_comments c USING items i, map_sets m
+       WHERE c.id = $1 AND c.item_id = i.id AND i.map_set_id = m.id
+         AND m.family_id = $2 AND c.user_id = $3`,
+      [id, req.user.familyId, req.user.id],
+    );
+    if (!res.rowCount) return reply.code(404).send({ error: "Not found" });
     return reply.code(204).send();
   });
 }

@@ -49,6 +49,7 @@ export interface Item {
   title: string;
   notes: string;
   themeId: string | null;
+  tripId: string | null;
   color: string | null;
   icon: string | null;
   occurredOn: string | null;
@@ -56,7 +57,39 @@ export interface Item {
   waypoints: Waypoint[];
   photos: Photo[];
   createdBy: string | null;
+  createdByName: string | null;
   createdAt: string;
+}
+
+export interface Trip {
+  id: string;
+  mapSetId: string;
+  name: string;
+  description: string;
+  startDate: string | null;
+  endDate: string | null;
+  coverPhotoUrl: string | null;
+  color: string;
+  createdAt: string;
+}
+
+export interface Comment {
+  id: string;
+  body: string;
+  createdAt: string;
+  userId: string | null;
+  author?: string | null;
+}
+
+export interface Stats {
+  items: number;
+  photos: number;
+  trips: number;
+  firstDate: string | null;
+  lastDate: string | null;
+  countByKind: Record<string, number>;
+  distanceMetersByKind: Record<string, number>;
+  totalDistanceMeters: number;
 }
 
 export interface MapSet {
@@ -180,6 +213,23 @@ export const api = {
   updatePhoto: (id: string, caption: string) =>
     request<Photo>(`/api/photos/${id}`, { method: "PATCH", body: body({ caption }) }),
   deletePhoto: (id: string) => request<void>(`/api/photos/${id}`, { method: "DELETE" }),
+
+  // trips
+  listTrips: (mapSetId: string) => request<Trip[]>(`/api/map-sets/${mapSetId}/trips`),
+  createTrip: (mapSetId: string, data: Partial<Trip>) =>
+    request<Trip>(`/api/map-sets/${mapSetId}/trips`, { method: "POST", body: body(data) }),
+  updateTrip: (id: string, data: Partial<Trip>) =>
+    request<Trip>(`/api/trips/${id}`, { method: "PATCH", body: body(data) }),
+  deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, { method: "DELETE" }),
+
+  // comments
+  listComments: (itemId: string) => request<Comment[]>(`/api/items/${itemId}/comments`),
+  addComment: (itemId: string, body_: string) =>
+    request<Comment>(`/api/items/${itemId}/comments`, { method: "POST", body: body({ body: body_ }) }),
+  deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: "DELETE" }),
+
+  // stats
+  getStats: (mapSetId: string) => request<Stats>(`/api/map-sets/${mapSetId}/stats`),
 
   // themes
   listThemes: () => request<Theme[]>("/api/themes"),
