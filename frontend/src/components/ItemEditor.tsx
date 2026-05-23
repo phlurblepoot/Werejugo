@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   api,
   type CustomIcon,
   type Geometry,
   type Item,
   type ItemKind,
+  type LookupResult,
   type MapSet,
   type Photo,
   type Theme,
@@ -12,8 +13,10 @@ import {
   type Waypoint,
 } from "../api/client";
 import { KIND_DEFAULTS, KIND_LABELS } from "../lib/style";
+import { buildRoutePath, type LngLat } from "../lib/geo";
 import { StylePicker } from "./StylePicker";
 import { PlaceSearch } from "./PlaceSearch";
+import { StopBuilder } from "./StopBuilder";
 import { MediaThumb } from "./MediaThumb";
 
 interface Props {
@@ -47,10 +50,13 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   );
 
   const [stops, setStops] = useState<Waypoint[]>(item?.waypoints ?? []);
-  const initialPath =
-    item?.geometry?.type === "LineString" ? (item.geometry.coordinates as number[][]) : [];
-  const [path, setPath] = useState<number[][]>(initialPath);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [lookupImage, setLookupImage] = useState<string | null>(null);
+
+  const props0 = (item?.properties ?? {}) as Record<string, string>;
+  const [cruiseLine, setCruiseLine] = useState(props0.cruiseLine ?? "");
+  const [ship, setShip] = useState(props0.ship ?? "");
+  const [lookupBusy, setLookupBusy] = useState(false);
 
   const [existingPhotos, setExistingPhotos] = useState<Photo[]>(item?.photos ?? []);
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; caption: string; preview: string }[]>([]);
@@ -120,6 +126,34 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     }
   }
 
+  function applyLookup(r: LookupResult) {
+    if (r.title && !title) setTitle(r.title);
+    setStops(
+      r.waypoints.map((w, i) => ({
+        label: w.label,
+        kind: (w.kind as Waypoint["kind"]) ?? "stop",
+        lng: w.lng,
+        lat: w.lat,
+        seq: i,
+      })),
+    );
+    setWarnings(r.warnings);
+    setLookupImage(r.image ?? null);
+  }
+
+  async function findCruise() {
+    if (!ship.trim()) {
+      setWarnings(["Enter the ship name to search CruiseMapper."]);
+      return;
+    }
+    setLookupBusy(true);
+    try {
+      applyLookup(await api.lookupCruise({ ship: ship.trim() }));
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
   async function save() {
     setError(null);
     if (!title.trim()) {
@@ -135,9 +169,18 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       }
       geometry = { type: "Point", coordinates: point };
     } else {
-      const coords = path.length >= 2 ? path : stops.map((s) => [s.lng, s.lat]);
-      if (coords.length >= 2) geometry = { type: "LineString", coordinates: coords };
+      const coords = stops.map((s) => [s.lng, s.lat] as LngLat);
+      const line = buildRoutePath(kind, coords);
+      if (line.length >= 2) geometry = { type: "LineString", coordinates: line };
       waypoints = stops;
+    }
+
+    const properties: Record<string, unknown> = { ...(item?.properties ?? {}) };
+    if (kind === "cruise") {
+      if (cruiseLine) properties.cruiseLine = cruiseLine;
+      else delete properties.cruiseLine;
+      if (ship) properties.ship = ship;
+      else delete properties.ship;
     }
 
     const payload: Partial<Item> = {
@@ -151,6 +194,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       occurredOn: occurredOn || null,
       geometry,
       waypoints,
+      properties,
     };
 
     setBusy(true);
@@ -207,11 +251,23 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
             onPhotoLocation={(lat, lng, date) => { setPoint([lng, lat]); if (date && !occurredOn) setOccurredOn(date); }}
           />
         ) : kind === "flight" ? (
-          <FlightFields setResult={(r) => applyLookup(r, setTitle, setStops, setPath, setWarnings, title)} />
+          <FlightFields setResult={applyLookup} />
         ) : kind === "cruise" ? (
-          <CruiseFields setResult={(r) => applyLookup(r, setTitle, setStops, setPath, setWarnings, title)} />
+          <>
+            <CruiseFields
+              cruiseLine={cruiseLine}
+              ship={ship}
+              sailDate={occurredOn ?? ""}
+              busy={lookupBusy}
+              onLine={setCruiseLine}
+              onShip={setShip}
+              onSailDate={setOccurredOn}
+              onFind={findCruise}
+            />
+            <StopBuilder stops={stops} onChange={setStops} source="ports" label="Ports of call (in order)" />
+          </>
         ) : (
-          <DriveFields stops={stops} setStops={(s) => { setStops(s); setPath(s.map((x) => [x.lng, x.lat])); }} />
+          <StopBuilder stops={stops} onChange={setStops} source="places" label="Stops along the drive (in order)" />
         )}
 
         {warnings.length > 0 && (
@@ -222,19 +278,25 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
           </div>
         )}
 
-        {!isPoint && stops.length > 0 && (
+        {lookupImage && (
           <div className="field">
-            <label>Stops ({stops.length})</label>
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>
-              {stops.map((s) => s.label).join("  →  ")}
-            </div>
+            <img src={lookupImage} alt="" style={{ width: "100%", borderRadius: "var(--radius)", maxHeight: 160, objectFit: "cover" }} />
           </div>
         )}
 
-        <div className="field">
-          <label>Date (optional)</label>
-          <input type="date" value={occurredOn ?? ""} onChange={(e) => setOccurredOn(e.target.value)} />
-        </div>
+        {kind === "flight" && stops.length > 0 && (
+          <div className="field">
+            <label>Stops ({stops.length})</label>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{stops.map((s) => s.label).join("  →  ")}</div>
+          </div>
+        )}
+
+        {kind !== "cruise" && (
+          <div className="field">
+            <label>Date (optional)</label>
+            <input type="date" value={occurredOn ?? ""} onChange={(e) => setOccurredOn(e.target.value)} />
+          </div>
+        )}
 
         <div className="field">
           <label>Theme</label>
@@ -326,28 +388,6 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   );
 }
 
-function applyLookup(
-  r: { title: string; waypoints: Array<{ label: string; lng: number; lat: number; kind: string }>; path: number[][]; warnings: string[] },
-  setTitle: (s: string) => void,
-  setStops: (w: Waypoint[]) => void,
-  setPath: (p: number[][]) => void,
-  setWarnings: (w: string[]) => void,
-  currentTitle: string,
-) {
-  if (r.title && !currentTitle) setTitle(r.title);
-  setStops(
-    r.waypoints.map((w, i) => ({
-      label: w.label,
-      kind: (w.kind as Waypoint["kind"]) ?? "stop",
-      lng: w.lng,
-      lat: w.lat,
-      seq: i,
-    })),
-  );
-  setPath(r.path);
-  setWarnings(r.warnings);
-}
-
 function PointFields({
   point,
   onPick,
@@ -394,9 +434,7 @@ function PointFields({
   );
 }
 
-type LookupSetter = (r: { title: string; waypoints: Array<{ label: string; lng: number; lat: number; kind: string }>; path: number[][]; warnings: string[] }) => void;
-
-function FlightFields({ setResult }: { setResult: LookupSetter }) {
+function FlightFields({ setResult }: { setResult: (r: LookupResult) => void }) {
   const [mode, setMode] = useState<"codes" | "number">("codes");
   const [codes, setCodes] = useState("");
   const [flightNumber, setFlightNumber] = useState("");
@@ -439,67 +477,41 @@ function FlightFields({ setResult }: { setResult: LookupSetter }) {
   );
 }
 
-function CruiseFields({ setResult }: { setResult: LookupSetter }) {
-  const [mode, setMode] = useState<"ports" | "ship">("ports");
-  const [ports, setPorts] = useState("");
-  const [ship, setShip] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function run() {
-    setBusy(true);
-    try {
-      if (mode === "ports") {
-        const list = ports.split(/\n+/).map((p) => p.trim()).filter(Boolean);
-        setResult(await api.lookupCruise({ ports: list }));
-      } else {
-        setResult(await api.lookupCruise({ ship }));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function CruiseFields({
+  cruiseLine,
+  ship,
+  sailDate,
+  busy,
+  onLine,
+  onShip,
+  onSailDate,
+  onFind,
+}: {
+  cruiseLine: string;
+  ship: string;
+  sailDate: string;
+  busy: boolean;
+  onLine: (s: string) => void;
+  onShip: (s: string) => void;
+  onSailDate: (s: string) => void;
+  onFind: () => void;
+}) {
   return (
     <div className="field">
-      <label>Cruise itinerary</label>
-      <div className="tabs">
-        <button type="button" className={mode === "ports" ? "active" : ""} onClick={() => setMode("ports")}>Ports</button>
-        <button type="button" className={mode === "ship" ? "active" : ""} onClick={() => setMode("ship")}>By ship</button>
+      <label>Find an itinerary (CruiseMapper)</label>
+      <div className="row">
+        <input value={cruiseLine} onChange={(e) => onLine(e.target.value)} placeholder="Cruise line (e.g. Royal Caribbean)" />
       </div>
-      {mode === "ports" ? (
-        <textarea value={ports} onChange={(e) => setPorts(e.target.value)} placeholder={"One port per line, in order:\nMiami\nNassau\nCozumel"} />
-      ) : (
-        <input value={ship} onChange={(e) => setShip(e.target.value)} placeholder="Ship name (e.g. Symphony of the Seas)" />
-      )}
-      <button type="button" style={{ marginTop: 8 }} onClick={run} disabled={busy}>
-        {busy ? "Looking up…" : "Plot itinerary"}
+      <div className="row" style={{ marginTop: 6 }}>
+        <input value={ship} onChange={(e) => onShip(e.target.value)} placeholder="Ship (e.g. Symphony of the Seas)" />
+        <input type="date" value={sailDate} onChange={(e) => onSailDate(e.target.value)} title="Sail date" />
+      </div>
+      <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy}>
+        {busy ? "Searching CruiseMapper…" : "🔎 Find on CruiseMapper"}
       </button>
-    </div>
-  );
-}
-
-function DriveFields({ stops, setStops }: { stops: Waypoint[]; setStops: (w: Waypoint[]) => void }) {
-  const seq = useMemo(() => stops.length, [stops]);
-  return (
-    <div className="field">
-      <label>Stops along the drive (in order)</label>
-      <PlaceSearch
-        placeholder="Add a stop…"
-        search={api.searchPlaces}
-        onSelect={(s) =>
-          setStops([...stops, { label: s.label, kind: stops.length === 0 ? "origin" : "stop", lng: s.lng, lat: s.lat, seq }])
-        }
-      />
-      {stops.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          {stops.map((s, i) => (
-            <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4 }}>
-              <span style={{ flex: 1, fontSize: 13 }}>{i + 1}. {s.label}</span>
-              <button type="button" className="ghost" onClick={() => setStops(stops.filter((_, j) => j !== i))}>✕</button>
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
+        Auto-lookup is best-effort. You can always add or fix the ports below.
+      </div>
     </div>
   );
 }

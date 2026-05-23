@@ -30,6 +30,7 @@ const itemSchema = z.object({
   color: z.string().max(40).nullish(),
   icon: z.string().max(200).nullish(),
   occurredOn: z.string().nullish(),
+  properties: z.record(z.unknown()).optional(),
   geometry: geometrySchema.optional(),
   waypoints: z.array(waypointSchema).optional(),
 });
@@ -167,10 +168,10 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     const id = await tx(async (client) => {
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
       const res = await client.query<{ id: string }>(
-        `INSERT INTO items (map_set_id, kind, title, notes, theme_id, trip_id, color, icon, occurred_on, geom, created_by)
+        `INSERT INTO items (map_set_id, kind, title, notes, theme_id, trip_id, color, icon, occurred_on, geom, created_by, properties)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
            CASE WHEN $10::text IS NULL THEN NULL ELSE ST_SetSRID(ST_GeomFromGeoJSON($10), 4326) END,
-           $11)
+           $11, COALESCE($12::jsonb, '{}'::jsonb))
          RETURNING id`,
         [
           mapSetId,
@@ -184,6 +185,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
           b.occurredOn ?? null,
           geomJson,
           req.user.id,
+          b.properties ? JSON.stringify(b.properties) : null,
         ],
       );
       const itemId = res.rows[0].id;
@@ -219,6 +221,7 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
               (CASE WHEN $14::text IS NULL THEN NULL ELSE ST_SetSRID(ST_GeomFromGeoJSON($14), 4326) END)
               ELSE geom END,
            trip_id = CASE WHEN $15::boolean THEN $16 ELSE trip_id END,
+           properties = CASE WHEN $17::boolean THEN COALESCE($18::jsonb, '{}'::jsonb) ELSE properties END,
            updated_at = now()
          WHERE id = $1`,
         [
@@ -238,6 +241,8 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
           geomJson,
           Object.prototype.hasOwnProperty.call(b, "tripId"),
           b.tripId ?? null,
+          Object.prototype.hasOwnProperty.call(b, "properties"),
+          b.properties ? JSON.stringify(b.properties) : null,
         ],
       );
       if (b.waypoints) {

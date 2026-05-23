@@ -60,6 +60,7 @@ export interface Item {
   geometry: Geometry | null;
   waypoints: Waypoint[];
   photos: Photo[];
+  properties?: Record<string, unknown> | null;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: string;
@@ -146,6 +147,7 @@ export interface LookupResult {
   waypoints: Array<{ label: string; lng: number; lat: number; kind: string }>;
   path: number[][];
   warnings: string[];
+  image?: string | null;
 }
 
 export interface PlaceSuggestion {

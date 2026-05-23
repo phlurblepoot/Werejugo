@@ -19,6 +19,8 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
   const trip = trips.find((t) => t.id === item.tripId);
+  const p = (item.properties ?? {}) as Record<string, string>;
+  const cruiseMeta = [p.cruiseLine, p.ship].filter(Boolean).join(" · ") || null;
 
   const commentsQuery = useQuery({
     queryKey: ["comments", item.id],
@@ -52,6 +54,7 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
           {item.occurredOn ? ` · ${item.occurredOn}` : ""}
           {trip ? <span className="tag" style={{ background: trip.color, color: "#fff" }}>{trip.name}</span> : null}
           {item.createdByName ? ` · added by ${item.createdByName}` : ""}
+          {cruiseMeta && <div style={{ marginTop: 2 }}>{cruiseMeta}</div>}
         </div>
 
         {item.photos.length > 0 && (

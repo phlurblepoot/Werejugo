@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../lib/auth.js";
 import { lookupFlightByCodes, lookupFlightByNumber } from "../services/flightLookup.js";
-import { lookupCruiseByPorts, lookupCruiseByShip } from "../services/cruiseLookup.js";
+import { diagnoseCruise, lookupCruiseByPorts, lookupCruiseByShip } from "../services/cruiseLookup.js";
 import { searchAirports, searchPorts, searchPlaces } from "../services/places.js";
 
 const flightSchema = z.union([
@@ -33,6 +33,13 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     const b = parsed.data;
     const result = "ports" in b ? await lookupCruiseByPorts(b.ports) : await lookupCruiseByShip(b.ship);
     return result;
+  });
+
+  // Diagnostic: shows what this server actually receives from CruiseMapper, so the
+  // scraper can be tuned to the real HTML. POST { "query": "symphony" } or { "url": "..." }.
+  app.post("/api/lookup/cruise/diagnose", async (req) => {
+    const b = (req.body ?? {}) as { url?: string; query?: string };
+    return diagnoseCruise({ url: b.url, query: b.query });
   });
 
   // Autocomplete helpers used by the entry forms.

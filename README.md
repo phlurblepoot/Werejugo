@@ -172,11 +172,13 @@ See `.env.example` for the full list. Highlights:
 
 ## Caveats & honest limitations
 
-- **Cruise auto-lookup is best-effort.** CruiseMapper has no public API, so the
-  "by ship name" feature scrapes their public pages and **may break without notice**
-  when their site changes. The reliable path is to type the ports of call in order —
-  that always works and plots precisely. Cruise *legs* are drawn as great-circle
-  arcs, not true sea routes (no marine routing engine).
+- **Cruise auto-lookup is best-effort.** CruiseMapper has no public API and uses
+  bot protection, so the "Find on CruiseMapper" feature scrapes public pages and
+  **may be blocked or break** when their site changes. The reliable path is the
+  reorderable port builder — type/search the ports of call in order and they plot
+  precisely. Cruise *legs* are drawn as great-circle arcs, not true sea routes.
+  A diagnostic endpoint (`POST /api/lookup/cruise/diagnose`) reports what your
+  server actually receives from CruiseMapper, to help tune the scraper.
 - **Flight-number lookup needs an API key** (`AERODATABOX_RAPIDAPI_KEY`). Without it,
   enter origin/destination airport codes and the route is drawn as a great-circle arc.
 - **Place/port search uses public OSM Nominatim** by default. Be respectful of their

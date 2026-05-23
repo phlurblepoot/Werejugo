@@ -20,4 +20,7 @@ export const config = {
   nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",
   nominatimUserAgent: process.env.NOMINATIM_USER_AGENT ?? "Werejugo/0.1",
   cruiseLookupEnabled: (process.env.CRUISE_LOOKUP_ENABLED ?? "true") === "true",
+  cruiseUserAgent:
+    process.env.CRUISE_USER_AGENT ??
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
 };

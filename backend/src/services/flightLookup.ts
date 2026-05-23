@@ -14,6 +14,7 @@ export interface LookupResult {
   waypoints: LookupWaypoint[];
   path: LngLat[];
   warnings: string[];
+  image?: string | null;
 }
 
 /**
