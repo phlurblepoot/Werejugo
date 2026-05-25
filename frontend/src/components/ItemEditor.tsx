@@ -231,7 +231,9 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
             lat: p.lat,
             seq: i,
             arriveAt: p.arriveAt ?? null,
-            departAt: p.departAt ?? p.dateISO ?? null,
+            // departAt must be a full datetime (backend validates it); a date-only
+            // fallback becomes midnight, which the formatter renders as just the date.
+            departAt: p.departAt ?? (p.dateISO ? `${p.dateISO}T00:00:00.000Z` : null),
           })),
         );
         setRoutePath(d.path && d.path.length >= 2 ? d.path : null);
