@@ -46,6 +46,7 @@ export async function diagnoseCruise(opts: {
   query?: string;
   selector?: string;
   raw?: boolean;
+  maxLen?: number;
 }): Promise<unknown> {
   let url = opts.url;
   if (!url && opts.query) url = `https://www.cruisemapper.com/search?q=${encodeURIComponent(opts.query)}`;
@@ -106,8 +107,9 @@ export async function diagnoseCruise(opts: {
   });
 
   // Optional drill-down once we know where to look.
+  const maxLen = Math.min(opts.maxLen ?? 4000, 20000);
   const selectorMatches = opts.selector
-    ? $(opts.selector).slice(0, 5).map((_i, el) => $.html(el).replace(/\s+/g, " ").slice(0, 1000)).get()
+    ? $(opts.selector).slice(0, 8).map((_i, el) => $.html(el).replace(/\s+/g, " ").slice(0, maxLen)).get()
     : undefined;
 
   return {
