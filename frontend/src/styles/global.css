@@ -260,6 +260,19 @@ textarea { resize: vertical; min-height: 60px; }
 .chip { padding: 4px 10px; font-size: 12px; border-radius: 999px; }
 .chip.active { background: var(--accent); border-color: var(--accent); }
 
+/* ---- Cruise sailings ---- */
+.sailing-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.sailing-row {
+  display: grid; grid-template-columns: 92px 1fr auto; gap: 8px; align-items: center;
+  padding: 6px 8px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.sailing-row:last-child { border-bottom: none; }
+.sailing-row:hover { background: var(--panel-2); }
+.sailing-row.match { background: rgba(37, 99, 235, 0.18); border-left: 3px solid var(--accent); }
+.sailing-date { color: var(--text); white-space: nowrap; }
+.sailing-title { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sailing-dep { color: var(--muted); white-space: nowrap; }
+
 /* ---- Comments ---- */
 .comment { padding: 6px 0; border-bottom: 1px solid var(--border); }
 .comment-body { font-size: 13px; white-space: pre-wrap; }

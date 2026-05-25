@@ -157,6 +157,23 @@ export interface PlaceSuggestion {
   source: string;
 }
 
+export interface CruiseSailing {
+  dateISO: string | null;
+  dateText: string;
+  title: string;
+  departurePort: string;
+  price: string;
+}
+
+export interface CruiseFindResult {
+  shipName: string;
+  shipUrl: string | null;
+  image: string | null;
+  sailings: CruiseSailing[];
+  ports: Array<{ label: string; lng: number | null; lat: number | null }>;
+  warnings: string[];
+}
+
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
@@ -303,6 +320,10 @@ export const api = {
     request<LookupResult>("/api/lookup/flight", { method: "POST", body: body(data) }),
   lookupCruise: (data: Record<string, unknown>) =>
     request<LookupResult>("/api/lookup/cruise", { method: "POST", body: body(data) }),
+  findCruise: (data: { line?: string; ship: string }) =>
+    request<CruiseFindResult>("/api/lookup/cruise/find", { method: "POST", body: body(data) }),
+  resolvePort: (q: string) =>
+    request<PlaceSuggestion>(`/api/geo/resolve?q=${encodeURIComponent(q)}`),
   searchAirports: (q: string) =>
     request<PlaceSuggestion[]>(`/api/geo/airports?q=${encodeURIComponent(q)}`),
   searchPorts: (q: string) =>

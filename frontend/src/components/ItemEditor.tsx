@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   api,
+  type CruiseFindResult,
+  type CruiseSailing,
   type CustomIcon,
   type Geometry,
   type Item,
@@ -57,6 +59,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   const [cruiseLine, setCruiseLine] = useState(props0.cruiseLine ?? "");
   const [ship, setShip] = useState(props0.ship ?? "");
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [cruiseResult, setCruiseResult] = useState<CruiseFindResult | null>(null);
 
   const [existingPhotos, setExistingPhotos] = useState<Photo[]>(item?.photos ?? []);
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; caption: string; preview: string }[]>([]);
@@ -148,10 +151,43 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     }
     setLookupBusy(true);
     try {
-      applyLookup(await api.lookupCruise({ ship: ship.trim() }));
+      const res = await api.findCruise({ line: cruiseLine.trim() || undefined, ship: ship.trim() });
+      setCruiseResult(res);
+      setWarnings(res.warnings);
+      setLookupImage(res.image ?? null);
     } finally {
       setLookupBusy(false);
     }
+  }
+
+  function addStop(label: string, lng: number, lat: number) {
+    setStops((prev) => {
+      const next = [...prev, { label, kind: "stop" as const, lng, lat, seq: prev.length }];
+      return next.map((s, i) => ({
+        ...s,
+        seq: i,
+        kind: i === 0 ? "origin" : i === next.length - 1 ? "destination" : "stop",
+      }));
+    });
+  }
+
+  async function addPortChip(label: string, lng: number | null, lat: number | null) {
+    if (lng != null && lat != null) {
+      addStop(label, lng, lat);
+      return;
+    }
+    try {
+      const p = await api.resolvePort(label);
+      addStop(p.label, p.lng, p.lat);
+    } catch {
+      setWarnings([`Couldn't locate "${label}" — try the search box below.`]);
+    }
+  }
+
+  function pickSailing(s: CruiseSailing) {
+    if (!title.trim()) setTitle(`${cruiseResult?.shipName || ship} — ${s.title}`.trim());
+    if (s.dateISO) setOccurredOn(s.dateISO);
+    if (s.departurePort) addPortChip(s.departurePort, null, null);
   }
 
   async function save() {
@@ -259,10 +295,13 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
               ship={ship}
               sailDate={occurredOn ?? ""}
               busy={lookupBusy}
+              result={cruiseResult}
               onLine={setCruiseLine}
               onShip={setShip}
               onSailDate={setOccurredOn}
               onFind={findCruise}
+              onPickSailing={pickSailing}
+              onAddPort={addPortChip}
             />
             <StopBuilder stops={stops} onChange={setStops} source="ports" label="Ports of call (in order)" />
           </>
@@ -482,19 +521,25 @@ function CruiseFields({
   ship,
   sailDate,
   busy,
+  result,
   onLine,
   onShip,
   onSailDate,
   onFind,
+  onPickSailing,
+  onAddPort,
 }: {
   cruiseLine: string;
   ship: string;
   sailDate: string;
   busy: boolean;
+  result: CruiseFindResult | null;
   onLine: (s: string) => void;
   onShip: (s: string) => void;
   onSailDate: (s: string) => void;
   onFind: () => void;
+  onPickSailing: (s: CruiseSailing) => void;
+  onAddPort: (label: string, lng: number | null, lat: number | null) => void;
 }) {
   return (
     <div className="field">
@@ -509,8 +554,45 @@ function CruiseFields({
       <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy}>
         {busy ? "Searching CruiseMapper…" : "🔎 Find on CruiseMapper"}
       </button>
+
+      {result && result.shipName && (
+        <div style={{ marginTop: 6, fontSize: 13 }}>Found: <strong>{result.shipName}</strong></div>
+      )}
+
+      {result && result.sailings.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div className="sub" style={{ marginBottom: 4 }}>Sailings — pick the one matching your date:</div>
+          <div className="sailing-list">
+            {result.sailings.map((s, i) => (
+              <div
+                key={i}
+                className={`sailing-row ${sailDate && s.dateISO === sailDate ? "match" : ""}`}
+                onClick={() => onPickSailing(s)}
+              >
+                <span className="sailing-date">{s.dateText}</span>
+                <span className="sailing-title">{s.title}</span>
+                <span className="sailing-dep">{s.departurePort}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {result && result.ports.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div className="sub" style={{ marginBottom: 4 }}>Ports this ship visits — tap to add in order:</div>
+          <div className="chips">
+            {result.ports.map((p, i) => (
+              <button key={i} type="button" className="chip" onClick={() => onAddPort(p.label, p.lng, p.lat)}>
+                + {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
-        Auto-lookup is best-effort. You can always add or fix the ports below.
+        Auto-lookup is best-effort. You can always add or reorder ports below.
       </div>
     </div>
   );

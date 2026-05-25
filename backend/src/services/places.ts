@@ -44,8 +44,8 @@ export async function searchAirports(q: string, limit = 8): Promise<Place[]> {
   }));
 }
 
-/** Resolve a port by (fuzzy) name from the bundled dataset, then geocoder fallback. */
-export async function findPort(name: string): Promise<Place | null> {
+/** Resolve a port by (fuzzy) name from the bundled dataset only (no geocoding). */
+export async function findPortDb(name: string): Promise<Place | null> {
   const term = `%${name.trim().toLowerCase()}%`;
   const { rows } = await query<{ name: string; country: string | null; lat: number; lng: number }>(
     "SELECT name, country, lat, lng FROM ports WHERE lower(name) LIKE $1 ORDER BY length(name) ASC LIMIT 1",
@@ -55,7 +55,12 @@ export async function findPort(name: string): Promise<Place | null> {
     const p = rows[0];
     return { label: p.name, lat: p.lat, lng: p.lng, source: "port", meta: { country: p.country } };
   }
-  return geocode(name);
+  return null;
+}
+
+/** Resolve a port by name from the bundled dataset, then geocoder fallback. */
+export async function findPort(name: string): Promise<Place | null> {
+  return (await findPortDb(name)) ?? geocode(name);
 }
 
 export async function searchPorts(q: string, limit = 8): Promise<Place[]> {

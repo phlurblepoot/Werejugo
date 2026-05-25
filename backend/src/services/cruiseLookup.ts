@@ -1,8 +1,152 @@
 import * as cheerio from "cheerio";
 import { config } from "../config.js";
 import { greatCirclePath, type LngLat } from "../lib/geo.js";
-import { findPort } from "./places.js";
+import { findPort, findPortDb } from "./places.js";
 import type { LookupResult, LookupWaypoint } from "./flightLookup.js";
+
+const BASE = "https://www.cruisemapper.com";
+const abs = (href: string) => (href.startsWith("http") ? href : `${BASE}${href}`);
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+export interface CruiseSailing {
+  dateISO: string | null;
+  dateText: string;
+  title: string;
+  departurePort: string;
+  price: string;
+}
+export interface CruiseFindResult {
+  shipName: string;
+  shipUrl: string | null;
+  image: string | null;
+  sailings: CruiseSailing[];
+  ports: Array<{ label: string; lng: number | null; lat: number | null }>;
+  warnings: string[];
+}
+
+const emptyFind = (warnings: string[]): CruiseFindResult => ({
+  shipName: "",
+  shipUrl: null,
+  image: null,
+  sailings: [],
+  ports: [],
+  warnings,
+});
+
+async function findLineUrl(line: string): Promise<string | null> {
+  const r = await cruiseFetch(`${BASE}/cruise-lines`);
+  if (looksBlocked(r.status, r.html)) return null;
+  const $ = cheerio.load(r.html);
+  const target = norm(line);
+  const candidates: Array<{ url: string; score: number }> = [];
+  $('a[href*="/cruise-lines/"]').each((_i, el) => {
+    const href = $(el).attr("href");
+    const n = norm($(el).text());
+    if (!href || !n) return;
+    if (n.includes(target) || target.includes(n)) {
+      candidates.push({ url: abs(href.split(/[?#]/)[0]), score: Math.abs(n.length - target.length) });
+    }
+  });
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates[0]?.url ?? null;
+}
+
+async function findShipUrl(pageUrl: string, ship: string): Promise<string | null> {
+  const r = await cruiseFetch(pageUrl);
+  if (looksBlocked(r.status, r.html)) return null;
+  const $ = cheerio.load(r.html);
+  const target = norm(ship);
+  const seen = new Set<string>();
+  const candidates: Array<{ url: string; score: number }> = [];
+  $('a[href*="/ships/"]').each((_i, el) => {
+    const raw = $(el).attr("href");
+    if (!raw) return;
+    const href = abs(raw.split(/[?#]/)[0]);
+    if (seen.has(href)) return;
+    seen.add(href);
+    const slug = href.split("/ships/")[1] ?? "";
+    const fromSlug = slug.replace(/-\d+$/, "").replace(/-/g, " ");
+    const text = $(el).text().trim();
+    const n = norm(text.length >= 3 ? text : fromSlug);
+    if (!n) return;
+    if (n.includes(target) || target.includes(n)) {
+      candidates.push({ url: href, score: Math.abs(n.length - target.length) });
+    }
+  });
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates[0]?.url ?? null;
+}
+
+async function parseShipPage(shipUrl: string) {
+  const r = await cruiseFetch(shipUrl);
+  if (looksBlocked(r.status, r.html)) return null;
+  const $ = cheerio.load(r.html);
+  const shipName = $("h1").first().text().trim() || $("title").text().split("|")[0].trim();
+  const ogImage = $('meta[property="og:image"]').attr("content");
+  const image = ogImage ? abs(ogImage) : null;
+
+  const sailings: CruiseSailing[] = [];
+  $("table.shipTableCruise tbody tr").each((_i, tr) => {
+    const dateText = $(tr).find(".cruiseDatetime").text().trim();
+    const title = $(tr).find(".cruiseTitle").text().trim();
+    const departurePort = $(tr).find(".cruiseDeparture").text().trim();
+    const price = $(tr).find(".cruisePrice").text().trim();
+    if (!dateText && !title) return;
+    const d = new Date(dateText);
+    const dateISO = Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    sailings.push({ dateISO, dateText, title, departurePort, price });
+  });
+
+  const seen = new Set<string>();
+  const ports: string[] = [];
+  $('a[href*="/ports/"]').each((_i, el) => {
+    const href = $(el).attr("href") ?? "";
+    if (href.includes("?")) return; // skip sub-links like ?tab=hotels
+    const clean = $(el).text().trim().split(/[(,]/)[0].trim();
+    const key = clean.toLowerCase();
+    if (clean && !seen.has(key)) {
+      seen.add(key);
+      ports.push(clean);
+    }
+  });
+
+  return { shipName, image, sailings, ports };
+}
+
+/**
+ * Find a ship on CruiseMapper (via its cruise line) and return its sailing
+ * schedule + ports of call. The exact day-by-day ports for one sailing are not
+ * in the static HTML, so the UI lets the user assemble the route from these ports.
+ */
+export async function findCruise({ line, ship }: { line?: string; ship: string }): Promise<CruiseFindResult> {
+  if (!config.cruiseLookupEnabled) return emptyFind(["Cruise lookup is disabled. Add ports manually."]);
+  const warnings: string[] = [];
+  try {
+    let shipUrl: string | null = null;
+    if (line && line.trim()) {
+      const lineUrl = await findLineUrl(line.trim());
+      if (lineUrl) shipUrl = await findShipUrl(lineUrl, ship);
+      else warnings.push(`Couldn't find cruise line "${line}" on CruiseMapper.`);
+    }
+    if (!shipUrl) shipUrl = await findShipUrl(`${BASE}/ships`, ship);
+    if (!shipUrl) {
+      return emptyFind([...warnings, `Couldn't find "${ship}". Try the exact ship name and cruise line, or add ports manually.`]);
+    }
+    const page = await parseShipPage(shipUrl);
+    if (!page) return emptyFind([...warnings, "CruiseMapper blocked the ship page. Add ports manually."]);
+
+    const ports = await Promise.all(
+      page.ports.slice(0, 40).map(async (label) => {
+        const p = await findPortDb(label);
+        return { label, lng: p?.lng ?? null, lat: p?.lat ?? null };
+      }),
+    );
+    if (!page.sailings.length) warnings.push("No upcoming sailings listed; you can still build the route from the ports below.");
+    return { shipName: page.shipName || ship, shipUrl, image: page.image, sailings: page.sailings, ports, warnings };
+  } catch {
+    return emptyFind(["Cruise lookup failed (network or parsing error). Add ports manually."]);
+  }
+}
 
 const BROWSER_HEADERS: Record<string, string> = {
   "User-Agent": config.cruiseUserAgent,
