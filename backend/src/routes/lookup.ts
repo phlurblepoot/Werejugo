@@ -38,8 +38,8 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
   // Diagnostic: shows what this server actually receives from CruiseMapper, so the
   // scraper can be tuned to the real HTML. POST { "query": "symphony" } or { "url": "..." }.
   app.post("/api/lookup/cruise/diagnose", async (req) => {
-    const b = (req.body ?? {}) as { url?: string; query?: string };
-    return diagnoseCruise({ url: b.url, query: b.query });
+    const b = (req.body ?? {}) as { url?: string; query?: string; selector?: string; raw?: boolean };
+    return diagnoseCruise({ url: b.url, query: b.query, selector: b.selector, raw: b.raw });
   });
 
   // Autocomplete helpers used by the entry forms.

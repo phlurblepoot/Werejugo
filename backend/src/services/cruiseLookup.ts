@@ -41,7 +41,12 @@ function looksBlocked(status: number, html: string): boolean {
  * the server actually receives. Used to ground the scraper in the real HTML —
  * run it on the host where the backend lives and share the output.
  */
-export async function diagnoseCruise(opts: { url?: string; query?: string }): Promise<unknown> {
+export async function diagnoseCruise(opts: {
+  url?: string;
+  query?: string;
+  selector?: string;
+  raw?: boolean;
+}): Promise<unknown> {
   let url = opts.url;
   if (!url && opts.query) url = `https://www.cruisemapper.com/search?q=${encodeURIComponent(opts.query)}`;
   if (!url) url = "https://www.cruisemapper.com/";
@@ -65,11 +70,6 @@ export async function diagnoseCruise(opts: { url?: string; query?: string }): Pr
   }
 
   const $ = cheerio.load(r.html);
-  const collect = (sel: string, n: number) =>
-    $(sel)
-      .slice(0, n)
-      .map((_i, el) => ({ href: $(el).attr("href"), text: $(el).text().trim().slice(0, 80) }))
-      .get();
   const jsonLd = $('script[type="application/ld+json"]')
     .map((_i, el) => {
       try {
@@ -80,6 +80,35 @@ export async function diagnoseCruise(opts: { url?: string; query?: string }): Pr
       }
     })
     .get();
+
+  // Forms reveal the real search endpoint + parameter name.
+  const forms = $("form")
+    .slice(0, 10)
+    .map((_i, f) => ({
+      action: $(f).attr("action") ?? "",
+      method: ($(f).attr("method") ?? "get").toLowerCase(),
+      inputs: $(f)
+        .find("input,select")
+        .slice(0, 15)
+        .map((_j, el) => ({ name: $(el).attr("name"), type: $(el).attr("type") ?? (el as { tagName?: string }).tagName }))
+        .get(),
+    }))
+    .get();
+
+  // A de-duplicated sample of every link on the page, to discover URL patterns.
+  const seen = new Set<string>();
+  const linkSample: Array<{ href: string; text: string }> = [];
+  $("a[href]").each((_i, el) => {
+    const href = $(el).attr("href");
+    if (!href || seen.has(href)) return;
+    seen.add(href);
+    if (linkSample.length < 60) linkSample.push({ href, text: $(el).text().trim().slice(0, 50) });
+  });
+
+  // Optional drill-down once we know where to look.
+  const selectorMatches = opts.selector
+    ? $(opts.selector).slice(0, 5).map((_i, el) => $.html(el).replace(/\s+/g, " ").slice(0, 1000)).get()
+    : undefined;
 
   return {
     url: r.url,
@@ -97,10 +126,11 @@ export async function diagnoseCruise(opts: { url?: string; query?: string }): Pr
       jsonLdBlocks: jsonLd.length,
     },
     jsonLdTypes: jsonLd,
-    shipLinks: collect('a[href*="/ships/"]', 10),
-    portLinks: $('a[href*="/ports/"]').slice(0, 30).map((_i, el) => $(el).text().trim()).get(),
-    cruiseLinks: collect('a[href*="/cruises/"]', 10),
-    snippet: $("body").text().replace(/\s+/g, " ").trim().slice(0, 1200),
+    forms,
+    linkSample,
+    selectorMatches,
+    rawHtml: opts.raw ? r.html.slice(0, 6000) : undefined,
+    snippet: $("body").text().replace(/\s+/g, " ").trim().slice(0, 800),
   };
 }
 
