@@ -224,7 +224,15 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       if (d.ports.length) {
         // Plot every port on its date, and use the real sailed route.
         setStops(
-          d.ports.map((p, i) => ({ label: p.label, kind: p.kind, lng: p.lng, lat: p.lat, seq: i, departAt: p.dateISO ?? null })),
+          d.ports.map((p, i) => ({
+            label: p.label,
+            kind: p.kind,
+            lng: p.lng,
+            lat: p.lat,
+            seq: i,
+            arriveAt: p.arriveAt ?? null,
+            departAt: p.departAt ?? p.dateISO ?? null,
+          })),
         );
         setRoutePath(d.path && d.path.length >= 2 ? d.path : null);
         if (d.warnings.length) setWarnings(d.warnings);

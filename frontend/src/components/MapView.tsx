@@ -6,6 +6,7 @@ import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { buildRoutePath, type LngLat } from "../lib/geo";
+import { formatWaypointTime } from "../lib/waypoint";
 
 export interface ItemStyle {
   color: string;
@@ -266,7 +267,7 @@ export function MapView(props: Props) {
   ): maplibregl.Marker {
     const el = buildBadge(style);
     const wp = waypointIndex !== null ? item.waypoints[waypointIndex] : null;
-    const wpDate = wp?.departAt ? String(wp.departAt).slice(0, 10) : undefined;
+    const wpDate = wp ? formatWaypointTime(wp) || undefined : undefined;
     const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode })
       .setLngLat(lngLat)
       .setPopup(buildPopup(item, wp?.label, wpDate))

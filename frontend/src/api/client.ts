@@ -167,7 +167,15 @@ export interface CruiseSailing {
 }
 
 export interface SailingDetail {
-  ports: Array<{ label: string; lng: number; lat: number; kind: "origin" | "port" | "destination"; dateISO: string | null }>;
+  ports: Array<{
+    label: string;
+    lng: number;
+    lat: number;
+    kind: "origin" | "port" | "destination";
+    dateISO: string | null;
+    arriveAt: string | null;
+    departAt: string | null;
+  }>;
   path: number[][];
   warnings: string[];
 }

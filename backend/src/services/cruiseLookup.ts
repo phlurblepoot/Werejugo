@@ -459,7 +459,15 @@ export async function lookupCruiseByShip(ship: string): Promise<LookupResult> {
 }
 
 export interface SailingDetail {
-  ports: Array<{ label: string; lng: number; lat: number; kind: "origin" | "port" | "destination"; dateISO: string | null }>;
+  ports: Array<{
+    label: string;
+    lng: number;
+    lat: number;
+    kind: "origin" | "port" | "destination";
+    dateISO: string | null;
+    arriveAt: string | null;
+    departAt: string | null;
+  }>;
   path: number[][];
   warnings: string[];
 }
@@ -514,8 +522,26 @@ export async function getSailingDetail(id: string): Promise<SailingDetail> {
       const href = $(portA).attr("href") ?? "";
       const portId = href.match(/-port-(\d+)/)?.[1] ?? null;
       const label = $(portA).text().trim().split(/[(,]/)[0].trim();
-      const dateText = $(tr).find("td.date").text().trim().split(/\s+/).slice(0, 2).join(" ");
-      const d = new Date(`${dateText} ${year}`);
+
+      // "17 Jun 08:00 - 17:00" → date + arrival/departure times.
+      const dateCell = $(tr).find("td.date").text().trim();
+      const dm = dateCell.match(/^(\d{1,2}\s+[A-Za-z]{3,})/)?.[1];
+      const times = dateCell.match(/\d{1,2}:\d{2}/g) ?? [];
+      const rowText = $(tr).find("td.text").text();
+      const iso = (time?: string): string | null => {
+        if (!dm || !time) return null;
+        const t = new Date(`${dm} ${year} ${time}`);
+        return Number.isNaN(t.getTime()) ? null : t.toISOString();
+      };
+      let arriveAt: string | null = null;
+      let departAt: string | null = null;
+      if (/Departing/i.test(rowText)) departAt = iso(times[0]);
+      else if (/Arriving/i.test(rowText)) arriveAt = iso(times[0]);
+      else {
+        arriveAt = iso(times[0]);
+        departAt = iso(times[1] ?? times[0]);
+      }
+      const d = dm ? new Date(`${dm} ${year}`) : new Date(NaN);
       const dateISO = Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 
       let coord = portId ? poiCoord.get(portId) : undefined;
@@ -523,7 +549,7 @@ export async function getSailingDetail(id: string): Promise<SailingDetail> {
         const p = await findPort(label);
         if (p) coord = { lng: p.lng, lat: p.lat };
       }
-      if (coord) ports.push({ label, lng: coord.lng, lat: coord.lat, kind: "port", dateISO });
+      if (coord) ports.push({ label, lng: coord.lng, lat: coord.lat, kind: "port", dateISO, arriveAt, departAt });
     }
   }
   ports.forEach((p, i) => {
