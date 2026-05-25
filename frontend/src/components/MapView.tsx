@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import maplibregl, { type StyleSpecification } from "maplibre-gl";
-import Supercluster from "supercluster";
 import type { Item, MapSet } from "../api/client";
 import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
@@ -13,6 +12,17 @@ export interface ItemStyle {
   icon: string;
   lineColor: string;
   lineWidth: number;
+  size: number;
+  shape: "circle" | "square" | "rounded" | "none";
+  borderWidth: number;
+  borderColor: string;
+}
+
+interface MarkerSpec {
+  lng: number;
+  lat: number;
+  item: Item;
+  wpIndex: number | null;
 }
 
 interface Props {
@@ -197,60 +207,90 @@ export function MapView(props: Props) {
   }
 
   function renderMarkers(map: maplibregl.Map) {
-    const { items, getStyle, onSelectItem, onMovePoint, onMoveWaypoint } = dataRef.current;
+    const { items, getStyle, onSelectItem, onMovePoint, onMoveWaypoint, editMode } = dataRef.current;
     const handlers = { onSelectItem, onMoveWaypoint, onMovePoint };
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    // Route waypoints are always shown (not clustered).
+    // Every marker position: point items + each route waypoint.
+    const specs: MarkerSpec[] = [];
     for (const item of items) {
-      if (item.geometry?.type === "Point") continue;
-      item.waypoints.forEach((wp, index) => {
-        markersRef.current.push(makeMarker(map, item, getStyle(item), [wp.lng, wp.lat], index, handlers));
-      });
+      if (item.geometry?.type === "Point") {
+        const c = item.geometry.coordinates as number[];
+        specs.push({ lng: c[0], lat: c[1], item, wpIndex: null });
+      }
+      item.waypoints.forEach((wp, i) => specs.push({ lng: wp.lng, lat: wp.lat, item, wpIndex: i }));
     }
 
-    // Point items are clustered by viewport + zoom.
-    const pointItems = items.filter((i) => i.geometry?.type === "Point");
-    const byId = new Map(pointItems.map((i) => [i.id, i]));
-    const index = new Supercluster<{ itemId: string }>({ radius: 50, maxZoom: 16 });
-    index.load(
-      pointItems.map((i) => {
-        const c = i.geometry!.coordinates as number[];
-        return {
-          type: "Feature" as const,
-          properties: { itemId: i.id },
-          geometry: { type: "Point" as const, coordinates: [c[0], c[1]] },
-        };
-      }),
-    );
-    const b = map.getBounds();
-    const bbox: [number, number, number, number] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-    for (const c of index.getClusters(bbox, Math.round(map.getZoom()))) {
-      const [lng, lat] = c.geometry.coordinates as [number, number];
-      const props = c.properties as { cluster?: boolean; point_count?: number; cluster_id?: number; itemId?: string };
-      if (props.cluster) {
-        const el = buildClusterBadge(props.point_count ?? 0);
-        el.addEventListener("click", () => {
-          const z = Math.min(index.getClusterExpansionZoom(props.cluster_id!), 18);
-          map.easeTo({ center: [lng, lat], zoom: z });
-        });
-        markersRef.current.push(new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map));
+    // Edit mode: show every marker individually so each can be dragged.
+    if (editMode) {
+      for (const s of specs) {
+        markersRef.current.push(makeMarker(map, s.item, getStyle(s.item), [s.lng, s.lat], s.wpIndex, handlers));
+      }
+      return;
+    }
+
+    // View mode: group markers that overlap on screen into a single clickable stack.
+    const THRESH = 26;
+    const groups: Array<{ lng: number; lat: number; x: number; y: number; members: MarkerSpec[] }> = [];
+    for (const s of specs) {
+      const p = map.project([s.lng, s.lat]);
+      const g = groups.find((grp) => Math.hypot(grp.x - p.x, grp.y - p.y) < THRESH);
+      if (g) g.members.push(s);
+      else groups.push({ lng: s.lng, lat: s.lat, x: p.x, y: p.y, members: [s] });
+    }
+    for (const g of groups) {
+      if (g.members.length === 1) {
+        const s = g.members[0];
+        markersRef.current.push(makeMarker(map, s.item, getStyle(s.item), [s.lng, s.lat], s.wpIndex, handlers));
       } else {
-        const item = byId.get(props.itemId!);
-        if (item) markersRef.current.push(makeMarker(map, item, getStyle(item), [lng, lat], null, handlers));
+        markersRef.current.push(buildStackMarker(map, g, onSelectItem));
       }
     }
   }
 
-  function buildClusterBadge(count: number): HTMLDivElement {
+  // A badge for overlapping markers; clicking lists the items to pick from.
+  function buildStackMarker(
+    map: maplibregl.Map,
+    group: { lng: number; lat: number; members: MarkerSpec[] },
+    onSelectItem: (id: string) => void,
+  ): maplibregl.Marker {
+    const { getStyle } = dataRef.current;
     const el = document.createElement("div");
-    el.textContent = String(count);
+    el.textContent = String(group.members.length);
     el.style.cssText =
-      "width:34px;height:34px;border-radius:50%;background:#1e293b;color:#e2e8f0;" +
-      "display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;" +
-      "border:2px solid #60a5fa;box-shadow:0 1px 6px rgba(0,0,0,0.5);";
-    return el;
+      "width:30px;height:30px;border-radius:50%;background:#1e293b;color:#e2e8f0;" +
+      "display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;font-size:13px;" +
+      "border:2px solid #93c5fd;box-shadow:0 1px 6px rgba(0,0,0,0.5);";
+
+    const popup = new maplibregl.Popup({ offset: 18, maxWidth: "280px" });
+    const list = document.createElement("div");
+    list.className = "stack-popup";
+    for (const s of group.members) {
+      const style = getStyle(s.item);
+      const row = document.createElement("button");
+      row.className = "stack-row";
+      const dot = document.createElement("span");
+      dot.className = "stack-dot";
+      dot.style.background = style.color;
+      if (isImageIcon(style.icon)) {
+        const img = document.createElement("img");
+        img.src = absoluteUrl(style.icon);
+        dot.appendChild(img);
+      } else {
+        dot.textContent = glyphFor(style.icon);
+      }
+      const txt = document.createElement("span");
+      txt.textContent = s.wpIndex !== null ? `${s.item.title} — ${s.item.waypoints[s.wpIndex].label}` : s.item.title;
+      row.append(dot, txt);
+      row.addEventListener("click", () => {
+        onSelectItem(s.item.id);
+        popup.remove();
+      });
+      list.appendChild(row);
+    }
+    popup.setDOMContent(list);
+    return new maplibregl.Marker({ element: el }).setLngLat([group.lng, group.lat]).setPopup(popup).addTo(map);
   }
 
   function makeMarker(
@@ -315,14 +355,21 @@ export function MapView(props: Props) {
   function buildBadge(style: ItemStyle): HTMLDivElement {
     const el = document.createElement("div");
     el.className = "item-badge";
+    const radius = style.shape === "circle" ? "50%" : style.shape === "rounded" ? "6px" : "0";
+    const box =
+      style.shape !== "none"
+        ? `background:${style.color};border:${style.borderWidth}px solid ${style.borderColor};` +
+          `border-radius:${radius};box-shadow:0 1px 4px rgba(0,0,0,0.5);`
+        : "";
     el.style.cssText =
-      `width:28px;height:28px;border-radius:50%;background:${style.color};` +
+      `width:${style.size}px;height:${style.size}px;${box}` +
       "display:flex;align-items:center;justify-content:center;cursor:pointer;" +
-      "box-shadow:0 1px 4px rgba(0,0,0,0.5);border:2px solid #fff;font-size:14px;";
+      `font-size:${Math.round(style.size * 0.5)}px;`;
+    const inner = Math.round(style.size * (style.shape === "none" ? 0.9 : 0.62));
     if (isImageIcon(style.icon)) {
       const img = document.createElement("img");
       img.src = absoluteUrl(style.icon);
-      img.style.cssText = "width:18px;height:18px;object-fit:contain;";
+      img.style.cssText = `width:${inner}px;height:${inner}px;object-fit:contain;`;
       el.appendChild(img);
     } else {
       el.textContent = glyphFor(style.icon);

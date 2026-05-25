@@ -35,6 +35,26 @@ export interface Geometry {
   coordinates: number[] | number[][];
 }
 
+export type PinShape = "circle" | "square" | "rounded" | "none";
+
+export interface PinStyle {
+  color?: string;
+  icon?: string;
+  size?: number;
+  shape?: PinShape;
+  borderWidth?: number;
+  borderColor?: string;
+}
+
+export interface PinSettings {
+  default?: PinStyle;
+  byKind?: Partial<Record<ItemKind, PinStyle>>;
+}
+
+export interface FamilySettings {
+  pin?: PinSettings;
+}
+
 export type MediaType = "image" | "video" | "audio";
 
 export interface Photo {
@@ -303,6 +323,11 @@ export const api = {
     });
   },
   exportData: () => request<unknown>("/api/export"),
+
+  // family settings
+  getSettings: () => request<FamilySettings>("/api/settings"),
+  saveSettings: (settings: FamilySettings) =>
+    request<FamilySettings>("/api/settings", { method: "PUT", body: body(settings) }),
 
   // share links
   listShares: (mapSetId: string) => request<ShareLink[]>(`/api/map-sets/${mapSetId}/shares`),

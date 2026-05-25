@@ -36,15 +36,22 @@ export function StylePicker({ color, icon, customIcons, onColor, onIcon, onUploa
     <>
       <div className="field">
         <label>Color</label>
-        <div className="swatches">
+        <div className="swatches" style={{ alignItems: "center" }}>
           {PALETTE.map((c) => (
             <div
               key={c}
-              className={`swatch ${c === color ? "active" : ""}`}
+              className={`swatch ${c.toLowerCase() === color.toLowerCase() ? "active" : ""}`}
               style={{ background: c }}
               onClick={() => onColor(c)}
             />
           ))}
+          <input
+            type="color"
+            className="color-input"
+            value={/^#[0-9a-fA-F]{6}$/.test(color) ? color : "#2563eb"}
+            onChange={(e) => onColor(e.target.value)}
+            title="Pick any color"
+          />
         </div>
       </div>
       <div className="field">

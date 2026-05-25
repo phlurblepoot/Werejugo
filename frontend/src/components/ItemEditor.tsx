@@ -14,13 +14,15 @@ import {
   type Trip,
   type Waypoint,
 } from "../api/client";
-import { KIND_DEFAULTS, KIND_LABELS } from "../lib/style";
+import { KIND_LABELS, defaultColor, defaultIcon, defaultPinStyle } from "../lib/style";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { StylePicker } from "./StylePicker";
+import { PinStyleControls, type PinShapeVals } from "./PinStyleControls";
 import { PlaceSearch } from "./PlaceSearch";
 import { StopBuilder } from "./StopBuilder";
 import { Autocomplete } from "./Autocomplete";
 import { MediaThumb } from "./MediaThumb";
+import type { PinSettings, PinStyle } from "../api/client";
 
 interface Props {
   mapSet: MapSet;
@@ -32,6 +34,7 @@ interface Props {
   onClose: () => void;
   onSaved: () => void;
   onIconsChanged?: () => void;
+  pinSettings?: PinSettings;
 }
 
 const POINT_KINDS: ItemKind[] = ["place", "food", "custom"];
@@ -43,16 +46,26 @@ function shiftIso(iso: string | null, offsetMs: number): string | null {
   return Number.isNaN(t) ? iso : new Date(t + offsetMs).toISOString();
 }
 
-export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved, onIconsChanged }: Props) {
+export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved, onIconsChanged, pinSettings }: Props) {
   const editing = Boolean(item);
-  const [kind, setKind] = useState<ItemKind>(item?.kind ?? "place");
+  const initialKind = item?.kind ?? "place";
+  const [kind, setKind] = useState<ItemKind>(initialKind);
   const [title, setTitle] = useState(item?.title ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [occurredOn, setOccurredOn] = useState(item?.occurredOn ?? "");
   const [themeId, setThemeId] = useState<string | null>(item?.themeId ?? null);
   const [tripId, setTripId] = useState<string | null>(item?.tripId ?? null);
-  const [color, setColor] = useState(item?.color ?? KIND_DEFAULTS[item?.kind ?? "place"].color);
-  const [icon, setIcon] = useState(item?.icon ?? KIND_DEFAULTS[item?.kind ?? "place"].icon);
+  const [color, setColor] = useState(item?.color ?? defaultColor(initialKind, pinSettings));
+  const [icon, setIcon] = useState(item?.icon ?? defaultIcon(initialKind, pinSettings));
+  // Per-item pin shape/size/border, prefilled from settings defaults.
+  const initialPin = (item?.properties?.pin ?? {}) as PinStyle;
+  const initialPinBase = defaultPinStyle(initialKind, pinSettings);
+  const [pinStyle, setPinStyle] = useState<PinShapeVals>({
+    size: initialPin.size ?? initialPinBase.size,
+    shape: initialPin.shape ?? initialPinBase.shape,
+    borderWidth: initialPin.borderWidth ?? initialPinBase.borderWidth,
+    borderColor: initialPin.borderColor ?? initialPinBase.borderColor,
+  });
 
   const initialPoint =
     item?.geometry?.type === "Point" ? (item.geometry.coordinates as number[]) : null;
@@ -124,9 +137,10 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   function applyKind(k: ItemKind) {
     setKind(k);
     if (!themeId) {
-      setColor(KIND_DEFAULTS[k].color);
-      setIcon(KIND_DEFAULTS[k].icon);
+      setColor(defaultColor(k, pinSettings));
+      setIcon(defaultIcon(k, pinSettings));
     }
+    setPinStyle(defaultPinStyle(k, pinSettings));
   }
 
   function applyTheme(id: string | null) {
@@ -302,6 +316,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     }
 
     const properties: Record<string, unknown> = { ...(item?.properties ?? {}) };
+    properties.pin = pinStyle; // per-item size/shape/border
     if (kind === "cruise") {
       if (cruiseLine) properties.cruiseLine = cruiseLine;
       else delete properties.cruiseLine;
@@ -470,6 +485,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
         </div>
 
         <StylePicker color={color} icon={icon} customIcons={customIcons} onColor={setColor} onIcon={setIcon} onUploaded={onIconsChanged} />
+        <PinStyleControls value={pinStyle} color={color} icon={icon} onChange={setPinStyle} />
 
         <div className="field">
           <label>Notes</label>

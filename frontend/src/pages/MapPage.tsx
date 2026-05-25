@@ -17,6 +17,7 @@ import { GalleryPanel } from "../components/GalleryPanel";
 import { Lightbox } from "../components/Lightbox";
 import { TimelineBar } from "../components/TimelineBar";
 import { Legend } from "../components/Legend";
+import { SettingsPanel } from "../components/SettingsPanel";
 
 export function MapPage() {
   const { user, family, logout } = useAuth();
@@ -25,6 +26,7 @@ export function MapPage() {
   const mapSetsQuery = useQuery({ queryKey: ["mapSets"], queryFn: api.listMapSets });
   const themesQuery = useQuery({ queryKey: ["themes"], queryFn: api.listThemes });
   const iconsQuery = useQuery({ queryKey: ["icons"], queryFn: api.listIcons });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
 
   const [currentMapSetId, setCurrentMapSetId] = useState<string | null>(null);
   useEffect(() => {
@@ -47,6 +49,7 @@ export function MapPage() {
   const themes = themesQuery.data ?? [];
   const themesById = useMemo(() => new Map<string, Theme>(themes.map((t) => [t.id, t])), [themes]);
   const customIcons = iconsQuery.data?.custom ?? [];
+  const pinSettings = settingsQuery.data?.pin;
   const items = itemsQuery.data ?? [];
   const trips = tripsQuery.data ?? [];
   const mapSets = mapSetsQuery.data ?? [];
@@ -118,6 +121,7 @@ export function MapPage() {
   const [editorItem, setEditorItem] = useState<Item | null>(null);
   const [mapSetEditor, setMapSetEditor] = useState<{ open: boolean; mapSet: MapSet | null }>({ open: false, mapSet: null });
   const [showManage, setShowManage] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showTrips, setShowTrips] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
@@ -204,6 +208,7 @@ export function MapPage() {
         items={filteredItems}
         trips={trips}
         themesById={themesById}
+        pinSettings={pinSettings}
         selectedItemId={selectedItemId}
         search={search}
         kindFilter={kindFilter}
@@ -218,6 +223,7 @@ export function MapPage() {
         onSelectItem={selectItem}
         onEditItem={(item) => { setEditorItem(item); setEditorOpen(true); }}
         onManage={() => setShowManage(true)}
+        onSettings={() => setShowSettings(true)}
         onTrips={() => setShowTrips(true)}
         onStats={() => setShowStats(true)}
         onGallery={() => setShowGallery(true)}
@@ -230,7 +236,7 @@ export function MapPage() {
               mapSet={currentMapSet}
               items={filteredItems}
               selectedItemId={selectedItemId}
-              getStyle={(item) => resolveItemStyle(item, themesById)}
+              getStyle={(item) => resolveItemStyle(item, themesById, pinSettings)}
               pickMode={pickActive}
               editMode={editMode}
               visitedGeo={visitedGeo}
@@ -277,6 +283,7 @@ export function MapPage() {
           onClose={() => setEditorOpen(false)}
           onSaved={() => { setEditorOpen(false); refreshItems(); }}
           onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
+          pinSettings={pinSettings}
         />
       )}
 
@@ -299,6 +306,15 @@ export function MapPage() {
           onSaved={(m) => { setMapSetEditor({ open: false, mapSet: null }); setCurrentMapSetId(m.id); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
           onDeleted={(id) => { setMapSetEditor({ open: false, mapSet: null }); if (currentMapSetId === id) setCurrentMapSetId(null); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
           onImported={() => { if (mapSetEditor.mapSet) qc.invalidateQueries({ queryKey: ["items", mapSetEditor.mapSet.id] }); }}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsPanel
+          settings={settingsQuery.data ?? {}}
+          customIcons={customIcons}
+          onClose={() => setShowSettings(false)}
+          onSaved={() => { setShowSettings(false); qc.invalidateQueries({ queryKey: ["settings"] }); }}
         />
       )}
 

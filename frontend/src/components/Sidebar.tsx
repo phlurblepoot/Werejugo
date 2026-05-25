@@ -1,4 +1,4 @@
-import type { Item, ItemKind, MapSet, Theme, Trip } from "../api/client";
+import type { Item, ItemKind, MapSet, PinSettings, Theme, Trip } from "../api/client";
 import { API_URL } from "../api/client";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { resolveItemStyle, KIND_LABELS } from "../lib/style";
@@ -11,6 +11,7 @@ interface Props {
   items: Item[];
   trips: Trip[];
   themesById: Map<string, Theme>;
+  pinSettings?: PinSettings;
   selectedItemId: string | null;
   search: string;
   kindFilter: ItemKind[];
@@ -25,6 +26,7 @@ interface Props {
   onSelectItem: (id: string) => void;
   onEditItem: (item: Item) => void;
   onManage: () => void;
+  onSettings: () => void;
   onTrips: () => void;
   onStats: () => void;
   onGallery: () => void;
@@ -53,6 +55,7 @@ export function Sidebar(props: Props) {
         <button className="ghost" onClick={props.onGallery}>🖼 Photos</button>
         <button className="ghost" onClick={props.onStats}>📊 Stats</button>
         <button className="ghost" onClick={props.onManage}>🎨 Themes</button>
+        <button className="ghost" onClick={props.onSettings}>⚙ Settings</button>
       </div>
 
       <button className="primary" style={{ width: "100%", marginTop: 8 }} onClick={props.onAddItem} disabled={!current}>
@@ -86,7 +89,7 @@ export function Sidebar(props: Props) {
       {props.items.length === 0 && <div className="empty">Nothing matches. Add a pin or clear filters.</div>}
 
       {props.items.map((item) => {
-        const style = resolveItemStyle(item, props.themesById);
+        const style = resolveItemStyle(item, props.themesById, props.pinSettings);
         return (
           <div
             key={item.id}
