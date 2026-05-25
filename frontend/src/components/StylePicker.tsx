@@ -1,4 +1,5 @@
-import { API_URL, type CustomIcon } from "../api/client";
+import { useRef, useState } from "react";
+import { api, API_URL, type CustomIcon } from "../api/client";
 import { ICON_GLYPHS, isImageIcon } from "../lib/icons";
 
 export const PALETTE = [
@@ -12,9 +13,25 @@ interface Props {
   customIcons: CustomIcon[];
   onColor: (c: string) => void;
   onIcon: (i: string) => void;
+  // When provided, shows an inline "upload your own pin" tile.
+  onUploaded?: () => void;
 }
 
-export function StylePicker({ color, icon, customIcons, onColor, onIcon }: Props) {
+export function StylePicker({ color, icon, customIcons, onColor, onIcon, onUploaded }: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file: File) {
+    setBusy(true);
+    try {
+      const created = await api.uploadIcon(file, file.name.replace(/\.[^.]+$/, ""));
+      onIcon(created.url); // select the new pin immediately
+      onUploaded?.(); // let the parent refresh the family icon list
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <div className="field">
@@ -31,7 +48,7 @@ export function StylePicker({ color, icon, customIcons, onColor, onIcon }: Props
         </div>
       </div>
       <div className="field">
-        <label>Icon</label>
+        <label>Icon / custom pin</label>
         <div className="icon-grid">
           {Object.keys(ICON_GLYPHS).map((name) => (
             <div
@@ -53,6 +70,23 @@ export function StylePicker({ color, icon, customIcons, onColor, onIcon }: Props
               <img src={isImageIcon(ci.url) ? `${API_URL}${ci.url}` : ci.url} alt={ci.name} />
             </div>
           ))}
+          {onUploaded && (
+            <div
+              className="icon-choice"
+              title="Upload a custom pin image"
+              style={{ fontSize: 13, color: "var(--muted)" }}
+              onClick={() => !busy && fileRef.current?.click()}
+            >
+              {busy ? "…" : "+ Pin"}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+              />
+            </div>
+          )}
         </div>
       </div>
     </>

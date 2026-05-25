@@ -162,10 +162,13 @@ export function MapPage() {
   }
 
   async function deleteItem(id: string) {
-    if (!confirm("Delete this item?")) return;
-    await api.deleteItem(id);
-    setDetailItemId(null);
-    refreshItems();
+    try {
+      await api.deleteItem(id);
+      setDetailItemId(null);
+      refreshItems();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not delete item");
+    }
   }
 
   async function exportData() {
@@ -273,6 +276,7 @@ export function MapPage() {
           onRequestPick={requestPick}
           onClose={() => setEditorOpen(false)}
           onSaved={() => { setEditorOpen(false); refreshItems(); }}
+          onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
         />
       )}
 

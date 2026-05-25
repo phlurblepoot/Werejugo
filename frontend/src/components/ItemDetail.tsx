@@ -18,6 +18,7 @@ interface Props {
 export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpenLightbox }: Props) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const trip = trips.find((t) => t.id === item.tripId);
   const p = (item.properties ?? {}) as Record<string, string>;
   const cruiseMeta = [p.cruiseLine, p.ship].filter(Boolean).join(" · ") || null;
@@ -110,9 +111,23 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
         </div>
 
         <div className="modal-actions">
-          <button className="danger" onClick={onDelete} style={{ marginRight: "auto" }}>Delete item</button>
-          <button onClick={onClose}>Close</button>
-          <button className="primary" onClick={onEdit}>Edit</button>
+          {confirmingDelete ? (
+            <>
+              <span style={{ marginRight: "auto", alignSelf: "center", color: "#fca5a5", fontSize: 13 }}>
+                Delete this item?
+              </span>
+              <button onClick={() => setConfirmingDelete(false)}>Cancel</button>
+              <button className="danger" onClick={onDelete}>Yes, delete</button>
+            </>
+          ) : (
+            <>
+              <button className="danger" onClick={() => setConfirmingDelete(true)} style={{ marginRight: "auto" }}>
+                Delete item
+              </button>
+              <button onClick={onClose}>Close</button>
+              <button className="primary" onClick={onEdit}>Edit</button>
+            </>
+          )}
         </div>
       </div>
     </div>

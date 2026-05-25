@@ -31,6 +31,7 @@ interface Props {
   onRequestPick: () => Promise<[number, number]>;
   onClose: () => void;
   onSaved: () => void;
+  onIconsChanged?: () => void;
 }
 
 const POINT_KINDS: ItemKind[] = ["place", "food", "custom"];
@@ -42,7 +43,7 @@ function shiftIso(iso: string | null, offsetMs: number): string | null {
   return Number.isNaN(t) ? iso : new Date(t + offsetMs).toISOString();
 }
 
-export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved }: Props) {
+export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved, onIconsChanged }: Props) {
   const editing = Boolean(item);
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? "place");
   const [title, setTitle] = useState(item?.title ?? "");
@@ -436,7 +437,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
           </select>
         </div>
 
-        <StylePicker color={color} icon={icon} customIcons={customIcons} onColor={setColor} onIcon={setIcon} />
+        <StylePicker color={color} icon={icon} customIcons={customIcons} onColor={setColor} onIcon={setIcon} onUploaded={onIconsChanged} />
 
         <div className="field">
           <label>Notes</label>
