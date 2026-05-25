@@ -35,6 +35,13 @@ interface Props {
 
 const POINT_KINDS: ItemKind[] = ["place", "food", "custom"];
 
+/** Shift an ISO datetime by a millisecond offset (used to realign reused itineraries). */
+function shiftIso(iso: string | null, offsetMs: number): string | null {
+  if (!iso || offsetMs === 0) return iso;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? iso : new Date(t + offsetMs).toISOString();
+}
+
 export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved }: Props) {
   const editing = Boolean(item);
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? "place");
@@ -67,6 +74,9 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   const [lookupBusy, setLookupBusy] = useState(false);
   const [cruiseResult, setCruiseResult] = useState<CruiseFindResult | null>(null);
   const [shipUrl, setShipUrl] = useState<string | null>(null);
+  // When reusing a repeating itinerary for a past/different sailing, keep the
+  // user's chosen start date and shift the itinerary's port dates onto it.
+  const [reuseItinerary, setReuseItinerary] = useState(false);
 
   const [existingPhotos, setExistingPhotos] = useState<Photo[]>(item?.photos ?? []);
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; caption: string; preview: string }[]>([]);
@@ -166,10 +176,11 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       setCruiseResult(res);
       setWarnings(res.warnings);
       setLookupImage(res.image ?? null);
-      // Auto-select the sailing closest to the entered date.
+      // Auto-select the sailing closest to the entered date — but not when reusing
+      // an itinerary, where the user deliberately picks the route that matches theirs.
       const dated = res.sailings.filter((s) => s.dateISO);
       const target = occurredOn ? Date.parse(occurredOn) : NaN;
-      if (dated.length && !Number.isNaN(target)) {
+      if (!reuseItinerary && dated.length && !Number.isNaN(target)) {
         const closest = dated.reduce((best, s) =>
           Math.abs(Date.parse(s.dateISO!) - target) < Math.abs(Date.parse(best.dateISO!) - target) ? s : best,
         );
@@ -213,7 +224,10 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
 
   async function pickSailing(s: CruiseSailing) {
     if (!title.trim()) setTitle(`${cruiseResult?.shipName || ship} — ${s.title}`.trim());
-    if (s.dateISO) setOccurredOn(s.dateISO);
+    // Reuse mode keeps the user's start date; otherwise adopt the sailing's date.
+    if (!reuseItinerary && s.dateISO) setOccurredOn(s.dateISO);
+    // Days to shift the itinerary's dates onto the user's chosen start date.
+    const offsetMs = reuseItinerary && occurredOn && s.dateISO ? Date.parse(occurredOn) - Date.parse(s.dateISO) : 0;
     if (!s.id) {
       if (s.departurePort) addPortChip(s.departurePort, null, null);
       return;
@@ -224,17 +238,20 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       if (d.ports.length) {
         // Plot every port on its date, and use the real sailed route.
         setStops(
-          d.ports.map((p, i) => ({
-            label: p.label,
-            kind: p.kind,
-            lng: p.lng,
-            lat: p.lat,
-            seq: i,
-            arriveAt: p.arriveAt ?? null,
+          d.ports.map((p, i) => {
             // departAt must be a full datetime (backend validates it); a date-only
             // fallback becomes midnight, which the formatter renders as just the date.
-            departAt: p.departAt ?? (p.dateISO ? `${p.dateISO}T00:00:00.000Z` : null),
-          })),
+            const baseDepart = p.departAt ?? (p.dateISO ? `${p.dateISO}T00:00:00.000Z` : null);
+            return {
+              label: p.label,
+              kind: p.kind,
+              lng: p.lng,
+              lat: p.lat,
+              seq: i,
+              arriveAt: shiftIso(p.arriveAt ?? null, offsetMs),
+              departAt: shiftIso(baseDepart, offsetMs),
+            };
+          }),
         );
         setRoutePath(d.path && d.path.length >= 2 ? d.path : null);
         if (d.warnings.length) setWarnings(d.warnings);
@@ -354,6 +371,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
               sailDate={occurredOn ?? ""}
               busy={lookupBusy}
               result={cruiseResult}
+              reuse={reuseItinerary}
+              onReuse={setReuseItinerary}
               onLine={(t) => setCruiseLine(t)}
               onShip={(t, url) => { setShip(t); setShipUrl(url); }}
               onSailDate={setOccurredOn}
@@ -580,6 +599,8 @@ function CruiseFields({
   sailDate,
   busy,
   result,
+  reuse,
+  onReuse,
   onLine,
   onShip,
   onSailDate,
@@ -592,6 +613,8 @@ function CruiseFields({
   sailDate: string;
   busy: boolean;
   result: CruiseFindResult | null;
+  reuse: boolean;
+  onReuse: (b: boolean) => void;
   onLine: (s: string) => void;
   onShip: (s: string, url: string | null) => void;
   onSailDate: (s: string) => void;
@@ -621,6 +644,15 @@ function CruiseFields({
         />
         <input type="date" value={sailDate} onChange={(e) => onSailDate(e.target.value)} title="Sail date" style={{ maxWidth: 150 }} />
       </div>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 13, color: "var(--text)" }}>
+        <input type="checkbox" style={{ width: "auto" }} checked={reuse} onChange={(e) => onReuse(e.target.checked)} />
+        Reuse this itinerary for my dates (keep my start date; shift port days to match)
+      </label>
+      {reuse && (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+          Pick the sailing whose route matches yours — its dates will be shifted onto your start date.
+        </div>
+      )}
       <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy}>
         {busy ? "Searching CruiseMapper…" : "🔎 Find on CruiseMapper"}
       </button>
