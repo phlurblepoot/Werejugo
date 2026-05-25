@@ -184,6 +184,8 @@ export interface CruiseFindResult {
   shipName: string;
   shipUrl: string | null;
   image: string | null;
+  lineName: string | null;
+  lineLogo: string | null;
   sailings: CruiseSailing[];
   ports: Array<{ label: string; lng: number | null; lat: number | null }>;
   warnings: string[];

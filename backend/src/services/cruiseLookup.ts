@@ -22,6 +22,8 @@ export interface CruiseFindResult {
   shipName: string;
   shipUrl: string | null;
   image: string | null;
+  lineName: string | null;
+  lineLogo: string | null;
   sailings: CruiseSailing[];
   ports: Array<{ label: string; lng: number | null; lat: number | null }>;
   warnings: string[];
@@ -31,6 +33,8 @@ const emptyFind = (warnings: string[]): CruiseFindResult => ({
   shipName: "",
   shipUrl: null,
   image: null,
+  lineName: null,
+  lineLogo: null,
   sailings: [],
   ports: [],
   warnings,
@@ -165,6 +169,14 @@ async function parseShipPage(shipUrl: string) {
   const imgSrc = $('img[itemprop="image"]').attr("src") || $('meta[property="og:image"]').attr("content");
   const image = imgSrc ? abs(imgSrc) : null;
 
+  // The ship's cruise line link (e.g. /cruise-lines/Royal-Caribbean-1) gives the
+  // line id, which maps to its logo at /images/lines/icons/<id>.png.
+  const lineHref =
+    $("a.shipCompanyLink").first().attr("href") || $('a[href*="/cruise-lines/"]').first().attr("href") || "";
+  const lineId = lineHref.match(/\/cruise-lines\/[^/]*-(\d+)/)?.[1] ?? null;
+  const lineName = $("a.shipCompanyLink").first().text().trim() || null;
+  const lineLogo = lineId ? `${BASE}/images/lines/icons/${lineId}.png` : null;
+
   const sailings: CruiseSailing[] = [];
   $("table.shipTableCruise tbody tr").each((_i, tr) => {
     const id = $(tr).attr("data-row") ?? "";
@@ -191,7 +203,7 @@ async function parseShipPage(shipUrl: string) {
     }
   });
 
-  return { shipName, image, sailings, ports };
+  return { shipName, image, lineName, lineLogo, sailings, ports };
 }
 
 /**
@@ -239,7 +251,16 @@ export async function findCruise({
       }),
     );
     if (!page.sailings.length) warnings.push("No upcoming sailings listed; you can still build the route from the ports below.");
-    return { shipName: page.shipName || ship || "", shipUrl, image: page.image, sailings: page.sailings, ports, warnings };
+    return {
+      shipName: page.shipName || ship || "",
+      shipUrl,
+      image: page.image,
+      lineName: page.lineName,
+      lineLogo: page.lineLogo,
+      sailings: page.sailings,
+      ports,
+      warnings,
+    };
   } catch {
     return emptyFind(["Cruise lookup failed (network or parsing error). Add ports manually."]);
   }

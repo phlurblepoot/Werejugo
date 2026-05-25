@@ -101,12 +101,12 @@ export async function downloadImage(
   let thumbUrl: string | null = null;
   if (ext !== ".svg" && ext !== ".gif") {
     try {
-      const thumbName = `${name.replace(ext, "")}_thumb.jpg`;
-      await sharp(buf)
-        .rotate()
-        .resize(400, 400, { fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 80 })
-        .toFile(join(config.uploadsDir, thumbName));
+      // Preserve transparency for PNG/WebP (logos); JPEG otherwise.
+      const thumbExt = ext === ".png" ? ".png" : ext === ".webp" ? ".webp" : ".jpg";
+      const thumbName = `${name.replace(ext, "")}_thumb${thumbExt}`;
+      let pipe = sharp(buf).rotate().resize(400, 400, { fit: "inside", withoutEnlargement: true });
+      pipe = thumbExt === ".png" ? pipe.png() : thumbExt === ".webp" ? pipe.webp() : pipe.jpeg({ quality: 80 });
+      await pipe.toFile(join(config.uploadsDir, thumbName));
       thumbUrl = `/uploads/${thumbName}`;
     } catch {
       thumbUrl = null;

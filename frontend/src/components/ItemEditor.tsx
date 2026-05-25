@@ -163,15 +163,14 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     setLookupImage(r.image ?? null);
   }
 
-  // Import the looked-up ship photo and use it as this item's map pin.
-  async function useShipPhotoAsPin() {
-    if (!lookupImage) return;
+  // Import a CruiseMapper image (ship photo or line logo) and use it as the pin.
+  async function useImageAsPin(url: string) {
     setPinBusy(true);
     try {
-      const r = await api.uploadFromUrl(lookupImage);
+      const r = await api.uploadFromUrl(url);
       setIcon(r.thumbUrl || r.url);
     } catch {
-      setWarnings(["Couldn't import the ship photo as a pin."]);
+      setWarnings(["Couldn't import that image as a pin."]);
     } finally {
       setPinBusy(false);
     }
@@ -413,9 +412,24 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
         {lookupImage && (
           <div className="field">
             <img src={lookupImage} alt="" style={{ width: "100%", borderRadius: "var(--radius)", maxHeight: 160, objectFit: "cover" }} />
-            <button type="button" style={{ marginTop: 6 }} onClick={useShipPhotoAsPin} disabled={pinBusy}>
-              {pinBusy ? "Importing…" : "📌 Use ship photo as pin"}
-            </button>
+            <div className="row" style={{ marginTop: 6, alignItems: "center", gap: 8 }}>
+              {cruiseResult?.lineLogo && (
+                <img
+                  src={cruiseResult.lineLogo}
+                  alt={cruiseResult.lineName ?? "line logo"}
+                  style={{ height: 30, width: "auto", background: "#fff", borderRadius: 4, padding: 2 }}
+                  onError={(e) => (e.currentTarget.style.display = "none")}
+                />
+              )}
+              {cruiseResult?.lineLogo && (
+                <button type="button" onClick={() => useImageAsPin(cruiseResult.lineLogo!)} disabled={pinBusy}>
+                  {pinBusy ? "Importing…" : "🏷 Use line logo as pin"}
+                </button>
+              )}
+              <button type="button" onClick={() => useImageAsPin(lookupImage)} disabled={pinBusy}>
+                📌 Use ship photo as pin
+              </button>
+            </div>
           </div>
         )}
 
