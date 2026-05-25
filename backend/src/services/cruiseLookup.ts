@@ -258,8 +258,8 @@ interface FetchResult {
 }
 
 /** Fetch a CruiseMapper page with browser-like headers. */
-export async function cruiseFetch(url: string): Promise<FetchResult> {
-  const res = await fetch(url, { headers: BROWSER_HEADERS, redirect: "follow" });
+export async function cruiseFetch(url: string, extraHeaders: Record<string, string> = {}): Promise<FetchResult> {
+  const res = await fetch(url, { headers: { ...BROWSER_HEADERS, ...extraHeaders }, redirect: "follow" });
   const html = await res.text();
   return {
     url: res.url || url,
@@ -268,6 +268,13 @@ export async function cruiseFetch(url: string): Promise<FetchResult> {
     html,
   };
 }
+
+// CruiseMapper's *.json endpoints only return JSON for requests that look like a
+// browser XHR; otherwise they redirect/serve HTML.
+const XHR_HEADERS: Record<string, string> = {
+  "X-Requested-With": "XMLHttpRequest",
+  Accept: "application/json, text/javascript, */*; q=0.01",
+};
 
 function looksBlocked(status: number, html: string): boolean {
   if (status === 403 || status === 429 || status === 503) return true;
@@ -486,10 +493,11 @@ export async function getSailingDetail(id: string): Promise<SailingDetail> {
   const warnings: string[] = [];
   let mapJson: MapJson = {};
   try {
-    const r = await cruiseFetch(`${BASE}/map/cruise.json?id=${encodeURIComponent(id)}`);
-    if (!looksBlocked(r.status, r.html)) mapJson = JSON.parse(r.html) as MapJson;
+    const r = await cruiseFetch(`${BASE}/map/cruise.json?id=${encodeURIComponent(id)}`, XHR_HEADERS);
+    if (r.status === 200) mapJson = JSON.parse(r.html) as MapJson;
+    else warnings.push(`Route map request failed (HTTP ${r.status}).`);
   } catch {
-    warnings.push("Couldn't read the sailing route map.");
+    warnings.push("Couldn't read the sailing route map (not JSON).");
   }
 
   // poi id → coordinates, and the cruise year (for dating the HTML rows).
@@ -505,10 +513,11 @@ export async function getSailingDetail(id: string): Promise<SailingDetail> {
 
   let html = "";
   try {
-    const r = await cruiseFetch(`${BASE}/ships/cruise.json?id=${encodeURIComponent(id)}`);
-    if (!looksBlocked(r.status, r.html)) html = (JSON.parse(r.html) as { result?: string }).result ?? "";
+    const r = await cruiseFetch(`${BASE}/ships/cruise.json?id=${encodeURIComponent(id)}`, XHR_HEADERS);
+    if (r.status === 200) html = (JSON.parse(r.html) as { result?: string }).result ?? "";
+    else warnings.push(`Port list request failed (HTTP ${r.status}).`);
   } catch {
-    warnings.push("Couldn't read the sailing's port list.");
+    warnings.push("Couldn't read the sailing's port list (not JSON).");
   }
 
   const ports: SailingDetail["ports"] = [];

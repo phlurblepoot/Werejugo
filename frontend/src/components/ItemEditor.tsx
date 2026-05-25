@@ -612,7 +612,7 @@ function CruiseFields({
       <div className="row" style={{ marginTop: 6 }}>
         <Autocomplete
           value={ship}
-          placeholder="Ship (e.g. Symphony of the Seas)"
+          placeholder={cruiseLine ? "Ship (e.g. Symphony of the Seas)" : "Ship — pick a cruise line first"}
           search={(q) => api.searchCruiseShips(q, cruiseLine)}
           onText={(t) => onShip(t, null)}
           onPick={(item) => onShip(item.name, item.url)}
