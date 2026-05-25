@@ -53,6 +53,11 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   );
 
   const [stops, setStops] = useState<Waypoint[]>(item?.waypoints ?? []);
+  // Explicit route polyline (e.g. CruiseMapper's actual sailed track). When null,
+  // the route is derived from the stops (great-circle for flights/cruises).
+  const [routePath, setRoutePath] = useState<number[][] | null>(
+    item?.geometry?.type === "LineString" ? (item.geometry.coordinates as number[][]) : null,
+  );
   const [warnings, setWarnings] = useState<string[]>([]);
   const [lookupImage, setLookupImage] = useState<string | null>(null);
 
@@ -175,7 +180,14 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     }
   }
 
+  // Manual edits to the stop list invalidate any explicit (cruise) route.
+  function changeStops(next: Waypoint[]) {
+    setStops(next);
+    setRoutePath(null);
+  }
+
   function addStop(label: string, lng: number, lat: number) {
+    setRoutePath(null);
     setStops((prev) => {
       const next = [...prev, { label, kind: "stop" as const, lng, lat, seq: prev.length }];
       return next.map((s, i) => ({
@@ -199,10 +211,30 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     }
   }
 
-  function pickSailing(s: CruiseSailing) {
+  async function pickSailing(s: CruiseSailing) {
     if (!title.trim()) setTitle(`${cruiseResult?.shipName || ship} — ${s.title}`.trim());
     if (s.dateISO) setOccurredOn(s.dateISO);
-    if (s.departurePort) addPortChip(s.departurePort, null, null);
+    if (!s.id) {
+      if (s.departurePort) addPortChip(s.departurePort, null, null);
+      return;
+    }
+    setLookupBusy(true);
+    try {
+      const d = await api.getSailingDetail(s.id);
+      if (d.ports.length) {
+        // Plot every port on its date, and use the real sailed route.
+        setStops(
+          d.ports.map((p, i) => ({ label: p.label, kind: p.kind, lng: p.lng, lat: p.lat, seq: i, departAt: p.dateISO ?? null })),
+        );
+        setRoutePath(d.path && d.path.length >= 2 ? d.path : null);
+        if (d.warnings.length) setWarnings(d.warnings);
+      } else {
+        setWarnings(d.warnings.length ? d.warnings : ["Couldn't read that sailing's ports — add them manually below."]);
+        if (s.departurePort) addPortChip(s.departurePort, null, null);
+      }
+    } finally {
+      setLookupBusy(false);
+    }
   }
 
   async function save() {
@@ -221,7 +253,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       geometry = { type: "Point", coordinates: point };
     } else {
       const coords = stops.map((s) => [s.lng, s.lat] as LngLat);
-      const line = buildRoutePath(kind, coords);
+      // Prefer an explicit route (real cruise track) over a derived line.
+      const line = routePath && routePath.length >= 2 ? routePath : buildRoutePath(kind, coords);
       if (line.length >= 2) geometry = { type: "LineString", coordinates: line };
       waypoints = stops;
     }
@@ -318,10 +351,10 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
               onPickSailing={pickSailing}
               onAddPort={addPortChip}
             />
-            <StopBuilder stops={stops} onChange={setStops} source="ports" label="Ports of call (in order)" />
+            <StopBuilder stops={stops} onChange={changeStops} source="ports" label="Ports of call (in order)" />
           </>
         ) : (
-          <StopBuilder stops={stops} onChange={setStops} source="places" label="Stops along the drive (in order)" />
+          <StopBuilder stops={stops} onChange={changeStops} source="places" label="Stops along the drive (in order)" />
         )}
 
         {warnings.length > 0 && (

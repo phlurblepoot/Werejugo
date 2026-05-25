@@ -45,7 +45,10 @@ export function StopBuilder({ stops, onChange, source, label }: Props) {
         <div style={{ marginTop: 8 }}>
           {stops.map((s, i) => (
             <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4, gap: 4 }}>
-              <span style={{ flex: 1, fontSize: 13 }}>{i + 1}. {s.label}</span>
+              <span style={{ flex: 1, fontSize: 13 }}>
+                {i + 1}. {s.label}
+                {s.departAt ? <span style={{ color: "var(--muted)" }}> · {String(s.departAt).slice(0, 10)}</span> : null}
+              </span>
               <button type="button" className="ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
               <button type="button" className="ghost" disabled={i === stops.length - 1} onClick={() => move(i, 1)}>↓</button>
               <button type="button" className="ghost" onClick={() => remove(i)}>✕</button>

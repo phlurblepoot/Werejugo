@@ -5,6 +5,7 @@ import { lookupFlightByCodes, lookupFlightByNumber } from "../services/flightLoo
 import {
   diagnoseCruise,
   findCruise,
+  getSailingDetail,
   lookupCruiseByPorts,
   lookupCruiseByShip,
   searchCruiseLines,
@@ -50,6 +51,13 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     return findCruise(parsed.data);
+  });
+
+  // Full itinerary for one sailing (ports on their dates + the real sailed route).
+  app.post("/api/lookup/cruise/sailing", async (req, reply) => {
+    const parsed = z.object({ id: z.string().regex(/^\d+$/) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "numeric sailing id required" });
+    return getSailingDetail(parsed.data.id);
   });
 
   // Autocomplete for cruise lines and ships (ships require a cruise line).

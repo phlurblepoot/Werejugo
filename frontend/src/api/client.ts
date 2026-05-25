@@ -158,11 +158,18 @@ export interface PlaceSuggestion {
 }
 
 export interface CruiseSailing {
+  id: string;
   dateISO: string | null;
   dateText: string;
   title: string;
   departurePort: string;
   price: string;
+}
+
+export interface SailingDetail {
+  ports: Array<{ label: string; lng: number; lat: number; kind: "origin" | "port" | "destination"; dateISO: string | null }>;
+  path: number[][];
+  warnings: string[];
 }
 
 export interface CruiseFindResult {
@@ -328,6 +335,8 @@ export const api = {
     request<Array<{ name: string; url: string }>>(
       `/api/lookup/cruise/ships?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line ?? "")}`,
     ),
+  getSailingDetail: (id: string) =>
+    request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id }) }),
   resolvePort: (q: string) =>
     request<PlaceSuggestion>(`/api/geo/resolve?q=${encodeURIComponent(q)}`),
   searchAirports: (q: string) =>

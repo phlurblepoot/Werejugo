@@ -266,9 +266,10 @@ export function MapView(props: Props) {
   ): maplibregl.Marker {
     const el = buildBadge(style);
     const wp = waypointIndex !== null ? item.waypoints[waypointIndex] : null;
+    const wpDate = wp?.departAt ? String(wp.departAt).slice(0, 10) : undefined;
     const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode })
       .setLngLat(lngLat)
-      .setPopup(buildPopup(item, wp?.label))
+      .setPopup(buildPopup(item, wp?.label, wpDate))
       .addTo(map);
 
     let dragged = false;
@@ -297,7 +298,7 @@ export function MapView(props: Props) {
     return marker;
   }
 
-  function buildPopup(item: Item, label?: string): maplibregl.Popup {
+  function buildPopup(item: Item, label?: string, date?: string): maplibregl.Popup {
     const photo = item.photos[0];
     const html =
       (photo
@@ -305,7 +306,7 @@ export function MapView(props: Props) {
         : "") +
       `<div class="title">${escapeHtml(item.title)}</div>` +
       (label ? `<div class="sub">${escapeHtml(label)}</div>` : "") +
-      (item.occurredOn ? `<div class="sub">${escapeHtml(item.occurredOn)}</div>` : "") +
+      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(item.occurredOn)}</div>` : "") +
       (item.photos.length > 1 ? `<div class="sub">${item.photos.length} photos</div>` : "");
     return new maplibregl.Popup({ offset: 18, maxWidth: "260px" }).setHTML(html);
   }

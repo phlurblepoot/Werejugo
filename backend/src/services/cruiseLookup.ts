@@ -9,6 +9,7 @@ const abs = (href: string) => (href.startsWith("http") ? href : `${BASE}${href}`
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 export interface CruiseSailing {
+  id: string;
   dateISO: string | null;
   dateText: string;
   title: string;
@@ -164,6 +165,7 @@ async function parseShipPage(shipUrl: string) {
 
   const sailings: CruiseSailing[] = [];
   $("table.shipTableCruise tbody tr").each((_i, tr) => {
+    const id = $(tr).attr("data-row") ?? "";
     const dateText = $(tr).find(".cruiseDatetime").text().trim();
     const title = $(tr).find(".cruiseTitle").text().trim();
     const departurePort = $(tr).find(".cruiseDeparture").text().trim();
@@ -171,7 +173,7 @@ async function parseShipPage(shipUrl: string) {
     if (!dateText && !title) return;
     const d = new Date(dateText);
     const dateISO = Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
-    sailings.push({ dateISO, dateText, title, departurePort, price });
+    sailings.push({ id, dateISO, dateText, title, departurePort, price });
   });
 
   const seen = new Set<string>();
@@ -454,6 +456,83 @@ export async function lookupCruiseByShip(ship: string): Promise<LookupResult> {
   } catch {
     return manualHint("Cruise lookup failed (network or parsing error).");
   }
+}
+
+export interface SailingDetail {
+  ports: Array<{ label: string; lng: number; lat: number; kind: "origin" | "port" | "destination"; dateISO: string | null }>;
+  path: number[][];
+  warnings: string[];
+}
+
+interface MapJson {
+  points?: number[][];
+  ports?: Array<{ poi?: string; lat?: string; lon?: string; dep_datetime?: string | null }>;
+}
+
+/**
+ * Fetch a single sailing's full itinerary by its id (the schedule row's data-row):
+ *  - /map/cruise.json?id=   → the real sailed route (`points`) + port coordinates
+ *  - /ships/cruise.json?id= → { result: <html> } day-by-day ports with names + dates
+ */
+export async function getSailingDetail(id: string): Promise<SailingDetail> {
+  const warnings: string[] = [];
+  let mapJson: MapJson = {};
+  try {
+    const r = await cruiseFetch(`${BASE}/map/cruise.json?id=${encodeURIComponent(id)}`);
+    if (!looksBlocked(r.status, r.html)) mapJson = JSON.parse(r.html) as MapJson;
+  } catch {
+    warnings.push("Couldn't read the sailing route map.");
+  }
+
+  // poi id → coordinates, and the cruise year (for dating the HTML rows).
+  const poiCoord = new Map<string, { lng: number; lat: number }>();
+  let year = new Date().getFullYear();
+  for (const p of mapJson.ports ?? []) {
+    if (p.poi && p.lat && p.lon) poiCoord.set(String(p.poi), { lng: Number(p.lon), lat: Number(p.lat) });
+    if (p.dep_datetime) {
+      const y = Number(p.dep_datetime.slice(0, 4));
+      if (y > 2000) year = y;
+    }
+  }
+
+  let html = "";
+  try {
+    const r = await cruiseFetch(`${BASE}/ships/cruise.json?id=${encodeURIComponent(id)}`);
+    if (!looksBlocked(r.status, r.html)) html = (JSON.parse(r.html) as { result?: string }).result ?? "";
+  } catch {
+    warnings.push("Couldn't read the sailing's port list.");
+  }
+
+  const ports: SailingDetail["ports"] = [];
+  if (html) {
+    const $ = cheerio.load(html);
+    const rows = $("table.cruiseExpand tbody tr").toArray();
+    for (const tr of rows) {
+      const anchors = $(tr).find('td.text a[href*="/ports/"]').toArray();
+      const portA = anchors.find((el) => !($(el).attr("href") ?? "").includes("?"));
+      if (!portA) continue; // sea day / no port
+      const href = $(portA).attr("href") ?? "";
+      const portId = href.match(/-port-(\d+)/)?.[1] ?? null;
+      const label = $(portA).text().trim().split(/[(,]/)[0].trim();
+      const dateText = $(tr).find("td.date").text().trim().split(/\s+/).slice(0, 2).join(" ");
+      const d = new Date(`${dateText} ${year}`);
+      const dateISO = Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+
+      let coord = portId ? poiCoord.get(portId) : undefined;
+      if (!coord) {
+        const p = await findPort(label);
+        if (p) coord = { lng: p.lng, lat: p.lat };
+      }
+      if (coord) ports.push({ label, lng: coord.lng, lat: coord.lat, kind: "port", dateISO });
+    }
+  }
+  ports.forEach((p, i) => {
+    p.kind = i === 0 ? "origin" : i === ports.length - 1 ? "destination" : "port";
+  });
+
+  const path = Array.isArray(mapJson.points) ? mapJson.points.filter((c) => Array.isArray(c) && c.length === 2) : [];
+  if (!ports.length) warnings.push("Couldn't parse this sailing's ports — add them manually below.");
+  return { ports, path, warnings };
 }
 
 function manualHint(reason: string): LookupResult {
