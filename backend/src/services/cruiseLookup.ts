@@ -33,6 +33,83 @@ const emptyFind = (warnings: string[]): CruiseFindResult => ({
   warnings,
 });
 
+interface NamedUrl {
+  name: string;
+  url: string;
+}
+
+// --- Autocomplete caches (CruiseMapper changes rarely) ---
+let linesCache: { at: number; lines: NamedUrl[] } | null = null;
+const shipsByLine = new Map<string, { at: number; ships: NamedUrl[] }>();
+const LINES_TTL = 6 * 60 * 60 * 1000;
+const SHIPS_TTL = 60 * 60 * 1000;
+
+async function getLines(): Promise<NamedUrl[]> {
+  if (linesCache && Date.now() - linesCache.at < LINES_TTL) return linesCache.lines;
+  const r = await cruiseFetch(`${BASE}/cruise-lines`);
+  if (looksBlocked(r.status, r.html)) return linesCache?.lines ?? [];
+  const $ = cheerio.load(r.html);
+  const seen = new Set<string>();
+  const lines: NamedUrl[] = [];
+  $('a[href*="/cruise-lines/"]').each((_i, el) => {
+    const raw = $(el).attr("href");
+    if (!raw) return;
+    const url = abs(raw.split(/[?#]/)[0]);
+    if (seen.has(url) || /\/cruise-lines\/?$/.test(url)) return; // skip the index link itself
+    seen.add(url);
+    const name = $(el).text().trim();
+    if (name && name.length >= 2 && name.length < 60) lines.push({ name, url });
+  });
+  if (lines.length) linesCache = { at: Date.now(), lines };
+  return lines;
+}
+
+async function getShipsForLine(lineUrl: string): Promise<NamedUrl[]> {
+  const cached = shipsByLine.get(lineUrl);
+  if (cached && Date.now() - cached.at < SHIPS_TTL) return cached.ships;
+  const r = await cruiseFetch(lineUrl);
+  if (looksBlocked(r.status, r.html)) return cached?.ships ?? [];
+  const $ = cheerio.load(r.html);
+  const seen = new Set<string>();
+  const ships: NamedUrl[] = [];
+  $('a[href*="/ships/"]').each((_i, el) => {
+    const raw = $(el).attr("href");
+    if (!raw) return;
+    const url = abs(raw.split(/[?#]/)[0]);
+    if (seen.has(url)) return;
+    seen.add(url);
+    const slug = url.split("/ships/")[1] ?? "";
+    const fromSlug = slug.replace(/-\d+$/, "").replace(/-/g, " ");
+    const text = $(el).text().trim();
+    const name = text.length >= 3 ? text : fromSlug;
+    if (name) ships.push({ name, url });
+  });
+  if (ships.length) shipsByLine.set(lineUrl, { at: Date.now(), ships });
+  return ships;
+}
+
+export async function searchCruiseLines(q: string): Promise<NamedUrl[]> {
+  const lines = await getLines();
+  const n = norm(q);
+  if (!n) return lines.slice(0, 12);
+  return lines.filter((l) => norm(l.name).includes(n)).slice(0, 12);
+}
+
+export async function searchCruiseShips(q: string, lineName?: string): Promise<NamedUrl[]> {
+  let lineUrl: string | null = null;
+  if (lineName && lineName.trim()) {
+    const lines = await getLines();
+    const target = norm(lineName);
+    const match = lines.find((l) => norm(l.name).includes(target) || target.includes(norm(l.name)));
+    lineUrl = match?.url ?? null;
+  }
+  if (!lineUrl) return []; // ship autocomplete needs a known cruise line
+  const ships = await getShipsForLine(lineUrl);
+  const n = norm(q);
+  if (!n) return ships.slice(0, 15);
+  return ships.filter((s) => norm(s.name).includes(n)).slice(0, 15);
+}
+
 async function findLineUrl(line: string): Promise<string | null> {
   const r = await cruiseFetch(`${BASE}/cruise-lines`);
   if (looksBlocked(r.status, r.html)) return null;
@@ -118,19 +195,35 @@ async function parseShipPage(shipUrl: string) {
  * schedule + ports of call. The exact day-by-day ports for one sailing are not
  * in the static HTML, so the UI lets the user assemble the route from these ports.
  */
-export async function findCruise({ line, ship }: { line?: string; ship: string }): Promise<CruiseFindResult> {
+export async function findCruise({
+  line,
+  ship,
+  shipUrl: directUrl,
+}: {
+  line?: string;
+  ship?: string;
+  shipUrl?: string;
+}): Promise<CruiseFindResult> {
   if (!config.cruiseLookupEnabled) return emptyFind(["Cruise lookup is disabled. Add ports manually."]);
   const warnings: string[] = [];
   try {
     let shipUrl: string | null = null;
-    if (line && line.trim()) {
+    // Exact URL chosen from autocomplete — use it directly (validate host).
+    if (directUrl) {
+      try {
+        if (/(^|\.)cruisemapper\.com$/.test(new URL(directUrl).hostname)) shipUrl = directUrl;
+      } catch {
+        /* ignore bad url */
+      }
+    }
+    if (!shipUrl && ship && line && line.trim()) {
       const lineUrl = await findLineUrl(line.trim());
       if (lineUrl) shipUrl = await findShipUrl(lineUrl, ship);
       else warnings.push(`Couldn't find cruise line "${line}" on CruiseMapper.`);
     }
-    if (!shipUrl) shipUrl = await findShipUrl(`${BASE}/ships`, ship);
+    if (!shipUrl && ship) shipUrl = await findShipUrl(`${BASE}/ships`, ship);
     if (!shipUrl) {
-      return emptyFind([...warnings, `Couldn't find "${ship}". Try the exact ship name and cruise line, or add ports manually.`]);
+      return emptyFind([...warnings, `Couldn't find "${ship ?? "that ship"}". Try the exact ship name and cruise line, or add ports manually.`]);
     }
     const page = await parseShipPage(shipUrl);
     if (!page) return emptyFind([...warnings, "CruiseMapper blocked the ship page. Add ports manually."]);
@@ -142,7 +235,7 @@ export async function findCruise({ line, ship }: { line?: string; ship: string }
       }),
     );
     if (!page.sailings.length) warnings.push("No upcoming sailings listed; you can still build the route from the ports below.");
-    return { shipName: page.shipName || ship, shipUrl, image: page.image, sailings: page.sailings, ports, warnings };
+    return { shipName: page.shipName || ship || "", shipUrl, image: page.image, sailings: page.sailings, ports, warnings };
   } catch {
     return emptyFind(["Cruise lookup failed (network or parsing error). Add ports manually."]);
   }

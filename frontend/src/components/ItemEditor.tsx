@@ -19,6 +19,7 @@ import { buildRoutePath, type LngLat } from "../lib/geo";
 import { StylePicker } from "./StylePicker";
 import { PlaceSearch } from "./PlaceSearch";
 import { StopBuilder } from "./StopBuilder";
+import { Autocomplete } from "./Autocomplete";
 import { MediaThumb } from "./MediaThumb";
 
 interface Props {
@@ -60,6 +61,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   const [ship, setShip] = useState(props0.ship ?? "");
   const [lookupBusy, setLookupBusy] = useState(false);
   const [cruiseResult, setCruiseResult] = useState<CruiseFindResult | null>(null);
+  const [shipUrl, setShipUrl] = useState<string | null>(null);
 
   const [existingPhotos, setExistingPhotos] = useState<Photo[]>(item?.photos ?? []);
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; caption: string; preview: string }[]>([]);
@@ -145,16 +147,29 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   }
 
   async function findCruise() {
-    if (!ship.trim()) {
+    if (!ship.trim() && !shipUrl) {
       setWarnings(["Enter the ship name to search CruiseMapper."]);
       return;
     }
     setLookupBusy(true);
     try {
-      const res = await api.findCruise({ line: cruiseLine.trim() || undefined, ship: ship.trim() });
+      const res = await api.findCruise({
+        line: cruiseLine.trim() || undefined,
+        ship: ship.trim() || undefined,
+        shipUrl: shipUrl || undefined,
+      });
       setCruiseResult(res);
       setWarnings(res.warnings);
       setLookupImage(res.image ?? null);
+      // Auto-select the sailing closest to the entered date.
+      const dated = res.sailings.filter((s) => s.dateISO);
+      const target = occurredOn ? Date.parse(occurredOn) : NaN;
+      if (dated.length && !Number.isNaN(target)) {
+        const closest = dated.reduce((best, s) =>
+          Math.abs(Date.parse(s.dateISO!) - target) < Math.abs(Date.parse(best.dateISO!) - target) ? s : best,
+        );
+        pickSailing(closest);
+      }
     } finally {
       setLookupBusy(false);
     }
@@ -296,8 +311,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
               sailDate={occurredOn ?? ""}
               busy={lookupBusy}
               result={cruiseResult}
-              onLine={setCruiseLine}
-              onShip={setShip}
+              onLine={(t) => setCruiseLine(t)}
+              onShip={(t, url) => { setShip(t); setShipUrl(url); }}
               onSailDate={setOccurredOn}
               onFind={findCruise}
               onPickSailing={pickSailing}
@@ -535,7 +550,7 @@ function CruiseFields({
   busy: boolean;
   result: CruiseFindResult | null;
   onLine: (s: string) => void;
-  onShip: (s: string) => void;
+  onShip: (s: string, url: string | null) => void;
   onSailDate: (s: string) => void;
   onFind: () => void;
   onPickSailing: (s: CruiseSailing) => void;
@@ -545,11 +560,23 @@ function CruiseFields({
     <div className="field">
       <label>Find an itinerary (CruiseMapper)</label>
       <div className="row">
-        <input value={cruiseLine} onChange={(e) => onLine(e.target.value)} placeholder="Cruise line (e.g. Royal Caribbean)" />
+        <Autocomplete
+          value={cruiseLine}
+          placeholder="Cruise line (e.g. Royal Caribbean)"
+          search={api.searchCruiseLines}
+          onText={onLine}
+          onPick={(item) => onLine(item.name)}
+        />
       </div>
       <div className="row" style={{ marginTop: 6 }}>
-        <input value={ship} onChange={(e) => onShip(e.target.value)} placeholder="Ship (e.g. Symphony of the Seas)" />
-        <input type="date" value={sailDate} onChange={(e) => onSailDate(e.target.value)} title="Sail date" />
+        <Autocomplete
+          value={ship}
+          placeholder="Ship (e.g. Symphony of the Seas)"
+          search={(q) => api.searchCruiseShips(q, cruiseLine)}
+          onText={(t) => onShip(t, null)}
+          onPick={(item) => onShip(item.name, item.url)}
+        />
+        <input type="date" value={sailDate} onChange={(e) => onSailDate(e.target.value)} title="Sail date" style={{ maxWidth: 150 }} />
       </div>
       <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy}>
         {busy ? "Searching CruiseMapper…" : "🔎 Find on CruiseMapper"}

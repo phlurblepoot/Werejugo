@@ -2,7 +2,14 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../lib/auth.js";
 import { lookupFlightByCodes, lookupFlightByNumber } from "../services/flightLookup.js";
-import { diagnoseCruise, findCruise, lookupCruiseByPorts, lookupCruiseByShip } from "../services/cruiseLookup.js";
+import {
+  diagnoseCruise,
+  findCruise,
+  lookupCruiseByPorts,
+  lookupCruiseByShip,
+  searchCruiseLines,
+  searchCruiseShips,
+} from "../services/cruiseLookup.js";
 import { findPort, searchAirports, searchPorts, searchPlaces } from "../services/places.js";
 
 const flightSchema = z.union([
@@ -35,11 +42,24 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     return result;
   });
 
-  // Find a ship (via its cruise line) and return its sailings + ports of call.
+  // Find a ship (via its cruise line, or an exact ship URL) → sailings + ports.
   app.post("/api/lookup/cruise/find", async (req, reply) => {
-    const parsed = z.object({ line: z.string().optional(), ship: z.string().min(2) }).safeParse(req.body);
+    const parsed = z
+      .object({ line: z.string().optional(), ship: z.string().optional(), shipUrl: z.string().url().optional() })
+      .refine((d) => Boolean(d.ship || d.shipUrl), { message: "ship or shipUrl required" })
+      .safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     return findCruise(parsed.data);
+  });
+
+  // Autocomplete for cruise lines and ships (ships require a cruise line).
+  app.get("/api/lookup/cruise/lines", async (req) => {
+    const q = (req.query as { q?: string }).q ?? "";
+    return searchCruiseLines(q);
+  });
+  app.get("/api/lookup/cruise/ships", async (req) => {
+    const { q, line } = req.query as { q?: string; line?: string };
+    return searchCruiseShips(q ?? "", line);
   });
 
   // Diagnostic: shows what this server actually receives from CruiseMapper, so the

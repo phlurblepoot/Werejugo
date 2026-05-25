@@ -320,8 +320,14 @@ export const api = {
     request<LookupResult>("/api/lookup/flight", { method: "POST", body: body(data) }),
   lookupCruise: (data: Record<string, unknown>) =>
     request<LookupResult>("/api/lookup/cruise", { method: "POST", body: body(data) }),
-  findCruise: (data: { line?: string; ship: string }) =>
+  findCruise: (data: { line?: string; ship?: string; shipUrl?: string }) =>
     request<CruiseFindResult>("/api/lookup/cruise/find", { method: "POST", body: body(data) }),
+  searchCruiseLines: (q: string) =>
+    request<Array<{ name: string; url: string }>>(`/api/lookup/cruise/lines?q=${encodeURIComponent(q)}`),
+  searchCruiseShips: (q: string, line?: string) =>
+    request<Array<{ name: string; url: string }>>(
+      `/api/lookup/cruise/ships?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line ?? "")}`,
+    ),
   resolvePort: (q: string) =>
     request<PlaceSuggestion>(`/api/geo/resolve?q=${encodeURIComponent(q)}`),
   searchAirports: (q: string) =>
