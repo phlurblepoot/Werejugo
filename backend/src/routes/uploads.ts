@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { saveUpload } from "../lib/upload.js";
+import { downloadImage, saveUpload } from "../lib/upload.js";
 
 // Built-in icon names the frontend knows how to render.
 export const BUILTIN_ICONS = [
@@ -22,6 +22,25 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
     } catch {
       return reply.code(400).send({ error: "Unsupported file type" });
     }
+  });
+
+  // Import an image from CruiseMapper (e.g. a ship photo) into uploads. Restricted
+  // to cruisemapper.com to avoid SSRF; returns a self-hosted URL + thumbnail.
+  app.post("/api/uploads/from-url", async (req, reply) => {
+    const url = (req.body as { url?: string })?.url;
+    if (!url) return reply.code(400).send({ error: "url required" });
+    let host: string;
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      return reply.code(400).send({ error: "invalid url" });
+    }
+    if (!/(^|\.)cruisemapper\.com$/.test(host)) {
+      return reply.code(400).send({ error: "only cruisemapper.com images may be imported" });
+    }
+    const saved = await downloadImage(url);
+    if (!saved) return reply.code(400).send({ error: "could not import image" });
+    return reply.code(201).send(saved);
   });
 
   app.get("/api/icons", async (req) => {

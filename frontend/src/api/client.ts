@@ -328,6 +328,11 @@ export const api = {
     fd.append("file", file);
     return request<{ url: string }>("/api/uploads", { method: "POST", body: fd });
   },
+  uploadFromUrl: (url: string) =>
+    request<{ url: string; thumbUrl: string | null }>("/api/uploads/from-url", {
+      method: "POST",
+      body: body({ url }),
+    }),
   deleteIcon: (id: string) => request<void>(`/api/icons/${id}`, { method: "DELETE" }),
 
   // lookups

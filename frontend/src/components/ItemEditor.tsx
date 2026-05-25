@@ -78,6 +78,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   // When reusing a repeating itinerary for a past/different sailing, keep the
   // user's chosen start date and shift the itinerary's port dates onto it.
   const [reuseItinerary, setReuseItinerary] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
 
   const [existingPhotos, setExistingPhotos] = useState<Photo[]>(item?.photos ?? []);
   const [pendingPhotos, setPendingPhotos] = useState<{ file: File; caption: string; preview: string }[]>([]);
@@ -160,6 +161,20 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     );
     setWarnings(r.warnings);
     setLookupImage(r.image ?? null);
+  }
+
+  // Import the looked-up ship photo and use it as this item's map pin.
+  async function useShipPhotoAsPin() {
+    if (!lookupImage) return;
+    setPinBusy(true);
+    try {
+      const r = await api.uploadFromUrl(lookupImage);
+      setIcon(r.thumbUrl || r.url);
+    } catch {
+      setWarnings(["Couldn't import the ship photo as a pin."]);
+    } finally {
+      setPinBusy(false);
+    }
   }
 
   async function findCruise() {
@@ -398,6 +413,9 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
         {lookupImage && (
           <div className="field">
             <img src={lookupImage} alt="" style={{ width: "100%", borderRadius: "var(--radius)", maxHeight: 160, objectFit: "cover" }} />
+            <button type="button" style={{ marginTop: 6 }} onClick={useShipPhotoAsPin} disabled={pinBusy}>
+              {pinBusy ? "Importing…" : "📌 Use ship photo as pin"}
+            </button>
           </div>
         )}
 

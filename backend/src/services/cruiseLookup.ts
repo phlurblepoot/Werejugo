@@ -162,8 +162,8 @@ async function parseShipPage(shipUrl: string) {
   if (looksBlocked(r.status, r.html)) return null;
   const $ = cheerio.load(r.html);
   const shipName = $("h1").first().text().trim() || $("title").text().split("|")[0].trim();
-  const ogImage = $('meta[property="og:image"]').attr("content");
-  const image = ogImage ? abs(ogImage) : null;
+  const imgSrc = $('img[itemprop="image"]').attr("src") || $('meta[property="og:image"]').attr("content");
+  const image = imgSrc ? abs(imgSrc) : null;
 
   const sailings: CruiseSailing[] = [];
   $("table.shipTableCruise tbody tr").each((_i, tr) => {
