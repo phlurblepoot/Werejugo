@@ -5,6 +5,8 @@ import { findPort, findPortDb } from "./places.js";
 import type { LookupResult, LookupWaypoint } from "./flightLookup.js";
 
 const BASE = "https://www.cruisemapper.com";
+// Hosts the diagnostic may fetch (for reverse-engineering cruise-data sites).
+const DIAGNOSE_HOSTS = ["cruisemapper.com", "cruisetimetables.com"];
 const abs = (href: string) => (href.startsWith("http") ? href : `${BASE}${href}`);
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
@@ -298,15 +300,15 @@ export async function diagnoseCruise(opts: {
   if (!url && opts.query) url = `https://www.cruisemapper.com/search?q=${encodeURIComponent(opts.query)}`;
   if (!url) url = "https://www.cruisemapper.com/";
 
-  // Only allow probing CruiseMapper itself (avoid SSRF).
+  // Only allow probing known cruise-data sites (avoid SSRF).
   let host: string;
   try {
     host = new URL(url).hostname;
   } catch {
     return { error: "Invalid URL" };
   }
-  if (!/(^|\.)cruisemapper\.com$/.test(host)) {
-    return { error: "Only cruisemapper.com URLs may be probed" };
+  if (!DIAGNOSE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) {
+    return { error: `Only these hosts may be probed: ${DIAGNOSE_HOSTS.join(", ")}` };
   }
 
   let r: FetchResult;
