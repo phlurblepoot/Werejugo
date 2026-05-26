@@ -230,7 +230,11 @@ class ApiError extends Error {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = tokenStore.get();
   const headers = new Headers(options.headers);
-  if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
+  // Only declare a JSON body when one is actually sent — a JSON content-type with
+  // an empty body (e.g. DELETE) makes Fastify reject the request with 400.
+  if (options.body !== undefined && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
