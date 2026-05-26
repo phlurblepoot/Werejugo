@@ -49,19 +49,40 @@ export interface PinStyle {
 export interface PinSettings {
   default?: PinStyle;
   byKind?: Partial<Record<ItemKind, PinStyle>>;
+  byLine?: Record<string, PinStyle>;
 }
 
-export type PathStyleName = "solid" | "dashed" | "dotted" | "arrows" | "chevrons" | "waves" | "tire";
+export type PathStyleName =
+  | "solid"
+  | "dashed"
+  | "dotted"
+  | "arrows"
+  | "chevrons"
+  | "waves"
+  | "tire"
+  | "hearts"
+  | "stars"
+  | "paws"
+  | "palms"
+  | "planes"
+  | "anchors"
+  | "suns"
+  | "flowers"
+  | "balloons"
+  | "footprints"
+  | "image";
 
 export interface PathStyle {
   style?: PathStyleName;
   color?: string;
   width?: number;
+  imageUrl?: string;
 }
 
 export interface PathSettings {
   default?: PathStyle;
   byKind?: Partial<Record<ItemKind, PathStyle>>;
+  byLine?: Record<string, PathStyle>;
 }
 
 export interface FamilySettings {

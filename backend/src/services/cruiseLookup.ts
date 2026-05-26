@@ -98,7 +98,7 @@ async function getShipsForLine(lineUrl: string): Promise<NamedUrl[]> {
 export async function searchCruiseLines(q: string): Promise<NamedUrl[]> {
   const lines = await getLines();
   const n = norm(q);
-  if (!n) return lines.slice(0, 12);
+  if (!n) return lines; // full cached list (for the settings dropdown)
   return lines.filter((l) => norm(l.name).includes(n)).slice(0, 12);
 }
 

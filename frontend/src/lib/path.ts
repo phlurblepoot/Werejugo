@@ -8,25 +8,49 @@ export const PATH_STYLES: Array<{ value: PathStyleName; label: string }> = [
   { value: "chevrons", label: "Chevrons (directional)" },
   { value: "waves", label: "Waves" },
   { value: "tire", label: "Tire tracks" },
+  { value: "hearts", label: "❤️ Hearts" },
+  { value: "stars", label: "🌟 Stars" },
+  { value: "paws", label: "🐾 Paw prints" },
+  { value: "footprints", label: "👣 Footprints" },
+  { value: "palms", label: "🌴 Palm trees" },
+  { value: "planes", label: "✈️ Planes" },
+  { value: "anchors", label: "⚓ Anchors" },
+  { value: "suns", label: "☀️ Suns" },
+  { value: "flowers", label: "🌸 Flowers" },
+  { value: "balloons", label: "🎈 Balloons" },
+  { value: "image", label: "Custom image…" },
 ];
 
-const PATTERN_STYLES = new Set<PathStyleName>(["arrows", "chevrons", "waves", "tire"]);
-export const isPatternStyle = (s: PathStyleName): boolean => PATTERN_STYLES.has(s);
+const EMOJI: Partial<Record<PathStyleName, string>> = {
+  hearts: "❤️",
+  stars: "🌟",
+  paws: "🐾",
+  footprints: "👣",
+  palms: "🌴",
+  planes: "✈️",
+  anchors: "⚓",
+  suns: "☀️",
+  flowers: "🌸",
+  balloons: "🎈",
+};
+
+const DRAWN = new Set<PathStyleName>(["arrows", "chevrons", "waves", "tire"]);
+
+/** Styles rendered as a repeating image (drawn shapes or emoji). "image" is handled separately. */
+export const isPatternStyle = (s: PathStyleName): boolean => DRAWN.has(s) || s in EMOJI;
+export const isEmojiStyle = (s: PathStyleName): boolean => s in EMOJI;
 
 /** A stable image id for a given pattern style + color. */
 export const patternId = (style: PathStyleName, color: string): string =>
   `path-${style}-${color.replace("#", "")}`;
 
-/** Draw a path pattern onto a canvas context spanning [0..W] x [0..H], centered. */
-function drawPattern(ctx: CanvasRenderingContext2D, style: PathStyleName, color: string, W: number, H: number): void {
-  ctx.clearRect(0, 0, W, H);
+function drawShapes(ctx: CanvasRenderingContext2D, style: PathStyleName, color: string, W: number, H: number): void {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   const mid = H / 2;
   ctx.lineWidth = Math.max(2, H * 0.12);
-
   if (style === "arrows") {
     ctx.beginPath();
     ctx.moveTo(0, mid);
@@ -68,16 +92,48 @@ function drawPattern(ctx: CanvasRenderingContext2D, style: PathStyleName, color:
   }
 }
 
-/** Build a colored, directional pattern image for use as a MapLibre line-pattern. */
+function drawEmoji(ctx: CanvasRenderingContext2D, emoji: string, W: number, H: number): void {
+  ctx.font = `${Math.round(H * 0.8)}px serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(emoji, W / 2, H / 2 + 1);
+}
+
+/** Build a colored/emoji pattern image for use as a MapLibre line-pattern. */
 export function makePatternImage(style: PathStyleName, color: string): ImageData {
-  const H = 32;
-  const W = style === "waves" ? 64 : style === "tire" ? 48 : 40;
+  const H = 36;
+  const emoji = EMOJI[style];
+  const W = emoji ? Math.round(H * 1.5) : style === "waves" ? 64 : style === "tire" ? 48 : 40;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
-  drawPattern(ctx, style, color, W, H);
+  ctx.clearRect(0, 0, W, H);
+  if (emoji) drawEmoji(ctx, emoji, W, H);
+  else drawShapes(ctx, style, color, W, H);
   return ctx.getImageData(0, 0, W, H);
+}
+
+/** Compose a repeating tile from a loaded image (logo), scaled to fit with spacing. */
+export function composeImageTile(img: CanvasImageSource, imgW: number, imgH: number): ImageData {
+  const H = 40;
+  const scale = Math.min(1, (H * 0.85) / imgH);
+  const w = Math.max(1, Math.round(imgW * scale));
+  const h = Math.max(1, Math.round(imgH * scale));
+  const W = w + Math.round(H * 0.5); // horizontal spacing between logos
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(img, Math.round((W - w) / 2), Math.round((H - h) / 2), w, h);
+  return ctx.getImageData(0, 0, W, H);
+}
+
+export function imagePatternId(url: string): string {
+  let h = 5381;
+  for (let i = 0; i < url.length; i++) h = (h * 33) ^ url.charCodeAt(i);
+  return `pathimg-${(h >>> 0).toString(36)}`;
 }
 
 /** Render a small preview of a path style into a canvas element. */
@@ -97,13 +153,22 @@ export function drawPathPreview(canvas: HTMLCanvasElement, style: PathStyleName,
     ctx.setLineDash([10, 7]); ctx.beginPath(); ctx.moveTo(4, mid); ctx.lineTo(W - 4, mid); ctx.stroke(); ctx.setLineDash([]);
   } else if (style === "dotted") {
     ctx.setLineDash([1, 8]); ctx.beginPath(); ctx.moveTo(4, mid); ctx.lineTo(W - 4, mid); ctx.stroke(); ctx.setLineDash([]);
+  } else if (style === "image") {
+    ctx.fillStyle = "var(--muted)";
+    ctx.font = "11px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = color;
+    ctx.fillText("custom image", W / 2, mid);
   } else {
-    // Tile the colored pattern across the preview.
-    const tileW = style === "waves" ? 32 : style === "tire" ? 24 : 20;
+    const emoji = EMOJI[style];
+    const tileW = emoji ? Math.round(H * 1.4) : style === "waves" ? 32 : style === "tire" ? 24 : 20;
     const tile = document.createElement("canvas");
     tile.width = tileW;
     tile.height = H;
-    drawPattern(tile.getContext("2d")!, style, color, tileW, H);
+    const tctx = tile.getContext("2d")!;
+    if (emoji) drawEmoji(tctx, emoji, tileW, H);
+    else drawShapes(tctx, style, color, tileW, H);
     for (let x = 0; x < W; x += tileW) ctx.drawImage(tile, x, 0);
   }
 }

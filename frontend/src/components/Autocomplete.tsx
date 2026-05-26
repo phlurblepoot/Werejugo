@@ -8,13 +8,14 @@ interface Item {
 interface Props {
   value: string;
   placeholder?: string;
+  confirmed?: boolean;
   search: (q: string) => Promise<Item[]>;
   onText: (text: string) => void;
   onPick: (item: Item) => void;
 }
 
 /** Free-text input with a debounced suggestion dropdown (cruise lines / ships). */
-export function Autocomplete({ value, placeholder, search, onText, onPick }: Props) {
+export function Autocomplete({ value, placeholder, confirmed, search, onText, onPick }: Props) {
   const [results, setResults] = useState<Item[]>([]);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,7 +56,11 @@ export function Autocomplete({ value, placeholder, search, onText, onPick }: Pro
         onChange={(e) => onText(e.target.value)}
         onFocus={() => results.length && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={confirmed ? { borderColor: "#16a34a" } : undefined}
       />
+      {confirmed && (
+        <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#16a34a", pointerEvents: "none" }}>✓</span>
+      )}
       {open && results.length > 0 && (
         <div className="suggestions">
           {results.map((r, i) => (

@@ -32,30 +32,35 @@ export const BASE_PIN = {
 export function resolveItemStyle(item: Item, themesById: Map<string, Theme>, settings?: FamilySettings): ItemStyle {
   const base = KIND_DEFAULTS[item.kind] ?? KIND_DEFAULTS.place;
   const theme = item.themeId ? themesById.get(item.themeId) : undefined;
+  const lineName = typeof item.properties?.cruiseLine === "string" ? (item.properties.cruiseLine as string) : "";
   const pin = settings?.pin;
   const fam = pin?.default ?? {};
   const kindS = pin?.byKind?.[item.kind] ?? {};
+  const lineS = lineName ? (pin?.byLine?.[lineName] ?? {}) : {};
   const itemPin = (item.properties?.pin ?? {}) as PinStyle;
 
   // Path (trail) style — independent of the pin's colours.
   const path = settings?.path;
   const pFam = path?.default ?? {};
   const pKind = path?.byKind?.[item.kind] ?? {};
+  const pLine = lineName ? (path?.byLine?.[lineName] ?? {}) : {};
   const itemPath = (item.properties?.path ?? {}) as PathStyle;
-  const pathStyle = itemPath.style ?? pKind.style ?? pFam.style ?? "solid";
-  const lineColor = itemPath.color ?? pKind.color ?? pFam.color ?? theme?.lineColor ?? base.lineColor;
-  const lineWidth = itemPath.width ?? pKind.width ?? pFam.width ?? (isPatternStyle(pathStyle) ? 9 : base.lineWidth);
+  const pathStyle = itemPath.style ?? pLine.style ?? pKind.style ?? pFam.style ?? "solid";
+  const lineColor = itemPath.color ?? pLine.color ?? pKind.color ?? pFam.color ?? theme?.lineColor ?? base.lineColor;
+  const lineWidth = itemPath.width ?? pLine.width ?? pKind.width ?? pFam.width ?? (isPatternStyle(pathStyle) ? 9 : base.lineWidth);
+  const pathImageUrl = itemPath.imageUrl ?? pLine.imageUrl ?? pKind.imageUrl ?? pFam.imageUrl;
 
   return {
-    color: item.color ?? theme?.color ?? kindS.color ?? fam.color ?? base.color,
-    icon: item.icon ?? theme?.icon ?? kindS.icon ?? fam.icon ?? base.icon,
+    color: item.color ?? theme?.color ?? lineS.color ?? kindS.color ?? fam.color ?? base.color,
+    icon: item.icon ?? theme?.icon ?? lineS.icon ?? kindS.icon ?? fam.icon ?? base.icon,
     lineColor,
     lineWidth,
     pathStyle,
-    size: itemPin.size ?? kindS.size ?? fam.size ?? BASE_PIN.size,
-    shape: itemPin.shape ?? kindS.shape ?? fam.shape ?? BASE_PIN.shape,
-    borderWidth: itemPin.borderWidth ?? kindS.borderWidth ?? fam.borderWidth ?? BASE_PIN.borderWidth,
-    borderColor: itemPin.borderColor ?? kindS.borderColor ?? fam.borderColor ?? BASE_PIN.borderColor,
+    pathImageUrl,
+    size: itemPin.size ?? lineS.size ?? kindS.size ?? fam.size ?? BASE_PIN.size,
+    shape: itemPin.shape ?? lineS.shape ?? kindS.shape ?? fam.shape ?? BASE_PIN.shape,
+    borderWidth: itemPin.borderWidth ?? lineS.borderWidth ?? kindS.borderWidth ?? fam.borderWidth ?? BASE_PIN.borderWidth,
+    borderColor: itemPin.borderColor ?? lineS.borderColor ?? kindS.borderColor ?? fam.borderColor ?? BASE_PIN.borderColor,
   };
 }
 
@@ -78,7 +83,8 @@ export function defaultPathStyle(kind: ItemKind, path?: import("../api/client").
   const style = k.style ?? fam.style ?? "solid";
   const color = k.color ?? fam.color ?? KIND_DEFAULTS[kind].lineColor;
   const width = k.width ?? fam.width ?? (isPatternStyle(style) ? 9 : 3);
-  return { style, color, width };
+  const imageUrl = k.imageUrl ?? fam.imageUrl;
+  return { style, color, width, imageUrl };
 }
 
 export function defaultColor(kind: ItemKind, pin?: PinSettings): string {

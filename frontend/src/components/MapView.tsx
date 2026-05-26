@@ -6,7 +6,7 @@ import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
-import { isPatternStyle, makePatternImage, patternId } from "../lib/path";
+import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
 
 export interface ItemStyle {
   color: string;
@@ -14,6 +14,7 @@ export interface ItemStyle {
   lineColor: string;
   lineWidth: number;
   pathStyle: import("../api/client").PathStyleName;
+  pathImageUrl?: string;
   size: number;
   shape: "circle" | "square" | "rounded" | "none";
   borderWidth: number;
@@ -79,6 +80,7 @@ export function MapView(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const patternLoadingRef = useRef<Set<string>>(new Set());
   const pickRef = useRef(pickMode);
   pickRef.current = pickMode;
 
@@ -181,7 +183,10 @@ export function MapView(props: Props) {
             ? override.coords
             : (it.geometry!.coordinates as number[][]);
         let pattern = "";
-        if (isPatternStyle(style.pathStyle)) {
+        if (style.pathStyle === "image" && style.pathImageUrl) {
+          pattern = imagePatternId(style.pathImageUrl);
+          if (!map.hasImage(pattern)) ensureImagePattern(map, pattern, style.pathImageUrl);
+        } else if (isPatternStyle(style.pathStyle)) {
           pattern = patternId(style.pathStyle, style.lineColor);
           if (!map.hasImage(pattern)) {
             try {
@@ -197,6 +202,25 @@ export function MapView(props: Props) {
           geometry: { type: "LineString" as const, coordinates: coords },
         };
       });
+  }
+
+  // Load a custom image (logo, Mickey, …), compose a spaced tile, and use it as a
+  // line pattern. Async; re-renders once the image is available.
+  async function ensureImagePattern(map: maplibregl.Map, id: string, url: string) {
+    if (patternLoadingRef.current.has(id) || map.hasImage(id)) return;
+    patternLoadingRef.current.add(id);
+    try {
+      const resp = await map.loadImage(absoluteUrl(url));
+      const img = resp.data as ImageBitmap;
+      if (!map.hasImage(id)) {
+        map.addImage(id, composeImageTile(img, img.width, img.height));
+        renderAll();
+      }
+    } catch {
+      /* image failed to load */
+    } finally {
+      patternLoadingRef.current.delete(id);
+    }
   }
 
   function renderRoutes(map: maplibregl.Map, override?: { itemId: string; coords: LngLat[] }) {

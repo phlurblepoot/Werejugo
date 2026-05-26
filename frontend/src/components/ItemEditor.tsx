@@ -76,6 +76,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     style: initialPathOverride.style ?? initialPathBase.style,
     color: initialPathOverride.color ?? initialPathBase.color,
     width: initialPathOverride.width ?? initialPathBase.width,
+    imageUrl: initialPathOverride.imageUrl ?? initialPathBase.imageUrl,
   });
 
   const initialPoint =
@@ -99,6 +100,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   const [lookupBusy, setLookupBusy] = useState(false);
   const [cruiseResult, setCruiseResult] = useState<CruiseFindResult | null>(null);
   const [shipUrl, setShipUrl] = useState<string | null>(null);
+  const [lineConfirmed, setLineConfirmed] = useState<boolean>(!!props0.cruiseLine);
+  const [shipConfirmed, setShipConfirmed] = useState<boolean>(!!props0.ship);
   // When reusing a repeating itinerary for a past/different sailing, keep the
   // user's chosen start date and shift the itinerary's port dates onto it.
   const [reuseItinerary, setReuseItinerary] = useState(false);
@@ -203,8 +206,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   }
 
   async function findCruise() {
-    if (!ship.trim() && !shipUrl) {
-      setWarnings(["Enter the ship name to search CruiseMapper."]);
+    if (!shipConfirmed) {
+      setWarnings(["Choose your cruise line and ship from the lists."]);
       return;
     }
     setLookupBusy(true);
@@ -416,9 +419,13 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
               busy={lookupBusy}
               result={cruiseResult}
               reuse={reuseItinerary}
+              lineConfirmed={lineConfirmed}
+              shipConfirmed={shipConfirmed}
               onReuse={setReuseItinerary}
-              onLine={(t) => setCruiseLine(t)}
-              onShip={(t, url) => { setShip(t); setShipUrl(url); }}
+              onLineText={(t) => { setCruiseLine(t); setLineConfirmed(false); setShipConfirmed(false); setShipUrl(null); }}
+              onLinePick={(name) => { setCruiseLine(name); setLineConfirmed(true); }}
+              onShipText={(t) => { setShip(t); setShipUrl(null); setShipConfirmed(false); }}
+              onShipPick={(name, url) => { setShip(name); setShipUrl(url); setShipConfirmed(true); }}
               onSailDate={setOccurredOn}
               onFind={findCruise}
               onPickSailing={pickSailing}
@@ -503,7 +510,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
         {!isPoint && (
           <>
             <div className="section-title"><span>Trail (path line)</span></div>
-            <PathStyleControls value={pathVals} onChange={setPathVals} />
+            <PathStyleControls value={pathVals} customIcons={customIcons} onChange={setPathVals} />
           </>
         )}
 
@@ -669,9 +676,13 @@ function CruiseFields({
   busy,
   result,
   reuse,
+  lineConfirmed,
+  shipConfirmed,
   onReuse,
-  onLine,
-  onShip,
+  onLineText,
+  onLinePick,
+  onShipText,
+  onShipPick,
   onSailDate,
   onFind,
   onPickSailing,
@@ -683,9 +694,13 @@ function CruiseFields({
   busy: boolean;
   result: CruiseFindResult | null;
   reuse: boolean;
+  lineConfirmed: boolean;
+  shipConfirmed: boolean;
   onReuse: (b: boolean) => void;
-  onLine: (s: string) => void;
-  onShip: (s: string, url: string | null) => void;
+  onLineText: (s: string) => void;
+  onLinePick: (name: string) => void;
+  onShipText: (s: string) => void;
+  onShipPick: (name: string, url: string) => void;
   onSailDate: (s: string) => void;
   onFind: () => void;
   onPickSailing: (s: CruiseSailing) => void;
@@ -697,22 +712,29 @@ function CruiseFields({
       <div className="row">
         <Autocomplete
           value={cruiseLine}
-          placeholder="Cruise line (e.g. Royal Caribbean)"
+          placeholder="Cruise line — start typing (e.g. Royal)"
+          confirmed={lineConfirmed}
           search={api.searchCruiseLines}
-          onText={onLine}
-          onPick={(item) => onLine(item.name)}
+          onText={onLineText}
+          onPick={(item) => onLinePick(item.name)}
         />
       </div>
       <div className="row" style={{ marginTop: 6 }}>
         <Autocomplete
           value={ship}
-          placeholder={cruiseLine ? "Ship (e.g. Symphony of the Seas)" : "Ship — pick a cruise line first"}
-          search={(q) => api.searchCruiseShips(q, cruiseLine)}
-          onText={(t) => onShip(t, null)}
-          onPick={(item) => onShip(item.name, item.url)}
+          placeholder={lineConfirmed ? "Ship — start typing (e.g. Symphony)" : "Pick a cruise line first"}
+          confirmed={shipConfirmed}
+          search={(q) => (lineConfirmed ? api.searchCruiseShips(q, cruiseLine) : Promise.resolve([]))}
+          onText={onShipText}
+          onPick={(item) => onShipPick(item.name, item.url)}
         />
         <input type="date" value={sailDate} onChange={(e) => onSailDate(e.target.value)} title="Sail date" style={{ maxWidth: 150 }} />
       </div>
+      {!shipConfirmed && (cruiseLine || ship) && (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+          Choose your cruise line and ship from the lists.
+        </div>
+      )}
       <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 13, color: "var(--text)" }}>
         <input type="checkbox" style={{ width: "auto" }} checked={reuse} onChange={(e) => onReuse(e.target.checked)} />
         Reuse this itinerary for my dates (keep my start date; shift port days to match)
@@ -722,7 +744,7 @@ function CruiseFields({
           Pick the sailing whose route matches yours — its dates will be shifted onto your start date.
         </div>
       )}
-      <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy}>
+      <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy || !shipConfirmed}>
         {busy ? "Searching CruiseMapper…" : "🔎 Find on CruiseMapper"}
       </button>
 
