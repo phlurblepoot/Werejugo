@@ -49,7 +49,9 @@ export function MapPage() {
   const themes = themesQuery.data ?? [];
   const themesById = useMemo(() => new Map<string, Theme>(themes.map((t) => [t.id, t])), [themes]);
   const customIcons = iconsQuery.data?.custom ?? [];
-  const pinSettings = settingsQuery.data?.pin;
+  const settings = settingsQuery.data;
+  const pinSettings = settings?.pin;
+  const pathSettings = settings?.path;
   const items = itemsQuery.data ?? [];
   const trips = tripsQuery.data ?? [];
   const mapSets = mapSetsQuery.data ?? [];
@@ -208,7 +210,7 @@ export function MapPage() {
         items={filteredItems}
         trips={trips}
         themesById={themesById}
-        pinSettings={pinSettings}
+        settings={settings}
         selectedItemId={selectedItemId}
         search={search}
         kindFilter={kindFilter}
@@ -236,7 +238,7 @@ export function MapPage() {
               mapSet={currentMapSet}
               items={filteredItems}
               selectedItemId={selectedItemId}
-              getStyle={(item) => resolveItemStyle(item, themesById, pinSettings)}
+              getStyle={(item) => resolveItemStyle(item, themesById, settings)}
               pickMode={pickActive}
               editMode={editMode}
               visitedGeo={visitedGeo}
@@ -284,6 +286,7 @@ export function MapPage() {
           onSaved={() => { setEditorOpen(false); refreshItems(); }}
           onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
           pinSettings={pinSettings}
+          pathSettings={pathSettings}
         />
       )}
 

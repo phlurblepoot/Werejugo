@@ -6,12 +6,14 @@ import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
+import { isPatternStyle, makePatternImage, patternId } from "../lib/path";
 
 export interface ItemStyle {
   color: string;
   icon: string;
   lineColor: string;
   lineWidth: number;
+  pathStyle: import("../api/client").PathStyleName;
   size: number;
   shape: "circle" | "square" | "rounded" | "none";
   borderWidth: number;
@@ -168,42 +170,79 @@ export function MapView(props: Props) {
     }
   }
 
-  function routeFeatures(override?: { itemId: string; coords: LngLat[] }) {
+  function routeFeatures(map: maplibregl.Map, override?: { itemId: string; coords: LngLat[] }) {
     const { items, getStyle } = dataRef.current;
     return items
       .filter((it) => it.geometry?.type === "LineString")
       .map((it) => {
+        const style = getStyle(it);
         const coords =
           override && override.itemId === it.id
             ? override.coords
             : (it.geometry!.coordinates as number[][]);
+        let pattern = "";
+        if (isPatternStyle(style.pathStyle)) {
+          pattern = patternId(style.pathStyle, style.lineColor);
+          if (!map.hasImage(pattern)) {
+            try {
+              map.addImage(pattern, makePatternImage(style.pathStyle, style.lineColor));
+            } catch {
+              /* already added / unsupported */
+            }
+          }
+        }
         return {
           type: "Feature" as const,
-          properties: { color: getStyle(it).lineColor, width: getStyle(it).lineWidth },
+          properties: { color: style.lineColor, width: style.lineWidth, style: style.pathStyle, pattern },
           geometry: { type: "LineString" as const, coordinates: coords },
         };
       });
   }
 
   function renderRoutes(map: maplibregl.Map, override?: { itemId: string; coords: LngLat[] }) {
-    const data = { type: "FeatureCollection" as const, features: routeFeatures(override) };
+    const data = { type: "FeatureCollection" as const, features: routeFeatures(map, override) };
     const existing = map.getSource("routes") as maplibregl.GeoJSONSource | undefined;
     if (existing) {
       existing.setData(data as never);
-    } else {
-      map.addSource("routes", { type: "geojson", data: data as never });
-      map.addLayer({
-        id: "routes-line",
-        type: "line",
-        source: "routes",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": ["get", "width"],
-          "line-opacity": 0.85,
-        },
-      });
+      return;
     }
+    map.addSource("routes", { type: "geojson", data: data as never });
+    const baseLayout = { "line-cap": "round" as const, "line-join": "round" as const };
+    const colorWidth = { "line-color": ["get", "color"] as never, "line-width": ["get", "width"] as never, "line-opacity": 0.9 };
+    // Solid + dashed + dotted use data-driven colour; dasharray is per-layer.
+    map.addLayer({
+      id: "routes-solid",
+      type: "line",
+      source: "routes",
+      filter: ["==", ["get", "style"], "solid"],
+      layout: baseLayout,
+      paint: colorWidth,
+    });
+    map.addLayer({
+      id: "routes-dashed",
+      type: "line",
+      source: "routes",
+      filter: ["==", ["get", "style"], "dashed"],
+      layout: baseLayout,
+      paint: { ...colorWidth, "line-dasharray": [2, 1.8] },
+    });
+    map.addLayer({
+      id: "routes-dotted",
+      type: "line",
+      source: "routes",
+      filter: ["==", ["get", "style"], "dotted"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { ...colorWidth, "line-dasharray": [0.1, 2] },
+    });
+    // Directional / textured styles use a colored, repeating pattern image.
+    map.addLayer({
+      id: "routes-pattern",
+      type: "line",
+      source: "routes",
+      filter: ["!=", ["get", "pattern"], ""],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: { "line-pattern": ["get", "pattern"] as never, "line-width": ["get", "width"] as never },
+    });
   }
 
   function renderMarkers(map: maplibregl.Map) {

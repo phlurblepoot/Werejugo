@@ -1,4 +1,4 @@
-import type { Item, ItemKind, MapSet, PinSettings, Theme, Trip } from "../api/client";
+import type { FamilySettings, Item, ItemKind, MapSet, Theme, Trip } from "../api/client";
 import { API_URL } from "../api/client";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { resolveItemStyle, KIND_LABELS } from "../lib/style";
@@ -11,7 +11,7 @@ interface Props {
   items: Item[];
   trips: Trip[];
   themesById: Map<string, Theme>;
-  pinSettings?: PinSettings;
+  settings?: FamilySettings;
   selectedItemId: string | null;
   search: string;
   kindFilter: ItemKind[];
@@ -89,7 +89,7 @@ export function Sidebar(props: Props) {
       {props.items.length === 0 && <div className="empty">Nothing matches. Add a pin or clear filters.</div>}
 
       {props.items.map((item) => {
-        const style = resolveItemStyle(item, props.themesById, props.pinSettings);
+        const style = resolveItemStyle(item, props.themesById, props.settings);
         return (
           <div
             key={item.id}

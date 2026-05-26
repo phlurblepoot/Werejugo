@@ -1,4 +1,5 @@
-import type { Item, ItemKind, PinSettings, PinStyle, Theme } from "../api/client";
+import type { FamilySettings, Item, ItemKind, PinSettings, PinStyle, PathStyle, Theme } from "../api/client";
+import { isPatternStyle } from "./path";
 import type { ItemStyle } from "../components/MapView";
 
 interface KindDefault {
@@ -28,18 +29,29 @@ export const BASE_PIN = {
  * Resolve an item's full pin style, layering (lowest → highest precedence):
  * base → family default → per-kind default → theme → per-item override.
  */
-export function resolveItemStyle(item: Item, themesById: Map<string, Theme>, pin?: PinSettings): ItemStyle {
+export function resolveItemStyle(item: Item, themesById: Map<string, Theme>, settings?: FamilySettings): ItemStyle {
   const base = KIND_DEFAULTS[item.kind] ?? KIND_DEFAULTS.place;
   const theme = item.themeId ? themesById.get(item.themeId) : undefined;
+  const pin = settings?.pin;
   const fam = pin?.default ?? {};
   const kindS = pin?.byKind?.[item.kind] ?? {};
   const itemPin = (item.properties?.pin ?? {}) as PinStyle;
 
+  // Path (trail) style — independent of the pin's colours.
+  const path = settings?.path;
+  const pFam = path?.default ?? {};
+  const pKind = path?.byKind?.[item.kind] ?? {};
+  const itemPath = (item.properties?.path ?? {}) as PathStyle;
+  const pathStyle = itemPath.style ?? pKind.style ?? pFam.style ?? "solid";
+  const lineColor = itemPath.color ?? pKind.color ?? pFam.color ?? theme?.lineColor ?? base.lineColor;
+  const lineWidth = itemPath.width ?? pKind.width ?? pFam.width ?? (isPatternStyle(pathStyle) ? 9 : base.lineWidth);
+
   return {
     color: item.color ?? theme?.color ?? kindS.color ?? fam.color ?? base.color,
     icon: item.icon ?? theme?.icon ?? kindS.icon ?? fam.icon ?? base.icon,
-    lineColor: item.color ?? theme?.lineColor ?? base.lineColor,
-    lineWidth: theme?.lineWidth ?? base.lineWidth,
+    lineColor,
+    lineWidth,
+    pathStyle,
     size: itemPin.size ?? kindS.size ?? fam.size ?? BASE_PIN.size,
     shape: itemPin.shape ?? kindS.shape ?? fam.shape ?? BASE_PIN.shape,
     borderWidth: itemPin.borderWidth ?? kindS.borderWidth ?? fam.borderWidth ?? BASE_PIN.borderWidth,
@@ -57,6 +69,16 @@ export function defaultPinStyle(kind: ItemKind, pin?: PinSettings) {
     borderWidth: k.borderWidth ?? fam.borderWidth ?? BASE_PIN.borderWidth,
     borderColor: k.borderColor ?? fam.borderColor ?? BASE_PIN.borderColor,
   };
+}
+
+/** Default trail style for a kind, from settings (per-kind → family → base). */
+export function defaultPathStyle(kind: ItemKind, path?: import("../api/client").PathSettings) {
+  const fam = path?.default ?? {};
+  const k = path?.byKind?.[kind] ?? {};
+  const style = k.style ?? fam.style ?? "solid";
+  const color = k.color ?? fam.color ?? KIND_DEFAULTS[kind].lineColor;
+  const width = k.width ?? fam.width ?? (isPatternStyle(style) ? 9 : 3);
+  return { style, color, width };
 }
 
 export function defaultColor(kind: ItemKind, pin?: PinSettings): string {

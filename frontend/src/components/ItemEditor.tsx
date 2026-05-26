@@ -14,15 +14,16 @@ import {
   type Trip,
   type Waypoint,
 } from "../api/client";
-import { KIND_LABELS, defaultColor, defaultIcon, defaultPinStyle } from "../lib/style";
+import { KIND_LABELS, defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "../lib/style";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { StylePicker } from "./StylePicker";
 import { PinStyleControls, type PinShapeVals } from "./PinStyleControls";
+import { PathStyleControls, type PathVals } from "./PathStyleControls";
 import { PlaceSearch } from "./PlaceSearch";
 import { StopBuilder } from "./StopBuilder";
 import { Autocomplete } from "./Autocomplete";
 import { MediaThumb } from "./MediaThumb";
-import type { PinSettings, PinStyle } from "../api/client";
+import type { PathSettings, PinSettings, PinStyle, PathStyle } from "../api/client";
 
 interface Props {
   mapSet: MapSet;
@@ -35,6 +36,7 @@ interface Props {
   onSaved: () => void;
   onIconsChanged?: () => void;
   pinSettings?: PinSettings;
+  pathSettings?: PathSettings;
 }
 
 const POINT_KINDS: ItemKind[] = ["place", "food", "custom"];
@@ -46,7 +48,7 @@ function shiftIso(iso: string | null, offsetMs: number): string | null {
   return Number.isNaN(t) ? iso : new Date(t + offsetMs).toISOString();
 }
 
-export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved, onIconsChanged, pinSettings }: Props) {
+export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved, onIconsChanged, pinSettings, pathSettings }: Props) {
   const editing = Boolean(item);
   const initialKind = item?.kind ?? "place";
   const [kind, setKind] = useState<ItemKind>(initialKind);
@@ -65,6 +67,15 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
     shape: initialPin.shape ?? initialPinBase.shape,
     borderWidth: initialPin.borderWidth ?? initialPinBase.borderWidth,
     borderColor: initialPin.borderColor ?? initialPinBase.borderColor,
+  });
+
+  // Trail (path) style for route kinds, prefilled from settings defaults.
+  const initialPathOverride = (item?.properties?.path ?? {}) as PathStyle;
+  const initialPathBase = defaultPathStyle(initialKind, pathSettings);
+  const [pathVals, setPathVals] = useState<PathVals>({
+    style: initialPathOverride.style ?? initialPathBase.style,
+    color: initialPathOverride.color ?? initialPathBase.color,
+    width: initialPathOverride.width ?? initialPathBase.width,
   });
 
   const initialPoint =
@@ -141,6 +152,7 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
       setIcon(defaultIcon(k, pinSettings));
     }
     setPinStyle(defaultPinStyle(k, pinSettings));
+    setPathVals(defaultPathStyle(k, pathSettings));
   }
 
   function applyTheme(id: string | null) {
@@ -317,6 +329,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
 
     const properties: Record<string, unknown> = { ...(item?.properties ?? {}) };
     properties.pin = pinStyle; // per-item size/shape/border
+    if (isPoint) delete properties.path;
+    else properties.path = pathVals; // per-item trail style for routes
     if (kind === "cruise") {
       if (cruiseLine) properties.cruiseLine = cruiseLine;
       else delete properties.cruiseLine;
@@ -486,6 +500,12 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
 
         <StylePicker color={color} icon={icon} customIcons={customIcons} onColor={setColor} onIcon={setIcon} onUploaded={onIconsChanged} />
         <PinStyleControls value={pinStyle} color={color} icon={icon} onChange={setPinStyle} />
+        {!isPoint && (
+          <>
+            <div className="section-title"><span>Trail (path line)</span></div>
+            <PathStyleControls value={pathVals} onChange={setPathVals} />
+          </>
+        )}
 
         <div className="field">
           <label>Notes</label>

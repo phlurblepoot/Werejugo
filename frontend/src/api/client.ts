@@ -51,8 +51,22 @@ export interface PinSettings {
   byKind?: Partial<Record<ItemKind, PinStyle>>;
 }
 
+export type PathStyleName = "solid" | "dashed" | "dotted" | "arrows" | "chevrons" | "waves" | "tire";
+
+export interface PathStyle {
+  style?: PathStyleName;
+  color?: string;
+  width?: number;
+}
+
+export interface PathSettings {
+  default?: PathStyle;
+  byKind?: Partial<Record<ItemKind, PathStyle>>;
+}
+
 export interface FamilySettings {
   pin?: PinSettings;
+  path?: PathSettings;
 }
 
 export type MediaType = "image" | "video" | "audio";
