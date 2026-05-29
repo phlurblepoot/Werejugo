@@ -51,6 +51,10 @@ const shipsByLine = new Map<string, { at: number; ships: NamedUrl[] }>();
 const LINES_TTL = 6 * 60 * 60 * 1000;
 const SHIPS_TTL = 60 * 60 * 1000;
 
+const isLineIndex = (url: string) => /\/cruise-lines\/?$/.test(url);
+const lineNameFromUrl = (url: string) =>
+  (url.split("/cruise-lines/")[1] ?? "").replace(/-\d+$/, "").replace(/-/g, " ").trim();
+
 async function getLines(): Promise<NamedUrl[]> {
   if (linesCache && Date.now() - linesCache.at < LINES_TTL) return linesCache.lines;
   const r = await cruiseFetch(`${BASE}/cruise-lines`);
@@ -62,10 +66,12 @@ async function getLines(): Promise<NamedUrl[]> {
     const raw = $(el).attr("href");
     if (!raw) return;
     const url = abs(raw.split(/[?#]/)[0]);
-    if (seen.has(url) || /\/cruise-lines\/?$/.test(url)) return; // skip the index link itself
+    if (seen.has(url) || isLineIndex(url)) return; // skip the index link itself
     seen.add(url);
-    const name = $(el).text().trim();
-    if (name && name.length >= 2 && name.length < 60) lines.push({ name, url });
+    // Index links are often logos with no text — derive the name from the slug.
+    const text = $(el).text().trim();
+    const name = text.length >= 2 && text.length < 60 ? text : lineNameFromUrl(url);
+    if (name && name.length >= 2) lines.push({ name, url });
   });
   if (lines.length) linesCache = { at: Date.now(), lines };
   return lines;
@@ -118,19 +124,14 @@ export async function searchCruiseShips(q: string, lineName?: string): Promise<N
 }
 
 async function findLineUrl(line: string): Promise<string | null> {
-  const r = await cruiseFetch(`${BASE}/cruise-lines`);
-  if (looksBlocked(r.status, r.html)) return null;
-  const $ = cheerio.load(r.html);
   const target = norm(line);
-  const candidates: Array<{ url: string; score: number }> = [];
-  $('a[href*="/cruise-lines/"]').each((_i, el) => {
-    const href = $(el).attr("href");
-    const n = norm($(el).text());
-    if (!href || !n) return;
-    if (n.includes(target) || target.includes(n)) {
-      candidates.push({ url: abs(href.split(/[?#]/)[0]), score: Math.abs(n.length - target.length) });
-    }
-  });
+  if (!target) return null;
+  const candidates = (await getLines())
+    .filter((l) => {
+      const n = norm(l.name);
+      return n.includes(target) || target.includes(n);
+    })
+    .map((l) => ({ url: l.url, score: Math.abs(norm(l.name).length - target.length) }));
   candidates.sort((a, b) => a.score - b.score);
   return candidates[0]?.url ?? null;
 }
