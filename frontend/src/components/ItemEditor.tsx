@@ -206,8 +206,8 @@ export function ItemEditor({ mapSet, item, themes, trips, customIcons, onRequest
   }
 
   async function findCruise() {
-    if (!shipConfirmed) {
-      setWarnings(["Choose your cruise line and ship from the lists."]);
+    if (!ship.trim()) {
+      setWarnings(["Enter or pick a ship to search CruiseMapper."]);
       return;
     }
     setLookupBusy(true);
@@ -722,19 +722,17 @@ function CruiseFields({
       <div className="row" style={{ marginTop: 6 }}>
         <Autocomplete
           value={ship}
-          placeholder={lineConfirmed ? "Ship — start typing (e.g. Symphony)" : "Pick a cruise line first"}
+          placeholder={cruiseLine ? "Ship — start typing (e.g. Symphony)" : "Cruise line first, then ship"}
           confirmed={shipConfirmed}
-          search={(q) => (lineConfirmed ? api.searchCruiseShips(q, cruiseLine) : Promise.resolve([]))}
+          search={(q) => (cruiseLine.trim() ? api.searchCruiseShips(q, cruiseLine) : Promise.resolve([]))}
           onText={onShipText}
           onPick={(item) => onShipPick(item.name, item.url)}
         />
         <input type="date" value={sailDate} onChange={(e) => onSailDate(e.target.value)} title="Sail date" style={{ maxWidth: 150 }} />
       </div>
-      {!shipConfirmed && (cruiseLine || ship) && (
-        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-          Choose your cruise line and ship from the lists.
-        </div>
-      )}
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+        Tip: pick from the suggestions when they appear. If none show, type the names and we'll match them.
+      </div>
       <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 13, color: "var(--text)" }}>
         <input type="checkbox" style={{ width: "auto" }} checked={reuse} onChange={(e) => onReuse(e.target.checked)} />
         Reuse this itinerary for my dates (keep my start date; shift port days to match)
@@ -744,7 +742,7 @@ function CruiseFields({
           Pick the sailing whose route matches yours — its dates will be shifted onto your start date.
         </div>
       )}
-      <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy || !shipConfirmed}>
+      <button type="button" style={{ marginTop: 8 }} onClick={onFind} disabled={busy || !ship.trim()}>
         {busy ? "Searching CruiseMapper…" : "🔎 Find on CruiseMapper"}
       </button>
 
