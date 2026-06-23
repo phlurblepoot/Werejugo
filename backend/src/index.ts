@@ -10,6 +10,7 @@ import { mapSetRoutes } from "./routes/mapsets.js";
 import { fileRoutes } from "./routes/files.js";
 import { linkRoutes } from "./routes/links.js";
 import { mediaRoutes } from "./routes/media.js";
+import { mediaSuggestRoutes } from "./routes/media-suggest.js";
 import { visitRoutes } from "./routes/visits.js";
 import { themeRoutes } from "./routes/themes.js";
 import { uploadRoutes } from "./routes/uploads.js";
@@ -45,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fileRoutes);
   await app.register(linkRoutes);
   await app.register(mediaRoutes);
+  await app.register(mediaSuggestRoutes);
   await app.register(visitRoutes);
   await app.register(themeRoutes);
   await app.register(uploadRoutes);
