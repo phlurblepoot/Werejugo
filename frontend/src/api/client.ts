@@ -277,6 +277,35 @@ export interface Relation { linkId: string; role: string; entity: EntitySummary;
 
 export interface MediaDto { id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string; }
 
+export interface MediaItem {
+  id: string;
+  kind: MediaType;
+  tripId: string | null;
+  url: string;
+  thumbUrl: string | null;
+  caption: string;
+  takenAt: string | null;
+  createdAt: string;
+  width: number | null;
+  height: number | null;
+  lng: number | null;
+  lat: number | null;
+  cursor: string;
+}
+
+export interface MediaFilters {
+  person?: string; trip?: string; visit?: string;
+  from?: string; to?: string; bbox?: string;
+  limit?: number; before?: string;
+}
+
+export interface MediaPage { items: MediaItem[]; nextCursor: string | null; }
+
+export interface MediaSuggestions {
+  trips: { tripId: string; name: string; mediaIds: string[] }[];
+  visits: { visitId: string; title: string; mediaIds: string[] }[];
+}
+
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
@@ -372,6 +401,19 @@ export const api = {
     return { id: m.id, url: m.url, thumbUrl: m.thumbUrl, mediaType: m.kind, caption: m.caption, seq: 0 } as Photo;
   },
   deletePhoto: (id: string) => request<void>(`/api/media/${id}`, { method: "DELETE" }),
+
+  // media library
+  listMedia: (f: MediaFilters = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    return request<MediaPage>(`/api/media?${qs.toString()}`);
+  },
+  setMediaTrip: (id: string, tripId: string | null) =>
+    request<unknown>(`/api/media/${id}`, { method: "PATCH", body: body({ tripId }) }),
+  getMediaSuggestions: (mediaIds: string[]) =>
+    request<MediaSuggestions>("/api/media/suggestions", { method: "POST", body: body({ mediaIds }) }),
+  applyMediaSuggestion: (data: { mediaIds: string[]; tripId?: string | null; visitId?: string }) =>
+    request<{ applied: number }>("/api/media/apply-suggestion", { method: "POST", body: body(data) }),
 
   // trips (family-scoped; mapSetId arg is ignored, kept for call-site compatibility)
   listTrips: (_mapSetId: string) => request<Trip[]>("/api/trips"),
