@@ -313,9 +313,9 @@ The full app is reached through eight phases. Each phase after the foundation is
 
 ### Phase 4 — Photos / Media
 
-**Goal:** a real photo library, not just per-pin attachments.
-**Steps:** Media module page with a library grid; browse/filter by person, place, and time; bulk upload; EXIF date + GPS read on upload to **auto-suggest** visit/trip/people links; link editing via `RelatedPanel`; set a photo's trip (drives its folder, §6).
-**Delivers:** a central gallery where any photo can be found by who/where/when and connected to the rest of the app. **Depends on:** Phases 1–2 (people tagging).
+**Goal:** a real photo library, not just per-pin attachments. *(Full design: `2026-06-23-photos-media-design.md`.)*
+**Steps:** a **timeline** grid (photos grouped by capture month) with person / trip / place filters and a **Grid/Map** toggle (clustered map of geotagged photos); a `GET /api/media` list endpoint (filters + keyset paging); **EXIF captured on upload** (`taken_at`/`geom`); a bulk upload that runs a **suggest-and-confirm** review (trip by date, nearby visit by GPS — people stay manual); a photo detail with caption, trip select (drives its folder, §6), and `RelatedPanel` links.
+**Delivers:** a central gallery where any photo can be found by who/where/when and connected to the rest of the app. **Depends on:** Phases 1–2 (people tagging, shared components).
 
 ### Phase 5 — Documents & reminders
 
