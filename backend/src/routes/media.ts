@@ -2,8 +2,9 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { mediaDirFor, saveMediaUpload, deleteStored } from "../lib/storage.js";
+import { mediaDirFor, saveMediaUpload, deleteStored, absStoragePath } from "../lib/storage.js";
 import { reconcileMediaTrip } from "../lib/reconcile.js";
+import { extractExif } from "../lib/exif.js";
 import { signFileUrl } from "../lib/filesign.js";
 
 interface MediaRow {
@@ -51,10 +52,15 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     if (!saved) return reply.code(400).send({ error: "No file provided" });
+    const exif = await extractExif(absStoragePath(saved.relPath));
     const { rows } = await query<MediaRow>(
-      `INSERT INTO media (family_id, kind, rel_path, thumb_rel_path, original_name, caption, width, height, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.familyId, saved.kind, saved.relPath, saved.thumbRelPath, originalName, caption, saved.width, saved.height, req.user.id],
+      `INSERT INTO media (family_id, kind, rel_path, thumb_rel_path, original_name, caption, width, height, taken_at, geom, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+         CASE WHEN $10::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($10,$11),4326) END,
+         $12)
+       RETURNING *`,
+      [req.user.familyId, saved.kind, saved.relPath, saved.thumbRelPath, originalName, caption,
+       saved.width, saved.height, exif.takenAt, exif.lng, exif.lat, req.user.id],
     );
     return reply.code(201).send(toDto(rows[0]));
   });

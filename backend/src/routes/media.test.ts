@@ -43,3 +43,11 @@ test("setting a media's trip moves the file into the trip folder", async () => {
   const row = await query<{ rel_path: string }>("SELECT rel_path FROM media WHERE id = $1", [id]);
   expect(row.rows[0].rel_path).toBe("trips/2024-italy/photos/italy-pic.png");
 });
+
+test("upload stores null taken_at/geom for a photo with no EXIF", async () => {
+  const id = await uploadPng("no-exif.png");
+  const row = await query<{ taken_at: string | null; geom: string | null }>(
+    "SELECT taken_at, ST_AsText(geom) AS geom FROM media WHERE id = $1", [id]);
+  expect(row.rows[0].taken_at).toBeNull();
+  expect(row.rows[0].geom).toBeNull();
+});
