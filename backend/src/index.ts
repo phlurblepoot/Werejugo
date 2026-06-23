@@ -1,5 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
@@ -19,10 +19,10 @@ import { exportRoutes } from "./routes/export.js";
 import { shareRoutes } from "./routes/share.js";
 import { settingsRoutes } from "./routes/settings.js";
 
-async function main(): Promise<void> {
+export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.uploadsDir, { recursive: true });
 
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
 
   await app.register(cors, {
     origin: config.corsOrigin.length ? config.corsOrigin : true,
@@ -48,10 +48,17 @@ async function main(): Promise<void> {
   await app.register(shareRoutes);
   await app.register(settingsRoutes);
 
+  return app;
+}
+
+async function main(): Promise<void> {
+  const app = await buildApp();
   await app.listen({ host: "0.0.0.0", port: config.port });
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
