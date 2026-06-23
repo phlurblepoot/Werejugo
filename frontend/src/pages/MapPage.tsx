@@ -7,7 +7,7 @@ import { buildRoutePath, type LngLat } from "../lib/geo";
 import { loadCountries, visitedCountryIds, type CountryCollection } from "../lib/countries";
 import { MapView } from "../components/MapView";
 import { Sidebar } from "../components/Sidebar";
-import { ItemEditor } from "../components/ItemEditor";
+import { VisitEditor } from "../components/visit-editor/VisitEditor";
 import { ItemDetail } from "../components/ItemDetail";
 import { MapSetEditor } from "../components/MapSetEditor";
 import { ManagePanel } from "../components/ManagePanel";
@@ -314,7 +314,7 @@ export function MapPage() {
       </div>
 
       {editorOpen && currentMapSet && (
-        <ItemEditor
+        <VisitEditor
           mapSet={currentMapSet}
           item={editorItem}
           themes={themes}
