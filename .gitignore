@@ -28,3 +28,4 @@ backend/src/data/airports.full.csv
 .idea/
 .vscode/
 *.swp
+.superpowers/
