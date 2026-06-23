@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { parseRef, TABLE_FOR, type CoreType } from "../lib/refs.js";
+import { parseRef, TABLE_FOR, CORE_TYPES, type CoreType } from "../lib/refs.js";
 import { signFileUrl } from "../lib/filesign.js";
 
 export interface EntitySummary {
@@ -72,5 +72,51 @@ export async function relationRoutes(app: FastifyInstance): Promise<void> {
     return others
       .map((o) => ({ linkId: o.linkId, role: o.role, entity: resolved.get(`${o.type}:${o.id}`) }))
       .filter((r) => r.entity); // drop any dangling refs
+  });
+
+  app.get("/api/entities/search", async (req, reply) => {
+    const { type, q } = req.query as { type?: string; q?: string };
+    if (!type || !(CORE_TYPES as readonly string[]).includes(type)) {
+      return reply.code(400).send({ error: "Unknown entity type" });
+    }
+    const term = (q ?? "").trim();
+    if (term.length === 0) return [];
+    const like = `%${term}%`;
+    const fam = req.user.familyId;
+    const t = type as CoreType;
+
+    if (t === "visit") {
+      const { rows } = await query<any>(
+        "SELECT id, title FROM visits WHERE family_id = $1 AND title ILIKE $2 ORDER BY title ASC LIMIT 20", [fam, like]);
+      return rows.map((r) => ({ type: t, id: r.id, label: r.title, thumbUrl: null }));
+    }
+    if (t === "trip") {
+      const { rows } = await query<any>(
+        "SELECT id, name FROM trips WHERE family_id = $1 AND name ILIKE $2 ORDER BY name ASC LIMIT 20", [fam, like]);
+      return rows.map((r) => ({ type: t, id: r.id, label: r.name, thumbUrl: null }));
+    }
+    if (t === "person") {
+      const { rows } = await query<any>(
+        `SELECT p.id, p.display_name, m.rel_path, m.thumb_rel_path
+         FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id
+         WHERE p.family_id = $1 AND p.display_name ILIKE $2 ORDER BY p.display_name ASC LIMIT 20`, [fam, like]);
+      return rows.map((r) => {
+        const rel = r.thumb_rel_path ?? r.rel_path;
+        return { type: t, id: r.id, label: r.display_name, thumbUrl: rel ? signFileUrl(rel) : null };
+      });
+    }
+    if (t === "media") {
+      const { rows } = await query<any>(
+        `SELECT id, caption, original_name, rel_path, thumb_rel_path FROM media
+         WHERE family_id = $1 AND (caption ILIKE $2 OR original_name ILIKE $2) ORDER BY created_at DESC LIMIT 20`, [fam, like]);
+      return rows.map((r) => {
+        const rel = r.thumb_rel_path ?? r.rel_path;
+        return { type: t, id: r.id, label: r.caption || r.original_name || "Photo", thumbUrl: rel ? signFileUrl(rel) : null };
+      });
+    }
+    // document
+    const { rows } = await query<any>(
+      "SELECT id, title FROM documents WHERE family_id = $1 AND title ILIKE $2 ORDER BY title ASC LIMIT 20", [fam, like]);
+    return rows.map((r) => ({ type: t, id: r.id, label: r.title, thumbUrl: null }));
   });
 }
