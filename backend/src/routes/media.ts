@@ -24,6 +24,20 @@ function toDto(r: MediaRow) {
   };
 }
 
+interface MediaListRow extends MediaRow {
+  lng: number | null; lat: number | null; sort_ts: string;
+}
+function toListDto(r: MediaListRow) {
+  return {
+    id: r.id, kind: r.kind, tripId: r.trip_id,
+    url: signFileUrl(r.rel_path),
+    thumbUrl: r.thumb_rel_path ? signFileUrl(r.thumb_rel_path) : null,
+    caption: r.caption, takenAt: r.taken_at, createdAt: r.created_at,
+    width: r.width, height: r.height, lng: r.lng, lat: r.lat,
+    cursor: `${new Date(r.sort_ts).toISOString()}__${r.id}`,
+  };
+}
+
 async function loadMedia(familyId: string, id: string): Promise<MediaRow | null> {
   const { rows } = await query<MediaRow>(
     "SELECT * FROM media WHERE id = $1 AND family_id = $2", [id, familyId],
@@ -63,6 +77,54 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
        saved.width, saved.height, exif.takenAt, exif.lng, exif.lat, req.user.id],
     );
     return reply.code(201).send(toDto(rows[0]));
+  });
+
+  app.get("/api/media", async (req, reply) => {
+    const q = req.query as Record<string, string | undefined>;
+    const where: string[] = ["m.family_id = $1"];
+    const params: unknown[] = [req.user.familyId];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+
+    if (q.trip) where.push(`m.trip_id = ${add(q.trip)}`);
+    if (q.person) {
+      const ph = add(q.person); // capture the "$N" placeholder once; use it in both directions
+      where.push(`EXISTS (SELECT 1 FROM links l WHERE l.family_id = m.family_id
+        AND ((l.from_type='media' AND l.from_id=m.id AND l.to_type='person' AND l.to_id=${ph})
+          OR (l.to_type='media' AND l.to_id=m.id AND l.from_type='person' AND l.from_id=${ph})))`);
+    }
+    if (q.visit) {
+      const ph = add(q.visit);
+      where.push(`EXISTS (SELECT 1 FROM links l WHERE l.family_id = m.family_id
+        AND ((l.from_type='media' AND l.from_id=m.id AND l.to_type='visit' AND l.to_id=${ph})
+          OR (l.to_type='media' AND l.to_id=m.id AND l.from_type='visit' AND l.from_id=${ph})))`);
+    }
+    if (q.from) where.push(`COALESCE(m.taken_at, m.created_at)::date >= ${add(q.from)}::date`);
+    if (q.to) where.push(`COALESCE(m.taken_at, m.created_at)::date <= ${add(q.to)}::date`);
+    if (q.bbox) {
+      const b = q.bbox.split(",").map(Number);
+      if (b.length === 4 && b.every(Number.isFinite)) {
+        where.push(`m.geom && ST_MakeEnvelope(${add(b[0])},${add(b[1])},${add(b[2])},${add(b[3])},4326)`);
+      }
+    }
+    if (q.before) {
+      const sep = q.before.lastIndexOf("__");
+      const ts = q.before.slice(0, sep);
+      const id = q.before.slice(sep + 2);
+      where.push(`(COALESCE(m.taken_at, m.created_at), m.id) < (${add(ts)}::timestamptz, ${add(id)}::uuid)`);
+    }
+    const limit = Math.min(Math.max(Number(q.limit) || 60, 1), 200);
+
+    const { rows } = await query<MediaListRow>(
+      `SELECT m.*, ST_X(m.geom) AS lng, ST_Y(m.geom) AS lat,
+              COALESCE(m.taken_at, m.created_at) AS sort_ts
+       FROM media m
+       WHERE ${where.join(" AND ")}
+       ORDER BY COALESCE(m.taken_at, m.created_at) DESC, m.id DESC
+       LIMIT ${limit}`,
+      params,
+    );
+    const items = rows.map(toListDto);
+    return { items, nextCursor: items.length === limit ? items[items.length - 1].cursor : null };
   });
 
   app.get("/api/media/:id", async (req, reply) => {
