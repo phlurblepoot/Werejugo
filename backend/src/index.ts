@@ -22,6 +22,7 @@ import { exportRoutes } from "./routes/export.js";
 import { shareRoutes } from "./routes/share.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { peopleRoutes } from "./routes/people.js";
+import { relationRoutes } from "./routes/relations.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.uploadsDir, { recursive: true });
@@ -56,6 +57,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(shareRoutes);
   await app.register(settingsRoutes);
   await app.register(peopleRoutes);
+  await app.register(relationRoutes);
 
   return app;
 }
