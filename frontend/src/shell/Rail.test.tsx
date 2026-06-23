@@ -25,5 +25,5 @@ test("marks the active module", () => {
 
 test("disables not-yet-built modules", () => {
   renderAt("/map");
-  expect(screen.getByText("Photos").closest(".rail-item")).toHaveClass("disabled");
+  expect(screen.getByText("Documents").closest(".rail-item")).toHaveClass("disabled");
 });
