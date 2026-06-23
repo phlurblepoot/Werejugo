@@ -103,7 +103,7 @@ export interface Photo {
 
 export interface Item {
   id: string;
-  mapSetId: string;
+  mapSetId?: string;
   kind: ItemKind;
   title: string;
   notes: string;
@@ -123,7 +123,7 @@ export interface Item {
 
 export interface Trip {
   id: string;
-  mapSetId: string;
+  mapSetId?: string;
   name: string;
   description: string;
   startDate: string | null;
@@ -308,41 +308,56 @@ export const api = {
     request<MapSet>(`/api/map-sets/${id}`, { method: "PATCH", body: body(data) }),
   deleteMapSet: (id: string) => request<void>(`/api/map-sets/${id}`, { method: "DELETE" }),
 
-  // items
-  listItems: (mapSetId: string) => request<Item[]>(`/api/map-sets/${mapSetId}/items`),
-  createItem: (mapSetId: string, data: Partial<Item>) =>
-    request<Item>(`/api/map-sets/${mapSetId}/items`, { method: "POST", body: body(data) }),
+  // visits (formerly items) — kept as `Item` shape; mapSetId is stamped client-side
+  listItems: async (mapSetId: string) => {
+    const visits = await request<Item[]>(`/api/map-sets/${mapSetId}/visits`);
+    return visits.map((v) => ({ ...v, mapSetId }));
+  },
+  createItem: async (mapSetId: string, data: Partial<Item>) => {
+    const visit = await request<Item>("/api/visits", { method: "POST", body: body(data) });
+    await request(`/api/map-sets/${mapSetId}/visits`, { method: "POST", body: body({ visitId: visit.id }) });
+    return { ...visit, mapSetId };
+  },
   updateItem: (id: string, data: Partial<Item>) =>
-    request<Item>(`/api/items/${id}`, { method: "PATCH", body: body(data) }),
-  deleteItem: (id: string) => request<void>(`/api/items/${id}`, { method: "DELETE" }),
+    request<Item>(`/api/visits/${id}`, { method: "PATCH", body: body(data) }),
+  deleteItem: (id: string) => request<void>(`/api/visits/${id}`, { method: "DELETE" }),
 
-  // photos
-  uploadItemPhoto: (itemId: string, file: File, caption = "") => {
+  // photos -> media + a media↔visit link
+  uploadItemPhoto: async (itemId: string, file: File, caption = "") => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("caption", caption);
-    return request<Photo>(`/api/items/${itemId}/photos`, { method: "POST", body: fd });
+    const m = await request<{ id: string; url: string; thumbUrl: string | null; kind: MediaType; caption: string }>(
+      "/api/media", { method: "POST", body: fd });
+    await request("/api/links", {
+      method: "POST",
+      body: body({ from: `media:${m.id}`, to: `visit:${itemId}`, role: "appears_in" }),
+    });
+    return { id: m.id, url: m.url, thumbUrl: m.thumbUrl, mediaType: m.kind, caption: m.caption, seq: 0 } as Photo;
   },
-  updatePhoto: (id: string, caption: string) =>
-    request<Photo>(`/api/photos/${id}`, { method: "PATCH", body: body({ caption }) }),
-  deletePhoto: (id: string) => request<void>(`/api/photos/${id}`, { method: "DELETE" }),
+  updatePhoto: async (id: string, caption: string) => {
+    const m = await request<{ id: string; url: string; thumbUrl: string | null; kind: MediaType; caption: string }>(
+      `/api/media/${id}`, { method: "PATCH", body: body({ caption }) });
+    return { id: m.id, url: m.url, thumbUrl: m.thumbUrl, mediaType: m.kind, caption: m.caption, seq: 0 } as Photo;
+  },
+  deletePhoto: (id: string) => request<void>(`/api/media/${id}`, { method: "DELETE" }),
 
-  // trips
-  listTrips: (mapSetId: string) => request<Trip[]>(`/api/map-sets/${mapSetId}/trips`),
-  createTrip: (mapSetId: string, data: Partial<Trip>) =>
-    request<Trip>(`/api/map-sets/${mapSetId}/trips`, { method: "POST", body: body(data) }),
+  // trips (family-scoped; mapSetId arg is ignored, kept for call-site compatibility)
+  listTrips: (_mapSetId: string) => request<Trip[]>("/api/trips"),
+  createTrip: (_mapSetId: string, data: Partial<Trip>) =>
+    request<Trip>("/api/trips", { method: "POST", body: body(data) }),
   updateTrip: (id: string, data: Partial<Trip>) =>
     request<Trip>(`/api/trips/${id}`, { method: "PATCH", body: body(data) }),
   deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, { method: "DELETE" }),
 
-  // comments
-  listComments: (itemId: string) => request<Comment[]>(`/api/items/${itemId}/comments`),
+  // comments (now on visits)
+  listComments: (itemId: string) => request<Comment[]>(`/api/visits/${itemId}/comments`),
   addComment: (itemId: string, body_: string) =>
-    request<Comment>(`/api/items/${itemId}/comments`, { method: "POST", body: body({ body: body_ }) }),
+    request<Comment>(`/api/visits/${itemId}/comments`, { method: "POST", body: body({ body: body_ }) }),
   deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: "DELETE" }),
 
-  // stats
-  getStats: (mapSetId: string) => request<Stats>(`/api/map-sets/${mapSetId}/stats`),
+  // stats (family-scoped)
+  getStats: (_mapSetId: string) => request<Stats>("/api/stats"),
 
   // exif / import / export
   readExif: (file: File) => {
