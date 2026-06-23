@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { api, type Item, type MapSet, type SharePayload, type Theme } from "../api/client";
 import { resolveItemStyle } from "../lib/style";
 import { MapView } from "../components/MapView";
+import { EmptyState, Spinner } from "../components/ui";
 
 const NO_THEMES = new Map<string, Theme>();
 const noop = () => {};
 
-export function ShareView({ token }: { token: string }) {
+export function ShareView() {
+  const { token = "" } = useParams<{ token: string }>();
   const [data, setData] = useState<SharePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,8 +17,8 @@ export function ShareView({ token }: { token: string }) {
     api.getShare(token).then(setData).catch(() => setError("This shared map is unavailable or the link was revoked."));
   }, [token]);
 
-  if (error) return <div className="centered">{error}</div>;
-  if (!data) return <div className="centered">Loading shared map…</div>;
+  if (error) return <EmptyState emoji="🔌" title="Map unavailable" hint={error} />;
+  if (!data) return <Spinner label="Loading shared map…" />;
 
   const mapSet: MapSet = { id: "shared", createdAt: "", ...data.mapSet };
   const items: Item[] = data.items.map((i) => ({
