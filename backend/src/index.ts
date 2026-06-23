@@ -21,6 +21,7 @@ import { settingsRoutes } from "./routes/settings.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.uploadsDir, { recursive: true });
+  await mkdir(config.storageDir, { recursive: true });
 
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
 

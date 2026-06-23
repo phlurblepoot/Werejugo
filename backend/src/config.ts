@@ -16,6 +16,7 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   uploadsDir: process.env.UPLOADS_DIR ?? "/app/uploads",
+  storageDir: process.env.STORAGE_DIR ?? "/app/storage",
   aerodataboxKey: process.env.AERODATABOX_RAPIDAPI_KEY ?? "",
   nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",
   nominatimUserAgent: process.env.NOMINATIM_USER_AGENT ?? "Werejugo/0.1",
