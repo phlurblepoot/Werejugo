@@ -1,4 +1,6 @@
+import { mkdir, rm } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
+import { config } from "../config.js";
 import { pool, query } from "../db/pool.js";
 import { buildApp } from "../index.js";
 
@@ -15,9 +17,12 @@ const APP_TABLES = [
   "icons", "themes", "map_sets", "share_links", "users", "families",
 ];
 
-/** Truncate all app tables (keeps reference data: airports/ports). */
+/** Truncate all app tables (keeps reference data: airports/ports) and wipe the
+ *  storage tree so file paths are reproducible across runs. */
 export async function resetDb(): Promise<void> {
   await query(`TRUNCATE ${APP_TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`);
+  await rm(config.storageDir, { recursive: true, force: true });
+  await mkdir(config.storageDir, { recursive: true });
 }
 
 /** Build the app, reset the DB, and create one family + owner user with a signed token. */

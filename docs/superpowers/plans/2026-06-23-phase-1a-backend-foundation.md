@@ -205,7 +205,9 @@ export async function setup(): Promise<void> {
 
 Create `backend/src/test/helpers.ts`:
 ```ts
+import { mkdir, rm } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
+import { config } from "../config.js";
 import { pool, query } from "../db/pool.js";
 import { buildApp } from "../index.js";
 
@@ -222,9 +224,12 @@ const APP_TABLES = [
   "icons", "themes", "map_sets", "share_links", "users", "families",
 ];
 
-/** Truncate all app tables (keeps reference data: airports/ports). */
+/** Truncate all app tables (keeps reference data: airports/ports) and wipe the
+ *  storage tree so file paths are reproducible across runs. */
 export async function resetDb(): Promise<void> {
   await query(`TRUNCATE ${APP_TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`);
+  await rm(config.storageDir, { recursive: true, force: true });
+  await mkdir(config.storageDir, { recursive: true });
 }
 
 /** Build the app, reset the DB, and create one family + owner user with a signed token. */
@@ -1511,10 +1516,10 @@ beforeAll(async () => { ctx = await buildTestApp(); });
 afterAll(async () => { await closeTestApp(ctx); });
 const auth = () => ({ authorization: `Bearer ${ctx.token}` });
 
-async function uploadPng(): Promise<string> {
+async function uploadPng(filename = "trip pic.png"): Promise<string> {
   const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#abc" } }).png().toBuffer();
   const form = new FormData();
-  form.append("file", png, { filename: "trip pic.png", contentType: "image/png" });
+  form.append("file", png, { filename, contentType: "image/png" });
   const res = await ctx.app.inject({
     method: "POST", url: "/api/media", headers: { ...auth(), ...form.getHeaders() }, payload: form,
   });
@@ -1532,7 +1537,8 @@ test("uploads media to loose/<year> by default and returns a signed url", async 
 });
 
 test("setting a media's trip moves the file into the trip folder", async () => {
-  const id = await uploadPng();
+  // Distinct filename so it doesn't collide with the previous test's upload.
+  const id = await uploadPng("italy pic.png");
   const t = await query<{ id: string }>(
     "INSERT INTO trips (family_id, name, start_date) VALUES ($1,'Italy','2024-06-01') RETURNING id",
     [ctx.familyId],
@@ -1542,7 +1548,7 @@ test("setting a media's trip moves the file into the trip folder", async () => {
   });
   expect(res.statusCode).toBe(200);
   const row = await query<{ rel_path: string }>("SELECT rel_path FROM media WHERE id = $1", [id]);
-  expect(row.rows[0].rel_path).toBe("trips/2024-italy/photos/trip-pic.png");
+  expect(row.rows[0].rel_path).toBe("trips/2024-italy/photos/italy-pic.png");
 });
 ```
 
