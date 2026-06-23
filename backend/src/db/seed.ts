@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pool } from "./pool.js";
+import { hashPassword } from "../lib/auth.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, "..", "data");
@@ -72,9 +73,38 @@ async function seedThemes(): Promise<void> {
   console.log(`[seed] built-in themes ensured (${BUILTIN_THEMES.length})`);
 }
 
+async function seedDevData(): Promise<void> {
+  if (process.env.SEED_DEV_DATA !== "true") return;
+  const fam = await pool.query<{ id: string }>(
+    "INSERT INTO families (name, invite_code) VALUES ('The Wanderers', 'wander-1') RETURNING id");
+  const familyId = fam.rows[0].id;
+  const pass = await hashPassword("password123");
+  const user = await pool.query<{ id: string }>(
+    `INSERT INTO users (family_id, email, display_name, password_hash, role)
+     VALUES ($1,'demo@werejugo.dev','Demo',$2,'owner') RETURNING id`, [familyId, pass]);
+  const userId = user.rows[0].id;
+  const ms = await pool.query<{ id: string }>(
+    "INSERT INTO map_sets (family_id, name, created_by) VALUES ($1,'Our Travels',$2) RETURNING id",
+    [familyId, userId]);
+  const trip = await pool.query<{ id: string }>(
+    "INSERT INTO trips (family_id, name, start_date, created_by) VALUES ($1,'Italy 2024','2024-06-01',$2) RETURNING id",
+    [familyId, userId]);
+  const v1 = await pool.query<{ id: string }>(
+    `INSERT INTO visits (family_id, trip_id, kind, title, occurred_on, geom, created_by)
+     VALUES ($1,$2,'place','Colosseum','2024-06-02', ST_SetSRID(ST_MakePoint(12.4924,41.8902),4326), $3) RETURNING id`,
+    [familyId, trip.rows[0].id, userId]);
+  await pool.query(
+    `INSERT INTO visits (family_id, kind, title, occurred_on, geom, created_by)
+     VALUES ($1,'food','Joe''s Pizza','2024-03-10', ST_SetSRID(ST_MakePoint(-73.99,40.73),4326), $2)`,
+    [familyId, userId]);
+  await pool.query("INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1,$2)", [ms.rows[0].id, v1.rows[0].id]);
+  console.log("[seed] dev data created (login: demo@werejugo.dev / password123)");
+}
+
 export async function seed(): Promise<void> {
   await seedReference();
   await seedThemes();
+  await seedDevData();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
