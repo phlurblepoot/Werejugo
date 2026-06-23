@@ -488,3 +488,16 @@ button.primary.is-success {
 .rail-spacer { flex: 1; }
 .shell-main { position: relative; flex: 1; min-width: 0; }
 .shell-main > .app { position: absolute; inset: 0; }
+/* --- Shared entity components --- */
+.entity-thumb { border-radius: 6px; object-fit: cover; flex: 0 0 auto; background: #1e293b; }
+.entity-thumb-fallback { display: inline-flex; align-items: center; justify-content: center; color: #94a3b8; font-weight: 700; }
+.entity-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+.entity-row:hover { background: #1e293b; }
+.entity-row .er-main { flex: 1; min-width: 0; }
+.entity-row .er-title { color: #e2e8f0; font-weight: 600; }
+.entity-row .er-sub { color: #94a3b8; font-size: 12px; }
+.related-group { margin-top: 10px; }
+.related-group h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+.related-chip { display: inline-flex; align-items: center; gap: 6px; background: #1e293b; border-radius: 14px; padding: 3px 8px 3px 4px; margin: 0 4px 4px 0; }
+.related-chip button { background: none; border: none; color: #64748b; cursor: pointer; }
+.picker-wrap { position: relative; }
