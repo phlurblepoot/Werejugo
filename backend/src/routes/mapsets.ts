@@ -129,4 +129,39 @@ export async function mapSetRoutes(app: FastifyInstance): Promise<void> {
     if (!res.rowCount) return reply.code(404).send({ error: "Not found" });
     return reply.code(204).send();
   });
+
+  // --- Map ↔ visit membership ---
+  async function ownsMapSet(familyId: string, id: string): Promise<boolean> {
+    const { rowCount } = await query("SELECT 1 FROM map_sets WHERE id = $1 AND family_id = $2", [id, familyId]);
+    return Boolean(rowCount);
+  }
+
+  app.get("/api/map-sets/:id/visits", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
+    const { rows } = await query<{ visit_id: string; seq: number }>(
+      "SELECT visit_id, seq FROM map_set_visits WHERE map_set_id = $1 ORDER BY seq ASC", [id]);
+    return rows.map((r) => ({ visitId: r.visit_id, seq: r.seq }));
+  });
+
+  app.post("/api/map-sets/:id/visits", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
+    const parsed = z.object({ visitId: z.string().uuid(), seq: z.number().int().optional() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const owns = await query("SELECT 1 FROM visits WHERE id = $1 AND family_id = $2", [parsed.data.visitId, req.user.familyId]);
+    if (!owns.rowCount) return reply.code(404).send({ error: "Visit not found" });
+    await query(
+      `INSERT INTO map_set_visits (map_set_id, visit_id, seq) VALUES ($1,$2,$3)
+       ON CONFLICT (map_set_id, visit_id) DO UPDATE SET seq = EXCLUDED.seq`,
+      [id, parsed.data.visitId, parsed.data.seq ?? 0]);
+    return reply.code(201).send({ ok: true });
+  });
+
+  app.delete("/api/map-sets/:id/visits/:visitId", async (req, reply) => {
+    const { id, visitId } = req.params as { id: string; visitId: string };
+    if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
+    await query("DELETE FROM map_set_visits WHERE map_set_id = $1 AND visit_id = $2", [id, visitId]);
+    return reply.code(204).send();
+  });
 }
