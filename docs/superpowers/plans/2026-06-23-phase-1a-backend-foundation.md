@@ -1078,7 +1078,10 @@ test("rejects a bad signature", async () => {
 test("rejects path traversal", async () => {
   const url = signFileUrl("../../etc/passwd");
   const res = await ctx.app.inject({ method: "GET", url });
-  expect(res.statusCode).toBe(403);
+  // app.inject normalizes `..` out of the path before routing (→ 404), and the
+  // handler's own `..` check rejects any that survive (→ 403). Either way the
+  // file is never served (and a valid signature is impossible without the secret).
+  expect([403, 404]).toContain(res.statusCode);
 });
 ```
 

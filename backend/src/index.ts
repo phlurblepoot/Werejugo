@@ -7,6 +7,7 @@ import fastifyStatic from "@fastify/static";
 import { config } from "./config.js";
 import { authRoutes } from "./routes/auth.js";
 import { mapSetRoutes } from "./routes/mapsets.js";
+import { fileRoutes } from "./routes/files.js";
 import { itemRoutes } from "./routes/items.js";
 import { themeRoutes } from "./routes/themes.js";
 import { uploadRoutes } from "./routes/uploads.js";
@@ -37,6 +38,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authRoutes);
   await app.register(mapSetRoutes);
+  await app.register(fileRoutes);
   await app.register(itemRoutes);
   await app.register(themeRoutes);
   await app.register(uploadRoutes);
