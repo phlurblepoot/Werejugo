@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { query } from "../db/pool.js";
+import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { reconcileMediaTrip } from "../lib/reconcile.js";
 
 const idsSchema = z.object({ mediaIds: z.array(z.string().uuid()).min(1).max(500) });
 
@@ -32,6 +33,51 @@ export async function mediaSuggestRoutes(app: FastifyInstance): Promise<void> {
       [ids, fam]);
 
     return { trips: group(tripRows.rows, "trip_id", "name"), visits: group(visitRows.rows, "visit_id", "title") };
+  });
+
+  const applySchema = z.object({
+    mediaIds: z.array(z.string().uuid()).min(1).max(500),
+    tripId: z.string().uuid().nullable().optional(),
+    visitId: z.string().uuid().optional(),
+  });
+
+  app.post("/api/media/apply-suggestion", async (req, reply) => {
+    const parsed = applySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const { mediaIds, tripId, visitId } = parsed.data;
+    const fam = req.user.familyId;
+
+    // Every media id must be this family's.
+    const owned = await query<{ n: string }>(
+      "SELECT COUNT(*)::int AS n FROM media WHERE id = ANY($1::uuid[]) AND family_id = $2", [mediaIds, fam]);
+    if (Number(owned.rows[0].n) !== mediaIds.length) return reply.code(404).send({ error: "Some media not found" });
+    if (tripId) {
+      const t = await query("SELECT 1 FROM trips WHERE id = $1 AND family_id = $2", [tripId, fam]);
+      if (!t.rowCount) return reply.code(404).send({ error: "Trip not found" });
+    }
+    if (visitId) {
+      const v = await query("SELECT 1 FROM visits WHERE id = $1 AND family_id = $2", [visitId, fam]);
+      if (!v.rowCount) return reply.code(404).send({ error: "Visit not found" });
+    }
+
+    await tx(async (client) => {
+      if (tripId !== undefined) {
+        for (const id of mediaIds) {
+          await client.query("UPDATE media SET trip_id = $1 WHERE id = $2", [tripId, id]);
+          await reconcileMediaTrip(client, id);
+        }
+      }
+      if (visitId) {
+        for (const id of mediaIds) {
+          await client.query(
+            `INSERT INTO links (family_id, from_type, from_id, to_type, to_id, role, created_by)
+             VALUES ($1,'media',$2,'visit',$3,'appears_in',$4)
+             ON CONFLICT (family_id, from_type, from_id, to_type, to_id, role) DO NOTHING`,
+            [fam, id, visitId, req.user.id]);
+        }
+      }
+    });
+    return { applied: mediaIds.length };
   });
 }
 
