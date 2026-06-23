@@ -25,7 +25,7 @@ This spec defines how the modules fit together and share data, so the map can be
 | File storage | **Trip/event folders on disk (Scheme B)** — files live in a browsable tree; only metadata + relative path in the DB |
 | Single/loose files | Date-grouped `loose/<year>/`; only trips get named folders |
 | Move-on-link | Yes — linking/unlinking moves the file on disk and updates the stored path |
-| Build order | Foundation → People → Photos → Documents → Planning → Packing |
+| Build order | Foundation → People → Map Editor Overhaul → Photos → Documents → Planning → Packing → Polish |
 
 ---
 
@@ -283,7 +283,7 @@ There is **no real data to preserve** — only disposable test/seed rows. So thi
 
 ## 9. Build sequence to a completed application
 
-The full app is reached through seven phases. Each phase after the foundation is its own spec → plan → build, reuses the module contract (§3), and ends in a shippable, usable increment. Phases are ordered by dependency and payoff; nothing depends on a phase that comes after it.
+The full app is reached through eight phases. Each phase after the foundation is its own spec → plan → build, reuses the module contract (§3), and ends in a shippable, usable increment. Phases are ordered by dependency and payoff; nothing depends on a phase that comes after it.
 
 ### Phase 1 — Foundation *(this spec)*
 
@@ -305,35 +305,41 @@ The full app is reached through seven phases. Each phase after the foundation is
 **Steps:** **first, build the deferred shared UI components** as reusable, entity-agnostic building blocks — `RelatedPanel`, `EntityPicker`, `MediaUploader`, `EntityList`, `EntityDetail` (factored from today's `ItemDetail`/`GalleryPanel`/`Lightbox`/`PlaceSearch`); then `people` CRUD routes; People module page (`EntityList` + `EntityDetail` with `RelatedPanel`); avatar upload (`MediaUploader`); optional link of a Person to a User account; the `EntityPicker` for people is reused by every other module.
 **Delivers:** the reusable component library plus: create anyone (with or without a login) and see everything linked to them. **Depends on:** Phase 1.
 
-### Phase 3 — Photos / Media
+### Phase 3 — Map Editor Overhaul
+
+**Goal:** replace the messy 790-line `ItemEditor` with a clean, fast, kind-tailored add/edit experience. *(Full design: `2026-06-23-map-editor-overhaul-design.md`.)*
+**Steps:** decompose the god-component into a thin `VisitEditor` shell + per-kind Details forms (`PlaceForm`/`FlightForm`/`CruiseForm`/`DriveForm`) + extracted hooks (`useVisitDraft`, `useCruiseLookup`); a type-selector-on-top, **Details / Appearance** tabbed UX; appearance reuses the existing style controls; photos go through Phase-2's `MediaUploader`. No backend changes.
+**Delivers:** a maintainable editor (~8 files, each <150 lines, with tested draft/lookup hooks) and a less-cluttered, kind-aware add-to-map flow with parallel photo uploads. **Depends on:** Phase 2 (shared `MediaUploader`).
+
+### Phase 4 — Photos / Media
 
 **Goal:** a real photo library, not just per-pin attachments.
 **Steps:** Media module page with a library grid; browse/filter by person, place, and time; bulk upload; EXIF date + GPS read on upload to **auto-suggest** visit/trip/people links; link editing via `RelatedPanel`; set a photo's trip (drives its folder, §6).
 **Delivers:** a central gallery where any photo can be found by who/where/when and connected to the rest of the app. **Depends on:** Phases 1–2 (people tagging).
 
-### Phase 4 — Documents & reminders
+### Phase 5 — Documents & reminders
 
 **Goal:** the practical travel-paperwork hub.
 **Steps:** `documents` CRUD (passport/visa/booking/insurance/other) with owner = person or trip; file upload into the owner's folder; expiry + `reminder_lead_days`; an in-app **renewals view** querying upcoming expiries; surface a count/badge in the rail.
 **Delivers:** every important document stored, browsable on disk by owner, with upcoming renewals visible at a glance. **Depends on:** Phases 1–2. *(Email/push delivery remains deferred — §7.3.)*
 
-### Phase 5 — Future trip planning
+### Phase 6 — Future trip planning
 
 **Goal:** plan trips that haven't happened yet.
 **Steps:** treat a planned trip as a Trip with future dates + a `status` (idea / planning / booked / done); itinerary of planned visits; idea/wishlist visits not yet scheduled; attach bookings (documents) and people; a planning view distinct from the past-trips view.
-**Delivers:** upcoming trips live alongside past ones, with itinerary, bookings, and who's coming. **Depends on:** Phases 1–4 (visits, documents, people).
+**Delivers:** upcoming trips live alongside past ones, with itinerary, bookings, and who's coming. **Depends on:** Phases 1, 2, 5 (visits, people, documents).
 
-### Phase 6 — Packing
+### Phase 7 — Packing
 
 **Goal:** packing lists tied to trips.
 **Steps:** `packing_lists` + `packing_items`; reusable list **templates**; per-trip checklists with check-off state; optionally seed a list from a template or a similar past trip.
-**Delivers:** every trip can carry packing checklists, reused across trips. **Depends on:** Phases 1, 5 (trips/planning).
+**Delivers:** every trip can carry packing checklists, reused across trips. **Depends on:** Phases 1, 6 (trips/planning).
 
-### Phase 7 — Polish & completion
+### Phase 8 — Polish & completion
 
 **Goal:** turn the module set into a finished product.
 **Steps:** consistent empty/loading/error states across modules; cross-module search ("find anything: a person, place, trip, document, photo"); finalize the read-only **guest** experience across all modules; generalized sharing if desired (promoted from §7.3); backup/export of the full family archive (DB + storage tree); docs/onboarding.
-**Delivers:** a cohesive, shareable, backup-able family travel hub. **Depends on:** Phases 1–6.
+**Delivers:** a cohesive, shareable, backup-able family travel hub. **Depends on:** Phases 1–7.
 
 ### Definition of done — the completed application
 
