@@ -285,7 +285,9 @@ function toListDto(r: MediaListRow) {
     thumbUrl: r.thumb_rel_path ? signFileUrl(r.thumb_rel_path) : null,
     caption: r.caption, takenAt: r.taken_at, createdAt: r.created_at,
     width: r.width, height: r.height, lng: r.lng, lat: r.lat,
-    cursor: `${r.sort_ts}__${r.id}`,
+    // `pg` returns sort_ts as a JS Date — serialize as ISO so the cursor
+    // round-trips through `before`'s ::timestamptz cast on the next page.
+    cursor: `${new Date(r.sort_ts).toISOString()}__${r.id}`,
   };
 }
 ```
@@ -484,9 +486,12 @@ git commit -m "feat(media): POST /api/media/suggestions (trip-by-date, visit-by-
 
 Create `backend/src/routes/media-apply.test.ts`:
 ```ts
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { buildTestApp, closeTestApp, type TestCtx } from "../test/helpers.js";
 import { query } from "../db/pool.js";
+import { absStoragePath } from "../lib/storage.js";
 
 let ctx: TestCtx;
 beforeAll(async () => { ctx = await buildTestApp(); });
@@ -497,6 +502,10 @@ test("applies a trip (sets trip_id) and a visit (links) to media", async () => {
   const trip = await query<{ id: string }>("INSERT INTO trips (family_id, name, start_date) VALUES ($1,'Italy','2024-06-01') RETURNING id", [ctx.familyId]);
   const visit = await query<{ id: string }>("INSERT INTO visits (family_id, kind, title) VALUES ($1,'place','Colosseum') RETURNING id", [ctx.familyId]);
   const m = await query<{ id: string }>("INSERT INTO media (family_id, kind, rel_path) VALUES ($1,'image','loose/2024/a.jpg') RETURNING id", [ctx.familyId]);
+  // Setting a trip moves the file on disk — give it a real file to move.
+  const abs = absStoragePath("loose/2024/a.jpg");
+  await mkdir(dirname(abs), { recursive: true });
+  await writeFile(abs, "x");
 
   const resTrip = await ctx.app.inject({ method: "POST", url: "/api/media/apply-suggestion", headers: auth(),
     payload: { mediaIds: [m.rows[0].id], tripId: trip.rows[0].id } });
