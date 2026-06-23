@@ -85,7 +85,7 @@ Shared services used by all modules: auth/users, families, comments, share links
 Every module is the same four pieces, so adding one is mechanical:
 
 1. **A rail entry** — icon, label, route path.
-2. **A page component** — assembled from shared building blocks:
+2. **A page component** — assembled from shared building blocks *(built at the start of Phase 2, not Phase 1 — see §7.3)*:
    - `EntityList` — filterable/sortable list of a core entity.
    - `EntityDetail` — a detail view.
    - `RelatedPanel` — shows and edits an entity's links (its photos, people, trips, documents). The standard cross-module surface.
@@ -254,12 +254,13 @@ A service `reconcileStorage(entity)`:
 ### 7.2 Frontend
 
 - **`AppShell`** with the left rail and module routing (replaces map-first `App.tsx`).
-- Extract shared components: `RelatedPanel`, `EntityPicker`, `MediaUploader`, `EntityList`, `EntityDetail` (factored out of current `ItemDetail`/`GalleryPanel`/`Lightbox`/`PlaceSearch`).
-- **Map module:** `MapPage` becomes a module that reads visits via `map_set_visits`; existing maps keep working.
+- **Map module:** `MapPage` becomes a module that reads visits via `map_set_visits`; existing maps keep working. The data migration is concentrated in `api/client.ts` (item/photo/trip/comment/stats methods repointed to the new endpoints while keeping their names and DTO shapes), so the Map components need no edits.
 - Rail shows Map (working) with later modules disabled.
+- **Shared UI components are deferred — see §7.3.** The genuine frontend foundation is the shell plus the Map on the new core; the reusable components are built alongside their first consumer in Phase 2.
 
 ### 7.3 Out of scope for the foundation
 
+- **Shared UI components** — `RelatedPanel`, `EntityPicker`, `MediaUploader`, `EntityList`, `EntityDetail` are **deferred to Phase 2 (People)**, their first real consumer, so their interfaces are shaped by actual use rather than guessed. Building them in Phase 1 with no module to host them would be speculative (YAGNI). Phase 2's first task is to build these as reusable components (not People-specific), so every later module inherits them. The module contract (§3) still describes them as the standard building blocks — they simply land at the start of Phase 2 instead of Phase 1.
 - People/Photos/Documents/Planning/Packing module UIs (later phases) — but their tables (`people`, `media`, `documents`) are created now so links work immediately.
 - Notifications delivery (email/push) for reminders — only the data + a queryable "upcoming expiry" view exist.
 - Generalized sharing beyond the current map share link.
@@ -292,16 +293,17 @@ The full app is reached through seven phases. Each phase after the foundation is
 2. Universal links service + API (§4) and the `(from_type,to_type)` allow-list.
 3. Storage layer: Scheme B canonical paths, readable filenames, the move-on-link reconciler (§6), and the auth-gated file-serving route (§10).
 4. Left-rail `AppShell` + module routing (replaces map-first `App.tsx`).
-5. Shared UI building blocks: `RelatedPanel`, `EntityPicker`, `MediaUploader`, `EntityList`, `EntityDetail`.
-6. Refactor the Map onto the new core (visits via `map_set_visits`); existing maps keep working.
+5. Refactor the Map onto the new core (visits via `map_set_visits`); existing maps keep working.
+
+*(The shared UI building blocks — `RelatedPanel`, `EntityPicker`, `MediaUploader`, `EntityList`, `EntityDetail` — are **deferred to the start of Phase 2**; see §7.3.)*
 
 **Delivers:** the app runs on the new architecture; the Map module works end-to-end; later modules are now "a routes file + a page + a rail entry." **Depends on:** nothing.
 
 ### Phase 2 — People
 
 **Goal:** people as first-class, taggable entities.
-**Steps:** `people` CRUD routes; People module page (list + detail with `RelatedPanel`); avatar upload; optional link of a Person to a User account; an `EntityPicker` for people used by every other module.
-**Delivers:** create anyone (with or without a login) and see everything linked to them. **Depends on:** Phase 1.
+**Steps:** **first, build the deferred shared UI components** as reusable, entity-agnostic building blocks — `RelatedPanel`, `EntityPicker`, `MediaUploader`, `EntityList`, `EntityDetail` (factored from today's `ItemDetail`/`GalleryPanel`/`Lightbox`/`PlaceSearch`); then `people` CRUD routes; People module page (`EntityList` + `EntityDetail` with `RelatedPanel`); avatar upload (`MediaUploader`); optional link of a Person to a User account; the `EntityPicker` for people is reused by every other module.
+**Delivers:** the reusable component library plus: create anyone (with or without a login) and see everything linked to them. **Depends on:** Phase 1.
 
 ### Phase 3 — Photos / Media
 
@@ -380,4 +382,4 @@ A self-hosted hub where one household can: pin and map everywhere they've been (
 
 ## 14. Summary
 
-A persistent left-rail shell hosts modules that all read and write a small shared core (Person, Visit, Trip, Media, Document) connected by a universal links table. Files live in a browsable trip/event folder tree with only paths in the DB, and move to follow their trip links. The foundation phase refactors today's map onto this core and ships the links API, storage reconciler, and shared UI building blocks — after which People, Photos, Documents, Planning, and Packing are each "a routes file + a page + a rail entry."
+A persistent left-rail shell hosts modules that all read and write a small shared core (Person, Visit, Trip, Media, Document) connected by a universal links table. Files live in a browsable trip/event folder tree with only paths in the DB, and move to follow their trip links. The foundation phase refactors today's map onto this core and ships the links API and storage reconciler; the shared UI building blocks are built at the start of Phase 2 (their first consumer — see §7.3). After that, People, Photos, Documents, Planning, and Packing are each "a routes file + a page + a rail entry."
