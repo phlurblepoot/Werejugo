@@ -246,6 +246,37 @@ export interface CruiseFindResult {
   warnings: string[];
 }
 
+export type CoreType = "visit" | "trip" | "person" | "media" | "document";
+
+export interface Person {
+  id: string;
+  displayName: string;
+  relationship: string;
+  notes: string;
+  userId: string | null;
+  avatarMediaId: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+}
+
+export interface PersonInput {
+  displayName?: string;
+  relationship?: string;
+  notes?: string;
+  userId?: string | null;
+  avatarMediaId?: string | null;
+}
+
+export interface FamilyMember { id: string; displayName: string; email: string; color: string; }
+
+export interface EntitySummary {
+  type: CoreType; id: string; label: string; subtitle?: string | null; thumbUrl: string | null;
+}
+
+export interface Relation { linkId: string; role: string; entity: EntitySummary; }
+
+export interface MediaDto { id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string; }
+
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
@@ -358,6 +389,32 @@ export const api = {
 
   // stats (family-scoped)
   getStats: (_mapSetId: string) => request<Stats>("/api/stats"),
+
+  // people
+  listPeople: () => request<Person[]>("/api/people"),
+  getPerson: (id: string) => request<Person>(`/api/people/${id}`),
+  createPerson: (data: PersonInput) => request<Person>("/api/people", { method: "POST", body: body(data) }),
+  updatePerson: (id: string, data: PersonInput) =>
+    request<Person>(`/api/people/${id}`, { method: "PATCH", body: body(data) }),
+  deletePerson: (id: string) => request<void>(`/api/people/${id}`, { method: "DELETE" }),
+  listFamilyMembers: () => request<FamilyMember[]>("/api/family-members"),
+
+  // entity graph
+  getRelations: (entity: string) =>
+    request<Relation[]>(`/api/relations?entity=${encodeURIComponent(entity)}`),
+  searchEntities: (type: CoreType, q: string) =>
+    request<EntitySummary[]>(`/api/entities/search?type=${type}&q=${encodeURIComponent(q)}`),
+
+  // generic media + links
+  uploadMedia: (file: File, caption = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("caption", caption);
+    return request<MediaDto>("/api/media", { method: "POST", body: fd });
+  },
+  createLink: (from: string, to: string, role = "") =>
+    request<{ id: string }>("/api/links", { method: "POST", body: body({ from, to, role }) }),
+  deleteLink: (id: string) => request<void>(`/api/links/${id}`, { method: "DELETE" }),
 
   // exif / import / export
   readExif: (file: File) => {
