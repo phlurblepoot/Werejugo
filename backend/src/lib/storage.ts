@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { mkdir, rename, unlink, access } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
 import { config } from "../config.js";
 
 export function slugify(text: string): string {
@@ -46,3 +47,46 @@ export function documentDirFor(
 export function absStoragePath(relPath: string): string {
   return join(config.storageDir, relPath);
 }
+
+async function exists(absPath: string): Promise<boolean> {
+  try {
+    await access(absPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A collision-free filename within relDir, derived from the original name. */
+export async function uniqueName(relDir: string, originalName: string): Promise<string> {
+  const ext = extname(originalName).toLowerCase();
+  const stem = slugify(basename(originalName, ext)) || "file";
+  let candidate = `${stem}${ext}`;
+  let n = 2;
+  while (await exists(absStoragePath(join(relDir, candidate)))) {
+    candidate = `${stem}-${n}${ext}`;
+    n += 1;
+  }
+  return candidate;
+}
+
+/** Move a stored file into relDir (de-duping its name); returns the new rel path. */
+export async function moveStored(relPath: string, relDir: string): Promise<string> {
+  const name = await uniqueName(relDir, basename(relPath));
+  const destRel = join(relDir, name);
+  await mkdir(absStoragePath(relDir), { recursive: true });
+  await rename(absStoragePath(relPath), absStoragePath(destRel));
+  return destRel;
+}
+
+/** Best-effort delete of a stored file. */
+export async function deleteStored(relPath: string | null): Promise<void> {
+  if (!relPath) return;
+  try {
+    await unlink(absStoragePath(relPath));
+  } catch {
+    /* already gone */
+  }
+}
+
+export { exists as storedExists };
