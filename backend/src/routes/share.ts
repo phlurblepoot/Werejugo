@@ -2,6 +2,7 @@ import { customAlphabet } from "nanoid";
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { signFileUrl } from "../lib/filesign.js";
 
 const makeToken = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 20);
 
@@ -13,18 +14,28 @@ async function ownsMapSet(familyId: string, mapSetId: string): Promise<boolean> 
   return Boolean(rowCount);
 }
 
+// Public, read-only view of a map set's pins: visits that are members of the map,
+// with their waypoints and linked photos (served via signed URLs, so they load
+// without a session — which is exactly what a public share needs).
 async function loadPublicItems(mapSetId: string) {
   const { rows } = await query<any>(
-    `SELECT i.id, i.kind, i.title, i.notes, i.color, i.icon, i.occurred_on, i.trip_id,
-            ST_AsGeoJSON(i.geom) AS geom,
+    `SELECT v.id, v.kind, v.title, v.notes, v.color, v.icon, v.occurred_on, v.trip_id,
+            ST_AsGeoJSON(v.geom) AS geom,
             COALESCE((SELECT json_agg(json_build_object('label', w.label, 'kind', w.kind, 'seq', w.seq,
                        'lng', ST_X(w.geom), 'lat', ST_Y(w.geom)) ORDER BY w.seq)
-                     FROM item_waypoints w WHERE w.item_id = i.id), '[]') AS waypoints,
-            COALESCE((SELECT json_agg(json_build_object('id', p.id, 'url', p.url, 'thumbUrl', p.thumb_url,
-                       'mediaType', p.media_type, 'caption', p.caption, 'seq', p.seq) ORDER BY p.seq)
-                     FROM item_photos p WHERE p.item_id = i.id), '[]') AS photos
-     FROM items i WHERE i.map_set_id = $1
-     ORDER BY i.occurred_on NULLS LAST, i.created_at ASC`,
+                     FROM visit_waypoints w WHERE w.visit_id = v.id), '[]') AS waypoints,
+            COALESCE((SELECT json_agg(json_build_object('id', m.id, 'rel_path', m.rel_path,
+                       'thumb_rel_path', m.thumb_rel_path, 'mediaType', m.kind, 'caption', m.caption)
+                       ORDER BY m.created_at)
+                     FROM links l JOIN media m ON m.id = CASE
+                        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
+                     WHERE l.family_id = v.family_id
+                       AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=v.id)
+                         OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=v.id))), '[]') AS photos
+     FROM visits v
+     JOIN map_set_visits msv ON msv.visit_id = v.id
+     WHERE msv.map_set_id = $1
+     ORDER BY v.occurred_on NULLS LAST, v.created_at ASC`,
     [mapSetId],
   );
   return rows.map((r) => ({
@@ -38,7 +49,14 @@ async function loadPublicItems(mapSetId: string) {
     tripId: r.trip_id,
     geometry: r.geom ? JSON.parse(r.geom) : null,
     waypoints: r.waypoints,
-    photos: r.photos,
+    photos: (r.photos as any[]).map((p, i) => ({
+      id: p.id,
+      url: signFileUrl(p.rel_path),
+      thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
+      mediaType: p.mediaType,
+      caption: p.caption,
+      seq: i,
+    })),
   }));
 }
 
@@ -101,8 +119,13 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
     if (!ms.rows[0]) return reply.code(404).send({ error: "Map set not found" });
     const m = ms.rows[0];
 
+    // Trips become family-scoped — show the ones referenced by this map's visits.
     const trips = await query<any>(
-      "SELECT id, name, color, start_date, end_date FROM trips WHERE map_set_id = $1",
+      `SELECT DISTINCT t.id, t.name, t.color, t.start_date, t.end_date
+       FROM trips t
+       JOIN visits v ON v.trip_id = t.id
+       JOIN map_set_visits msv ON msv.visit_id = v.id
+       WHERE msv.map_set_id = $1`,
       [mapSetId],
     );
 

@@ -82,10 +82,14 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           skipped++;
           continue;
         }
+        const ins = await client.query<{ id: string }>(
+          `INSERT INTO visits (family_id, kind, title, geom, created_by)
+           VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326), $5) RETURNING id`,
+          [req.user.familyId, kind, title, JSON.stringify(geom), req.user.id],
+        );
         await client.query(
-          `INSERT INTO items (map_set_id, kind, title, geom, created_by)
-           VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326), $5)`,
-          [mapSetId, kind, title, JSON.stringify(geom), req.user.id],
+          "INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [mapSetId, ins.rows[0].id],
         );
         imported++;
       }
