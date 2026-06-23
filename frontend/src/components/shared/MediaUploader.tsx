@@ -3,6 +3,7 @@ import { api, type MediaDto } from "../../api/client";
 
 interface Props {
   onUploaded: (media: MediaDto) => void;
+  onAllUploaded?: (media: MediaDto[]) => void;
   linkTo?: string;        // e.g. "person:<id>" — links each upload to this entity
   linkRole?: string;
   multiple?: boolean;
@@ -10,7 +11,7 @@ interface Props {
 }
 
 /** Generic media upload: uploads each file, optionally links it, reports each media. */
-export function MediaUploader({ onUploaded, linkTo, linkRole = "", multiple = false, label = "Upload" }: Props) {
+export function MediaUploader({ onUploaded, onAllUploaded, linkTo, linkRole = "", multiple = false, label = "Upload" }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,13 +19,15 @@ export function MediaUploader({ onUploaded, linkTo, linkRole = "", multiple = fa
     setBusy(true);
     setError(null);
     try {
-      await Promise.all(
+      const media = await Promise.all(
         Array.from(files).map(async (file) => {
-          const media = await api.uploadMedia(file);
-          if (linkTo) await api.createLink(`media:${media.id}`, linkTo, linkRole);
-          onUploaded(media);
+          const m = await api.uploadMedia(file);
+          if (linkTo) await api.createLink(`media:${m.id}`, linkTo, linkRole);
+          onUploaded(m);
+          return m;
         }),
       );
+      onAllUploaded?.(media);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
