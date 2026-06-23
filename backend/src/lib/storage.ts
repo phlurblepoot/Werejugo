@@ -1,5 +1,8 @@
+import { createWriteStream } from "node:fs";
 import { mkdir, rename, unlink, access } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
+import { pipeline } from "node:stream/promises";
+import sharp from "sharp";
 import { config } from "../config.js";
 
 export function slugify(text: string): string {
@@ -90,3 +93,62 @@ export async function deleteStored(relPath: string | null): Promise<void> {
 }
 
 export { exists as storedExists };
+
+const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
+const VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".m4v"]);
+const AUDIO_EXT = new Set([".mp3", ".m4a", ".ogg", ".wav", ".aac"]);
+
+export type MediaKind = "image" | "video" | "audio";
+
+function kindForExt(ext: string): MediaKind {
+  if (VIDEO_EXT.has(ext)) return "video";
+  if (AUDIO_EXT.has(ext)) return "audio";
+  return "image";
+}
+
+export interface SavedMedia {
+  relPath: string;
+  thumbRelPath: string | null;
+  kind: MediaKind;
+  width: number | null;
+  height: number | null;
+}
+
+/** Stream an upload into relDir, generate a thumbnail for raster images. */
+export async function saveMediaUpload(
+  part: { filename: string; file: NodeJS.ReadableStream },
+  relDir: string,
+): Promise<SavedMedia> {
+  const ext = extname(part.filename).toLowerCase();
+  if (!IMAGE_EXT.has(ext) && !VIDEO_EXT.has(ext) && !AUDIO_EXT.has(ext)) {
+    throw new Error("UNSUPPORTED_TYPE");
+  }
+  const name = await uniqueName(relDir, part.filename);
+  const relPath = join(relDir, name);
+  await mkdir(absStoragePath(relDir), { recursive: true });
+  await pipeline(part.file, createWriteStream(absStoragePath(relPath)));
+
+  const kind = kindForExt(ext);
+  let thumbRelPath: string | null = null;
+  let width: number | null = null;
+  let height: number | null = null;
+
+  if (kind === "image" && ext !== ".gif") {
+    try {
+      const meta = await sharp(absStoragePath(relPath)).metadata();
+      width = meta.width ?? null;
+      height = meta.height ?? null;
+      const thumbName = `${basename(name, ext)}.thumb.jpg`;
+      const thumbRel = join(relDir, thumbName);
+      await sharp(absStoragePath(relPath))
+        .rotate()
+        .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toFile(absStoragePath(thumbRel));
+      thumbRelPath = thumbRel;
+    } catch {
+      thumbRelPath = null;
+    }
+  }
+  return { relPath, thumbRelPath, kind, width, height };
+}
