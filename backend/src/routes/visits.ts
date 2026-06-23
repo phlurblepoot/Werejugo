@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { signFileUrl } from "../lib/filesign.js";
 
 const geometrySchema = z.object({ type: z.enum(["Point", "LineString"]), coordinates: z.any() }).nullable();
 const waypointSchema = z.object({
@@ -31,7 +32,7 @@ async function ownsVisit(familyId: string, id: string): Promise<boolean> {
   return Boolean(rowCount);
 }
 
-async function loadVisit(familyId: string, id: string) {
+export async function loadVisit(familyId: string, id: string) {
   const { rows } = await query<any>(
     `SELECT v.id, v.trip_id, v.kind, v.title, v.notes, v.theme_id, v.color, v.icon,
             v.occurred_on, v.occurred_end, v.properties, v.created_by, v.created_at,
@@ -46,6 +47,16 @@ async function loadVisit(familyId: string, id: string) {
     `SELECT id, label, kind, seq, arrive_at, depart_at, ST_X(geom) AS lng, ST_Y(geom) AS lat
      FROM visit_waypoints WHERE visit_id = $1 ORDER BY seq ASC`, [id],
   );
+  const photoRows = await query<any>(
+    `SELECT m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
+     FROM links l JOIN media m ON m.id = CASE
+        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
+     WHERE l.family_id = $2
+       AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=$1)
+         OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=$1))
+     ORDER BY m.created_at ASC`,
+    [id, familyId],
+  );
   return {
     id: r.id, tripId: r.trip_id, kind: r.kind, title: r.title, notes: r.notes,
     themeId: r.theme_id, color: r.color, icon: r.icon,
@@ -55,6 +66,14 @@ async function loadVisit(familyId: string, id: string) {
     waypoints: wps.rows.map((w) => ({
       id: w.id, label: w.label, kind: w.kind, seq: w.seq, lng: w.lng, lat: w.lat,
       arriveAt: w.arrive_at, departAt: w.depart_at,
+    })),
+    photos: photoRows.rows.map((p, i) => ({
+      id: p.id,
+      url: signFileUrl(p.rel_path),
+      thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
+      mediaType: p.kind,
+      caption: p.caption,
+      seq: i,
     })),
   };
 }

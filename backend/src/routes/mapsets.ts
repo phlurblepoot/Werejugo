@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { loadVisit } from "./visits.js";
 
 const upsertSchema = z.object({
   name: z.string().min(1).max(120),
@@ -139,9 +140,9 @@ export async function mapSetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/map-sets/:id/visits", async (req, reply) => {
     const id = (req.params as { id: string }).id;
     if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    const { rows } = await query<{ visit_id: string; seq: number }>(
-      "SELECT visit_id, seq FROM map_set_visits WHERE map_set_id = $1 ORDER BY seq ASC", [id]);
-    return rows.map((r) => ({ visitId: r.visit_id, seq: r.seq }));
+    const { rows } = await query<{ visit_id: string }>(
+      "SELECT visit_id FROM map_set_visits WHERE map_set_id = $1 ORDER BY seq ASC", [id]);
+    return Promise.all(rows.map((r) => loadVisit(req.user.familyId, r.visit_id)));
   });
 
   app.post("/api/map-sets/:id/visits", async (req, reply) => {
