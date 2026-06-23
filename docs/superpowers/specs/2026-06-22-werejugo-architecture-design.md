@@ -20,7 +20,8 @@ This spec defines how the modules fit together and share data, so the map can be
 | Data sharing | **Shared core + universal links** — a small set of first-class entities plus one generic links table; modules are views/filters over the core |
 | Deployment | **One household per install** — keep internal family-scoping, assume a single family; members log in, guests are read-only |
 | People | **First-class, optional account link** — anyone can be a Person (no login required); a Person may optionally link to a User account |
-| Migration approach | **Refactor the core now** — restructure the map-centric tables into the shared core as part of this foundation work |
+| Migration approach | **Refactor the core now**, as a **greenfield rebuild** — no real data exists, so wipe and rebuild the schema rather than transform data |
+| Photo↔trip | A photo belongs to **at most one trip** (`media.trip_id`), set directly or inherited from a linked visit's trip |
 | File storage | **Trip/event folders on disk (Scheme B)** — files live in a browsable tree; only metadata + relative path in the DB |
 | Single/loose files | Date-grouped `loose/<year>/`; only trips get named folders |
 | Move-on-link | Yes — linking/unlinking moves the file on disk and updates the stored path |
@@ -62,8 +63,10 @@ Five first-class entities every module reads/writes:
 One generic association table connects any two core entities, with a `role` describing the relationship ("shows", "appears_in", "belongs_to", "visited_with"). A new kind of connection is a row, not a migration.
 
 **Rule of thumb:**
-- **One-to-many ownership** stays a plain foreign key (e.g. `visit.trip_id`, `document.owner_person_id`).
-- **Many-to-many / cross-cutting** relationships go through `links` (e.g. media↔person, media↔visit, media↔trip).
+- **One-to-many ownership** stays a plain foreign key (e.g. `visit.trip_id`, `media.trip_id`, `document.owner_person_id`).
+- **Many-to-many / cross-cutting** relationships go through `links` (e.g. media↔person, media↔visit).
+
+**A photo belongs to at most one trip.** A photo is taken on a single trip, so the trip association is a foreign key (`media.trip_id`), not a link. It can be set directly or inherited from a linked visit's trip (§6.2). Attempting to give a photo a second, conflicting trip (e.g. linking it to a visit in a different trip) is rejected with a clear message.
 
 ### 2.5 Per-module extras
 
@@ -154,6 +157,7 @@ visits(                              -- evolves items
 media(
   id uuid pk, family_id uuid not null,
   kind text not null,                            -- image|video|audio
+  trip_id uuid null references trips(id) on delete set null,  -- at most one trip; drives folder
   rel_path text not null,                        -- e.g. trips/2024-italy/photos/venice-canal.jpg
   thumb_path text, original_name text,
   taken_at timestamptz,                          -- EXIF date (fallback: upload time)
@@ -207,10 +211,12 @@ storage/
 
 ### 6.2 Canonical-location rule
 
-For **media**:
-1. Determine the media's *trip context*: any trip directly linked, else the trip of any linked visit. If several, the **primary trip** = earliest `start_date` (tiebreak `created_at`).
-2. If a primary trip exists → `trips/<trip-slug>/photos/`.
-3. Else → `loose/<YYYY>/`.
+For **media** (a photo belongs to at most one trip — `media.trip_id`):
+1. `media.trip_id` is set either directly or by inheriting a linked visit's `trip_id` (**"follow the visit's trip"**): linking a photo to a visit that belongs to a trip sets the photo's `trip_id` to that trip.
+2. If `trip_id` is set → `trips/<trip-slug>/photos/`.
+3. Else → `loose/<YYYY>/` (year from `taken_at`, else upload time).
+
+**Conflict rule:** if an action would give a photo a *different* non-null `trip_id` than it already has (e.g. linking it to a visit in another trip), the action is rejected with a clear message rather than silently re-homing the file.
 
 For **documents**:
 1. `owner_trip_id` set → `trips/<trip-slug>/documents/`.
@@ -224,12 +230,13 @@ A service `reconcileStorage(entity)`:
 - If it differs from the stored `rel_path`, **moves the file and its thumbnail**, then updates `rel_path`/`thumb_path` in the same transaction.
 - Is **idempotent** (safe to re-run) and best-effort on the filesystem move: move file first, then commit DB; a failed commit leaves a recoverable state the next reconcile fixes.
 
-**Triggers:** link create/delete touching a media/visit↔trip relationship; document owner change; trip rename or `start_date` change (re-slug → reconcile all of that trip's files).
+**Triggers:** `media.trip_id` change (set directly or inherited from a linked visit's trip); document owner change; trip rename or `start_date` change (re-slug → reconcile all of that trip's files).
 
 ### 6.4 Implications & edge cases
 
-- A file has exactly **one** on-disk home (the canonical rule decides it); all other relationships remain virtual in `links`.
-- Multi-trip media follows the primary-trip rule; changing trip dates can re-home files.
+- A file has exactly **one** on-disk home (its `trip_id`, else `loose/`); all other relationships (people, visits) remain virtual in `links`.
+- A photo can belong to at most one trip; conflicting trip assignments are rejected (§6.2), not silently re-homed.
+- Changing a trip's name or start date re-slugs its folder and re-homes that trip's files.
 - Deletion removes the file from its current folder (best-effort), then the row.
 - The reconciler runs in the request path for single operations and can be batch-invoked after bulk imports.
 
@@ -239,8 +246,7 @@ A service `reconcileStorage(entity)`:
 
 ### 7.1 Backend
 
-- **Migrations:** create `people`, `media`, `documents`, `links`, `map_set_visits`; evolve `items`→`visits` (add `family_id`, relax/remove `map_set_id`, add `kind 'stay'`); rename `item_waypoints`→`visit_waypoints`.
-- **Data migration** (§8): move existing rows into the new shape; seed `map_set_visits`; convert `item_photos`→`media` + `links`; relocate existing files into the Scheme B tree.
+- **Schema (greenfield rebuild, §8):** stand up the full target schema — `people`, `media` (with `trip_id`), `documents`, `links`, `map_set_visits`, `visits` (replacing `items`, with `family_id` and `kind 'stay'`), `visit_waypoints`, `comments` — and drop the old `items`/`item_photos`/`item_waypoints`/`item_comments` tables. Wipe and reseed dev data.
 - **Generic links service + routes** (§4) and the **storage reconciler** (§6.3).
 - **Refactor** `items`/`trips`/`uploads`/`mapsets`/`share`/`stats`/`export`/`import` routes onto the new model.
 - Storage helper rewritten to compute canonical paths and readable names instead of flat random IDs.
@@ -260,17 +266,17 @@ A service `reconcileStorage(entity)`:
 
 ---
 
-## 8. Data migration plan
+## 8. Schema rebuild (greenfield)
 
-Run as ordered SQL migrations + a one-time data/file migration script, tested against seed data.
+There is **no real data to preserve** — only disposable test/seed rows. So this is a clean schema rebuild, not a data-preserving migration. This removes a large amount of risk and work.
 
-1. Create new tables (`people`, `media`, `documents`, `links`, `map_set_visits`).
-2. `items` → `visits`: add `family_id` (derive from `map_set.family_id`), keep `trip_id`/geometry/style; populate `map_set_visits` from `items.map_set_id`; then drop `map_set_id`.
-3. `item_waypoints` → `visit_waypoints` and `item_comments` → `comments` (rename + retarget FK to `visits`).
-4. `item_photos` → `media`: copy rows, set `kind` from `media_type`, derive `family_id`; create `links(media→visit, role 'appears_in')` for each; relocate the file from `/uploads/<rand>` into the canonical Scheme B path and set `rel_path`/`thumb_path`.
-5. Verify: row counts and link counts preserved; every old photo reachable from its visit; every map renders the same visits.
+**Approach:**
+1. Author the new schema as the target state: `families`, `users`, `people`, `trips`, `visits` (replacing `items`), `media`, `documents`, `links`, `map_sets`, `themes`, `icons`, `visit_waypoints`, `map_set_visits`, `comments`, `share_links`, reference tables (`airports`, `ports`). Either consolidate into a fresh initial migration or add forward migrations that drop/replace the old `items`/`item_photos`/`item_waypoints`/`item_comments` tables.
+2. Drop the existing dev database (and wipe the old `/app/uploads` folder) and re-run migrations from clean.
+3. Update `seed.ts` to generate fake data in the new shape (people, visits with `trip_id`, media in trip/loose folders, a few links, sample documents).
+4. No file-relocation step is needed — there are no real files to move; new uploads land in the Scheme B tree directly.
 
-**Safety:** the migration is reversible at the data level (keep the old `uploads/` files until verification passes); a migration test asserts invariants before cutover.
+**Note:** because this wipes the dev data, do it as a deliberate reset. After this point the storage layout and schema are the canonical baseline for all later phases.
 
 ---
 
@@ -290,6 +296,7 @@ Each is its own spec → plan → build, and reuses the module contract (§3).
 
 - **Auth & guests:** existing JWT. Roles `owner`/`member` plus a read-only **guest** capability (write actions hidden server- and client-side). One family per install; every query is family-scoped.
 - **Media storage:** filesystem + `sharp` thumbnails; `media`/`documents` hold `rel_path` only. See §6.
+- **File serving & privacy:** readable paths (`trips/2024-italy/photos/venice-canal.jpg`) are human-friendly but **guessable**, unlike today's random filenames. So files are served through an **auth-gated route** (family session required), not a wide-open static mount. Files belonging to a shared view are reachable via that view's **share token**. This preserves browsable on-disk names without making everything world-readable by URL.
 - **Reminders:** documents carry `expires_on` + `reminder_lead_days`; a queryable "upcoming" view powers a reminders surface. Delivery channels (email/push) are a later hook, not built now.
 - **Sharing:** current read-only map `share_links` keep working; generalized per-view sharing arrives with later modules.
 - **Comments:** stay on visits for the foundation; may generalize to any entity later via `(entity_type, entity_id)`.
@@ -309,8 +316,8 @@ Each is its own spec → plan → build, and reuses the module contract (§3).
 ## 12. Testing strategy
 
 - **Per-route API tests** for the new links service and each refactored route (family-scoping, validation, dedupe).
-- **Migration test:** run all migrations + the data/file migration against seed data; assert row/link counts preserved, every photo reachable from its visit, every map renders the same visits, and files land at correct canonical paths.
-- **Storage reconciler tests:** link/unlink moves the file and updates `rel_path`; trip rename re-homes files; idempotency.
+- **Schema/seed test:** run all migrations from clean and the seed script; assert the seed produces a coherent graph (visits with trips, media in the right folders, valid links) and that files land at correct canonical paths.
+- **Storage reconciler tests:** setting/clearing `media.trip_id` (directly or via a visit link) moves the file and updates `rel_path`; the conflict rule rejects a second trip; trip rename re-homes files; idempotency.
 - **Shell smoke test:** the rail renders, the Map module loads, disabled modules are inert.
 
 ---
