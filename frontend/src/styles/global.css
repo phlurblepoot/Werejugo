@@ -383,3 +383,108 @@ textarea { resize: vertical; min-height: 60px; }
   color: var(--text); font-size: 12px; padding: 6px 12px; border-radius: 999px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.4);
 }
+
+/* ---- Micro-interactions ---- */
+button { transition: background 0.15s, transform 0.08s, box-shadow 0.15s; }
+button:hover:not(:disabled) { transform: translateY(-1px); }
+button:active:not(:disabled) { transform: translateY(0); }
+button.primary.is-success {
+  background: #16a34a !important; border-color: #16a34a !important;
+}
+.item-row { transition: background 0.15s, transform 0.08s; }
+.item-row:active { transform: scale(0.99); }
+.chip, .toolbar button, .legend-row, .swatch, .icon-choice { transition: all 0.15s; }
+.swatch:hover, .icon-choice:hover { transform: scale(1.08); }
+
+/* ---- Spinner ---- */
+.spinner-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); padding: 24px; }
+.spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+.spinner-label { font-size: 13px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Empty / zero states ---- */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 8px; padding: 32px 24px; height: 100%; color: var(--muted);
+}
+.empty-state-emoji { font-size: 52px; line-height: 1; animation: float 3s ease-in-out infinite; }
+.empty-state-title { font-size: 18px; font-weight: 600; color: var(--text); }
+.empty-state-hint { font-size: 13px; max-width: 340px; }
+.empty-state-action { margin-top: 8px; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* ---- Toasts ---- */
+.toast-stack {
+  position: fixed; bottom: 20px; right: 20px; z-index: 3000;
+  display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px));
+}
+.toast {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-left-width: 4px;
+  border-radius: var(--radius); padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4); font-size: 13px;
+  animation: toast-in 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+.toast-success { border-left-color: #16a34a; }
+.toast-error { border-left-color: var(--danger); }
+.toast-info { border-left-color: var(--accent); }
+.toast-icon { flex-shrink: 0; }
+.toast-msg { line-height: 1.35; }
+@keyframes toast-in { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ---- Confetti ---- */
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 4000; overflow: hidden; }
+.confetti-piece {
+  position: absolute; top: -16px; border-radius: 2px; opacity: 0.9;
+  animation-name: confetti-fall; animation-timing-function: ease-in; animation-fill-mode: forwards;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-16px) rotateZ(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotateZ(720deg); opacity: 0; }
+}
+
+/* ---- "Drop your first pin" hint over the map ---- */
+.map-empty-hint {
+  position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--accent); color: var(--text);
+  font-size: 13px; padding: 8px 14px; border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4); animation: toast-in 0.3s ease;
+}
+.map-empty-hint-emoji { font-size: 16px; animation: float 3s ease-in-out infinite; }
+
+/* ---- No-results row ---- */
+.suggestions .no-results { color: var(--muted); font-style: italic; cursor: default; }
+.suggestions .no-results:hover { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  button:hover:not(:disabled), .item-row:active, .swatch:hover, .icon-choice:hover { transform: none; }
+  .empty-state-emoji { animation: none; }
+  .toast { animation: none; }
+  .confetti { display: none; }
+  .spinner { animation-duration: 1.4s; }
+}
+
+/* --- Module shell --- */
+.shell { position: absolute; inset: 0; display: flex; }
+.rail {
+  flex: 0 0 72px; background: #0f172a; color: #cbd5e1;
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: 8px 0; gap: 4px; z-index: 20;
+}
+.rail-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px; font-size: 10px; color: #94a3b8; text-decoration: none;
+  border-left: 3px solid transparent; cursor: pointer; background: none; border-right: none; border-top: none; border-bottom: none;
+}
+.rail-item .rail-icon { font-size: 20px; }
+.rail-item.active { color: #fff; border-left-color: #2563eb; background: #1e293b; }
+.rail-item.disabled { opacity: 0.4; pointer-events: none; }
+.rail-spacer { flex: 1; }
+.shell-main { position: relative; flex: 1; min-width: 0; }
+.shell-main > .app { position: absolute; inset: 0; }
