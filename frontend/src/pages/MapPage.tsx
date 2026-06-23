@@ -18,10 +18,13 @@ import { Lightbox } from "../components/Lightbox";
 import { TimelineBar } from "../components/TimelineBar";
 import { Legend } from "../components/Legend";
 import { SettingsPanel } from "../components/SettingsPanel";
+import { useToast } from "../components/Toast";
+import { EmptyState, Spinner } from "../components/ui";
 
 export function MapPage() {
   const { user, family, logout } = useAuth();
   const qc = useQueryClient();
+  const { toast, celebrate } = useToast();
 
   const mapSetsQuery = useQuery({ queryKey: ["mapSets"], queryFn: api.listMapSets });
   const themesQuery = useQuery({ queryKey: ["themes"], queryFn: api.listThemes });
@@ -172,20 +175,39 @@ export function MapPage() {
       await api.deleteItem(id);
       setDetailItemId(null);
       refreshItems();
+      toast("Item deleted", "success");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not delete item");
+      toast(e instanceof Error ? e.message : "Could not delete item", "error");
+    }
+  }
+
+  // Item saved from the editor: celebrate the very first pin, otherwise confirm the save.
+  function handleItemSaved() {
+    const wasFirstPin = editorItem === null && items.length === 0;
+    setEditorOpen(false);
+    refreshItems();
+    if (wasFirstPin) {
+      celebrate();
+      toast("🎉 Your first memory is on the map!", "success");
+    } else {
+      toast(editorItem === null ? "Pin added" : "Changes saved", "success");
     }
   }
 
   async function exportData() {
-    const data = await api.exportData();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `werejugo-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const data = await api.exportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `werejugo-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Backup downloaded", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Export failed", "error");
+    }
   }
 
   return (
@@ -259,6 +281,12 @@ export function MapPage() {
               </div>
             )}
             {editMode && <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>}
+            {!itemsQuery.isLoading && items.length === 0 && !pickActive && (
+              <div className="map-empty-hint">
+                <span className="map-empty-hint-emoji" aria-hidden="true">📍</span>
+                No pins yet — hit <strong>+ Add to map</strong> to drop your first memory.
+              </div>
+            )}
             <Legend items={items} kindFilter={kindFilter} onToggleKind={toggleKind} />
             {timelineOn && (
               <TimelineBar
@@ -269,8 +297,19 @@ export function MapPage() {
               />
             )}
           </>
+        ) : mapSetsQuery.isLoading ? (
+          <Spinner label="Loading your maps…" />
         ) : (
-          <div className="centered">Create a map set to get started.</div>
+          <EmptyState
+            emoji="🗺️"
+            title="Welcome to Werejugo!"
+            hint="Create your first map set — like “Summer Trips” or “Places We've Eaten” — and start pinning your family's memories."
+            action={
+              <button className="primary" onClick={() => setMapSetEditor({ open: true, mapSet: null })}>
+                ✨ Create your first map
+              </button>
+            }
+          />
         )}
       </div>
 
@@ -283,7 +322,7 @@ export function MapPage() {
           customIcons={customIcons}
           onRequestPick={requestPick}
           onClose={() => setEditorOpen(false)}
-          onSaved={() => { setEditorOpen(false); refreshItems(); }}
+          onSaved={handleItemSaved}
           onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
           pinSettings={pinSettings}
           pathSettings={pathSettings}

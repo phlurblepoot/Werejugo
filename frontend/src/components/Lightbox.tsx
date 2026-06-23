@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { API_URL, type Photo } from "../api/client";
 
 interface Props {
@@ -10,6 +10,9 @@ interface Props {
 
 export function Lightbox({ photos, index, onIndex, onClose }: Props) {
   const photo = photos[index];
+  const next = () => onIndex((index + 1) % photos.length);
+  const prev = () => onIndex((index - 1 + photos.length) % photos.length);
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -23,15 +26,29 @@ export function Lightbox({ photos, index, onIndex, onClose }: Props) {
 
   if (!photo) return null;
 
+  // Swipe left/right to navigate on touch devices.
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null || photos.length < 2) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (dx > 50) prev();
+    else if (dx < -50) next();
+    touchStartX.current = null;
+  }
+
   return (
-    <div className="lightbox" onClick={onClose}>
-      <button className="lightbox-close" onClick={onClose}>✕</button>
+    <div className="lightbox" onClick={onClose} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <button className="lightbox-close" onClick={onClose} aria-label="Close" title="Close (Esc)">✕</button>
       {photos.length > 1 && (
         <button
           className="lightbox-nav left"
+          aria-label="Previous photo"
+          title="Previous (←)"
           onClick={(e) => {
             e.stopPropagation();
-            onIndex((index - 1 + photos.length) % photos.length);
+            prev();
           }}
         >
           ‹
@@ -56,9 +73,11 @@ export function Lightbox({ photos, index, onIndex, onClose }: Props) {
       {photos.length > 1 && (
         <button
           className="lightbox-nav right"
+          aria-label="Next photo"
+          title="Next (→)"
           onClick={(e) => {
             e.stopPropagation();
-            onIndex((index + 1) % photos.length);
+            next();
           }}
         >
           ›

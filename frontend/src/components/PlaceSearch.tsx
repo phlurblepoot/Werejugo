@@ -11,20 +11,27 @@ export function PlaceSearch({ placeholder, search, onSelect }: Props) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     if (q.trim().length < 2) {
       setResults([]);
+      setSearched(false);
       return;
     }
+    setSearching(true);
     timer.current = setTimeout(async () => {
       try {
         setResults(await search(q));
-        setOpen(true);
       } catch {
         setResults([]);
+      } finally {
+        setSearching(false);
+        setSearched(true);
+        setOpen(true);
       }
     }, 300);
     return () => {
@@ -40,8 +47,12 @@ export function PlaceSearch({ placeholder, search, onSelect }: Props) {
         onChange={(e) => setQ(e.target.value)}
         onFocus={() => results.length && setOpen(true)}
       />
-      {open && results.length > 0 && (
+      {open && (results.length > 0 || searching || searched) && (
         <div className="suggestions">
+          {searching && <div className="no-results">Searching…</div>}
+          {!searching && results.length === 0 && searched && (
+            <div className="no-results">No matches — try a different spelling.</div>
+          )}
           {results.map((r, i) => (
             <div
               key={i}
@@ -49,6 +60,7 @@ export function PlaceSearch({ placeholder, search, onSelect }: Props) {
                 onSelect(r);
                 setQ("");
                 setResults([]);
+                setSearched(false);
                 setOpen(false);
               }}
             >

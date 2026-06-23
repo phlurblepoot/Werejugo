@@ -24,6 +24,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       "UPDATE families SET settings = $2 WHERE id = $1 RETURNING settings",
       [req.user.familyId, json],
     );
+    if (!rows[0]) return reply.code(404).send({ error: "Family not found" });
     return rows[0].settings;
   });
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, type Trip } from "../api/client";
 import { PALETTE } from "./StylePicker";
+import { useToast } from "./Toast";
 
 interface Props {
   mapSetId: string;
@@ -12,6 +13,7 @@ interface Props {
 const blank = { name: "", description: "", startDate: "", endDate: "", color: PALETTE[0] };
 
 export function TripsPanel({ mapSetId, trips, onClose, onChanged }: Props) {
+  const { toast } = useToast();
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<typeof blank>(blank);
   const [busy, setBusy] = useState(false);
@@ -42,10 +44,14 @@ export function TripsPanel({ mapSetId, trips, onClose, onChanged }: Props) {
         endDate: form.endDate || null,
         color: form.color,
       };
-      if (editing === "new") await api.createTrip(mapSetId, payload);
+      const isNew = editing === "new";
+      if (isNew) await api.createTrip(mapSetId, payload);
       else if (editing) await api.updateTrip(editing, payload);
       setEditing(null);
       onChanged();
+      toast(isNew ? `Trip “${payload.name}” created` : "Trip updated", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not save trip", "error");
     } finally {
       setBusy(false);
     }
@@ -53,8 +59,13 @@ export function TripsPanel({ mapSetId, trips, onClose, onChanged }: Props) {
 
   async function remove(id: string) {
     if (!confirm("Delete this trip? Items will be unassigned but not deleted.")) return;
-    await api.deleteTrip(id);
-    onChanged();
+    try {
+      await api.deleteTrip(id);
+      onChanged();
+      toast("Trip deleted", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not delete trip", "error");
+    }
   }
 
   return (
@@ -71,8 +82,8 @@ export function TripsPanel({ mapSetId, trips, onClose, onChanged }: Props) {
                 {t.startDate ?? "?"}{t.endDate ? ` – ${t.endDate}` : ""}
               </div>
             </div>
-            <button className="ghost" onClick={() => startEdit(t)}>✎</button>
-            <button className="ghost" onClick={() => remove(t.id)}>✕</button>
+            <button className="ghost" onClick={() => startEdit(t)} aria-label={`Edit ${t.name}`} title="Edit trip">✎</button>
+            <button className="ghost" onClick={() => remove(t.id)} aria-label={`Delete ${t.name}`} title="Delete trip">✕</button>
           </div>
         ))}
 

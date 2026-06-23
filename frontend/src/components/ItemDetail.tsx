@@ -47,7 +47,7 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <h2 style={{ flex: 1 }}>{item.title}</h2>
-          <button className="ghost" onClick={onClose}>✕</button>
+          <button className="ghost" onClick={onClose} aria-label="Close" title="Close">✕</button>
         </div>
 
         <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>

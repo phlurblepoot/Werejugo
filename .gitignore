@@ -29,3 +29,7 @@ backend/src/data/airports.full.csv
 .vscode/
 *.swp
 .superpowers/
+
+# Agent / tooling state (not project work)
+.claude/
+.omc/

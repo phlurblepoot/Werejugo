@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type MapSet, type ShareLink } from "../api/client";
+import { useToast } from "./Toast";
 
 interface Props {
   mapSet: MapSet | null; // null = create
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }: Props) {
+  const { toast } = useToast();
   const editing = Boolean(mapSet);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [shares, setShares] = useState<ShareLink[]>([]);
@@ -23,20 +25,31 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
 
   async function createShare() {
     if (!mapSet) return;
-    const link = await api.createShare(mapSet.id);
-    setShares((prev) => [link, ...prev]);
+    try {
+      const link = await api.createShare(mapSet.id);
+      setShares((prev) => [link, ...prev]);
+      toast("Share link created", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not create share link", "error");
+    }
   }
   async function revokeShare(id: string) {
-    await api.deleteShare(id);
-    setShares((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await api.deleteShare(id);
+      setShares((prev) => prev.filter((s) => s.id !== id));
+      toast("Share link revoked", "info");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not revoke link", "error");
+    }
   }
   async function copyShare(token: string) {
     try {
       await navigator.clipboard.writeText(shareUrl(token));
       setCopied(token);
       setTimeout(() => setCopied(null), 1500);
+      toast("Link copied to clipboard", "success");
     } catch {
-      /* clipboard unavailable */
+      toast("Couldn't copy — select and copy the link manually", "error");
     }
   }
 
@@ -45,10 +58,14 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
     setImportMsg("Importing…");
     try {
       const { imported, skipped } = await api.importFile(mapSet.id, file);
-      setImportMsg(`Imported ${imported} item(s)${skipped ? `, skipped ${skipped}` : ""}.`);
+      const msg = `Imported ${imported} item(s)${skipped ? `, skipped ${skipped}` : ""}.`;
+      setImportMsg(msg);
       onImported();
+      toast(msg, "success");
     } catch (e) {
-      setImportMsg(e instanceof Error ? e.message : "Import failed");
+      const msg = e instanceof Error ? e.message : "Import failed";
+      setImportMsg(msg);
+      toast(msg, "error");
     }
   }
   const [name, setName] = useState(mapSet?.name ?? "");
@@ -95,6 +112,7 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
     };
     try {
       const saved = editing && mapSet ? await api.updateMapSet(mapSet.id, payload) : await api.createMapSet(payload);
+      toast(editing ? "Map set saved" : `Map set “${saved.name}” created`, "success");
       onSaved(saved);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");
@@ -109,7 +127,10 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
     setBusy(true);
     try {
       await api.deleteMapSet(mapSet.id);
+      toast("Map set deleted", "success");
       onDeleted(mapSet.id);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not delete map set", "error");
     } finally {
       setBusy(false);
     }
