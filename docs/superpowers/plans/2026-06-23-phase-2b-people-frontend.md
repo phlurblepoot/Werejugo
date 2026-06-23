@@ -18,6 +18,12 @@
 
 - All commands run from `frontend/`.
 - Component tests mock the `api` module: `vi.mock("../../api/client", () => ({ API_URL: "", api: { ... } }))`. The mock only needs the runtime exports the component uses (`api`, `API_URL`); types are erased.
+- **Vitest hoists `vi.mock` above top-level `const`s**, so a factory cannot reference outer `const fn = vi.fn()`. Define such mock fns with `vi.hoisted` and reference them in the factory:
+  ```ts
+  const { uploadMedia, createLink } = vi.hoisted(() => ({ uploadMedia: vi.fn(), createLink: vi.fn() }));
+  vi.mock("../../api/client", () => ({ API_URL: "", api: { uploadMedia, createLink } }));
+  ```
+  (The test snippets below show the intent; wrap any factory-referenced `vi.fn()`s in `vi.hoisted` as above.)
 - react-query components are wrapped in a fresh `QueryClientProvider` in tests (helper below).
 - Commit after each task with the message in its final step.
 
@@ -791,7 +797,7 @@ test("requires a name then creates a person", async () => {
   const onSaved = vi.fn();
   render(<PersonForm person={null} onClose={() => {}} onSaved={onSaved} />);
   fireEvent.click(screen.getByText("Save"));
-  expect(await screen.findByText(/name/i)).toBeInTheDocument(); // validation message
+  expect(await screen.findByText(/please enter a name/i)).toBeInTheDocument(); // validation message (specific, not the "Name" label)
   expect(createPerson).not.toHaveBeenCalled();
 
   fireEvent.change(screen.getByPlaceholderText("e.g. Grandma"), { target: { value: "Grandma" } });
