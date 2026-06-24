@@ -12,6 +12,9 @@ const h = vi.hoisted(() => ({
   createItineraryItem: vi.fn(async () => ({})), deleteItineraryItem: vi.fn(async () => {}),
   updateItineraryItem: vi.fn(async () => ({})), updateTrip: vi.fn(async () => ({})),
   createLink: vi.fn(), deleteLink: vi.fn(), searchEntities: vi.fn(async () => []),
+  getTripPacking: vi.fn(async () => ({ list: null })),
+  createTripPacking: vi.fn(), listPackingTemplates: vi.fn(async () => []),
+  savePackingTemplate: vi.fn(), updatePackingItem: vi.fn(), addPackingItem: vi.fn(), deletePackingItem: vi.fn(),
 }));
 vi.mock("../../api/client", () => ({ API_URL: "", api: h }));
 import { TripDetail } from "./TripDetail";

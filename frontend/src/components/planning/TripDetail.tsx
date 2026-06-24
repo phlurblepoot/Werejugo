@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type ItineraryItem, type Trip } from "../../api/client";
 import { RelatedPanel } from "../shared/RelatedPanel";
 import { DocumentList } from "../documents/DocumentList";
+import { TripPacking } from "../packing/TripPacking";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const STATUSES: Status[] = ["idea", "planning", "booked", "done"];
@@ -62,6 +63,9 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
 
         <div className="section-title"><span>🛂 Bookings</span></div>
         {docs.length > 0 ? <DocumentList documents={docs} onOpen={() => {}} /> : <div className="er-sub">No documents attached to this trip.</div>}
+
+        <div className="section-title"><span>🎒 Packing</span></div>
+        <TripPacking trip={trip} />
 
         <div className="section-title"><span>👥 Travelers</span></div>
         <RelatedPanel entity={`trip:${trip.id}`} addTypes={["person"]} />
