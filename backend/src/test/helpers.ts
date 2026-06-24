@@ -13,7 +13,7 @@ export interface TestCtx {
 
 const APP_TABLES = [
   "links", "comments", "visit_waypoints", "map_set_visits",
-  "media", "documents", "visits", "trips", "people",
+  "media", "documents", "visits", "trips", "people", "packing_lists",
   "icons", "themes", "map_sets", "share_links", "users", "families",
 ];
 
