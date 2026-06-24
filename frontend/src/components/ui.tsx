@@ -31,3 +31,27 @@ export function EmptyState({
     </div>
   );
 }
+
+/** Consistent error state with an optional retry. */
+export function ErrorState({
+  title = "Something went wrong",
+  hint,
+  onRetry,
+}: {
+  title?: string;
+  hint?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="empty-state-emoji" aria-hidden="true">⚠️</div>
+      <div className="empty-state-title">{title}</div>
+      {hint && <div className="empty-state-hint">{hint}</div>}
+      {onRetry && (
+        <div className="empty-state-action">
+          <button onClick={onRetry}>Try again</button>
+        </div>
+      )}
+    </div>
+  );
+}

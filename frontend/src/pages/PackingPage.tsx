@@ -3,12 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type PackingList, type Trip } from "../api/client";
 import { PackingChecklist } from "../components/packing/PackingChecklist";
 import { TripPacking } from "../components/packing/TripPacking";
-import { Spinner } from "../components/ui";
+import { ErrorState, Spinner } from "../components/ui";
 
 type Sel = { kind: "template"; id: string } | { kind: "trip"; trip: Trip } | null;
 
 export function PackingPage() {
-  const { data: templates = [], isLoading } = useQuery({ queryKey: ["packing-templates"], queryFn: api.listPackingTemplates });
+  const { data: templates = [], isLoading, isError, refetch } = useQuery({ queryKey: ["packing-templates"], queryFn: api.listPackingTemplates });
   const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
   const [sel, setSel] = useState<Sel>(null);
 
@@ -18,7 +18,7 @@ export function PackingPage() {
       <div className="packing-cols">
         <div className="packing-side">
           <div className="cat-hdr">Templates</div>
-          {isLoading ? <Spinner /> : templates.map((t: PackingList) => (
+          {isError ? <ErrorState hint="Couldn't load templates." onRetry={() => refetch()} /> : isLoading ? <Spinner /> : templates.map((t: PackingList) => (
             <div key={t.id} className={`entity-row${sel?.kind === "template" && sel.id === t.id ? " active" : ""}`} onClick={() => setSel({ kind: "template", id: t.id })}>
               <span className="er-main"><span className="er-title">{t.name}</span><span className="er-sub"> {t.itemCount} items{t.isBuiltin ? " · built-in" : ""}</span></span>
             </div>

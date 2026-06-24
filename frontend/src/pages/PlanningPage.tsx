@@ -6,7 +6,7 @@ import { TripTimeline } from "../components/planning/TripTimeline";
 import { TripDetail } from "../components/planning/TripDetail";
 import { TripForm } from "../components/planning/TripForm";
 import { BlackoutManager } from "../components/planning/BlackoutManager";
-import { EmptyState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState, Spinner } from "../components/ui";
 
 type Status = "idea" | "planning" | "booked" | "done";
 
@@ -18,7 +18,7 @@ export function PlanningPage() {
   const [editing, setEditing] = useState<Trip | null>(null);
   const [blackouts, setBlackouts] = useState(false);
 
-  const { data: trips, isLoading } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
+  const { data: trips, isLoading, isError, refetch } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
   const { data: blackoutList = [] } = useQuery({ queryKey: ["blackouts"], queryFn: api.listBlackouts });
   const refresh = () => qc.invalidateQueries({ queryKey: ["trips"] });
 
@@ -41,7 +41,9 @@ export function PlanningPage() {
       </header>
 
       <div style={{ padding: 16, overflow: "auto" }}>
-        {isLoading ? (
+        {isError ? (
+          <ErrorState hint="Couldn't load trips." onRetry={() => refetch()} />
+        ) : isLoading ? (
           <Spinner label="Loading trips…" />
         ) : (trips && trips.length > 0) ? (
           view === "board" ? (

@@ -7,7 +7,7 @@ import { PhotoGrid } from "../components/photos/PhotoGrid";
 import { PhotoMap } from "../components/photos/PhotoMap";
 import { PhotoDetail } from "../components/photos/PhotoDetail";
 import { UploadReview } from "../components/photos/UploadReview";
-import { EmptyState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState, Spinner } from "../components/ui";
 
 export function PhotosPage() {
   const qc = useQueryClient();
@@ -45,7 +45,9 @@ export function PhotosPage() {
       </div>
 
       <div className="map-area" style={{ position: "relative", overflow: view === "grid" ? "auto" : "hidden" }}>
-        {mediaQuery.isLoading ? (
+        {mediaQuery.isError ? (
+          <ErrorState hint="Couldn't load photos." onRetry={() => mediaQuery.refetch()} />
+        ) : mediaQuery.isLoading ? (
           <Spinner label="Loading photos…" />
         ) : items.length === 0 ? (
           <EmptyState emoji="🖼️" title="No photos yet" hint="Upload photos to start your family library." />

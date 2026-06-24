@@ -6,11 +6,11 @@ import { EntityDetail } from "../components/shared/EntityDetail";
 import { EntityThumb } from "../components/shared/EntityThumb";
 import { RelatedPanel } from "../components/shared/RelatedPanel";
 import { PersonForm } from "../components/people/PersonForm";
-import { EmptyState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState, Spinner } from "../components/ui";
 
 export function PeoplePage() {
   const qc = useQueryClient();
-  const { data: people, isLoading } = useQuery({ queryKey: ["people"], queryFn: api.listPeople });
+  const { data: people, isLoading, isError, refetch } = useQuery({ queryKey: ["people"], queryFn: api.listPeople });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Person | null>(null);
   const [adding, setAdding] = useState(false);
@@ -33,7 +33,9 @@ export function PeoplePage() {
       </header>
 
       <div style={{ padding: 16, overflow: "auto" }}>
-        {isLoading ? (
+        {isError ? (
+          <ErrorState hint="Couldn't load people." onRetry={() => refetch()} />
+        ) : isLoading ? (
           <Spinner label="Loading people…" />
         ) : people && people.length > 0 ? (
           <EntityList

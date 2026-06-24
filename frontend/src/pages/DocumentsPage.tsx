@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type DocumentItem, type DocumentFilters, type DocType } from "../api/client";
 import { DocumentList } from "../components/documents/DocumentList";
 import { DocumentForm } from "../components/documents/DocumentForm";
-import { EmptyState, Spinner } from "../components/ui";
+import { EmptyState, ErrorState, Spinner } from "../components/ui";
 
 const DOC_TYPES: DocType[] = ["passport", "visa", "booking", "insurance", "other"];
 
@@ -13,7 +13,7 @@ export function DocumentsPage() {
   const [editing, setEditing] = useState<DocumentItem | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const { data: documents, isLoading } = useQuery({
+  const { data: documents, isLoading, isError, refetch } = useQuery({
     queryKey: ["documents", filters],
     queryFn: () => api.listDocuments(filters),
   });
@@ -35,7 +35,9 @@ export function DocumentsPage() {
       </header>
 
       <div style={{ padding: 16, overflow: "auto" }}>
-        {isLoading ? (
+        {isError ? (
+          <ErrorState hint="Couldn't load documents." onRetry={() => refetch()} />
+        ) : isLoading ? (
           <Spinner label="Loading documents…" />
         ) : (documents && documents.length > 0) ? (
           <>
