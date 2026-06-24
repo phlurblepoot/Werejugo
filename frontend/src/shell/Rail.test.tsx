@@ -25,5 +25,5 @@ test("marks the active module", () => {
 
 test("disables not-yet-built modules", () => {
   renderAt("/map");
-  expect(screen.getByText("Planning").closest(".rail-item")).toHaveClass("disabled");
+  expect(screen.getByText("Packing").closest(".rail-item")).toHaveClass("disabled");
 });
