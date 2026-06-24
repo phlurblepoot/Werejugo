@@ -319,9 +319,9 @@ The full app is reached through eight phases. Each phase after the foundation is
 
 ### Phase 5 — Documents & reminders
 
-**Goal:** the practical travel-paperwork hub.
-**Steps:** `documents` CRUD (passport/visa/booking/insurance/other) with owner = person or trip; file upload into the owner's folder; expiry + `reminder_lead_days`; an in-app **renewals view** querying upcoming expiries; surface a count/badge in the rail.
-**Delivers:** every important document stored, browsable on disk by owner, with upcoming renewals visible at a glance. **Depends on:** Phases 1–2. *(Email/push delivery remains deferred — §7.3.)*
+**Goal:** the practical travel-paperwork hub. *(Full design: `2026-06-23-documents-reminders-design.md`.)*
+**Steps:** a **renewals banner + filterable list** page; `documents` CRUD with a None/Person/Trip owner and an **optional** PDF/image file (saved into the owner's folder, with an attach-later endpoint); a PDF-capable `saveDocumentUpload` + a `reconcileDocument` (owner-change file move); a computed **status** (overdue/upcoming/ok) from each doc's `reminder_lead_days`; a `due-count` endpoint driving a **rail badge** (the one new shell capability).
+**Delivers:** every important document stored, browsable on disk by owner, with upcoming/overdue renewals visible at a glance (in-app). **Depends on:** Phases 1–2. *(Email/push delivery remains deferred — §7.3.)*
 
 ### Phase 6 — Future trip planning
 
