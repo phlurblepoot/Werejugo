@@ -126,12 +126,26 @@ export interface Trip {
   mapSetId?: string;
   name: string;
   description: string;
+  status: "idea" | "planning" | "booked" | "done";
   startDate: string | null;
   endDate: string | null;
   coverPhotoUrl: string | null;
   color: string;
   createdAt: string;
 }
+
+export interface ItineraryItem {
+  id: string; tripId: string; title: string; notes: string;
+  scheduledOn: string | null; seq: number;
+  lat: number | null; lng: number | null; placeLabel: string;
+  convertedVisitId: string | null; createdAt: string;
+}
+export interface ItineraryInput {
+  title?: string; notes?: string; scheduledOn?: string | null; seq?: number;
+  lat?: number | null; lng?: number | null; placeLabel?: string;
+}
+export interface Blackout { id: string; label: string; startDate: string; endDate: string; color: string; createdAt: string; }
+export interface BlackoutInput { label?: string; startDate?: string; endDate?: string; color?: string; }
 
 export interface Comment {
   id: string;
@@ -457,6 +471,22 @@ export const api = {
   updateTrip: (id: string, data: Partial<Trip>) =>
     request<Trip>(`/api/trips/${id}`, { method: "PATCH", body: body(data) }),
   deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, { method: "DELETE" }),
+
+  // itinerary
+  listItinerary: (tripId: string) => request<ItineraryItem[]>(`/api/trips/${tripId}/itinerary`),
+  createItineraryItem: (tripId: string, data: ItineraryInput) =>
+    request<ItineraryItem>(`/api/trips/${tripId}/itinerary`, { method: "POST", body: body(data) }),
+  updateItineraryItem: (id: string, data: ItineraryInput) =>
+    request<ItineraryItem>(`/api/itinerary/${id}`, { method: "PATCH", body: body(data) }),
+  deleteItineraryItem: (id: string) => request<void>(`/api/itinerary/${id}`, { method: "DELETE" }),
+  convertItineraryItem: (id: string) =>
+    request<{ visitId: string; item: ItineraryItem }>(`/api/itinerary/${id}/convert`, { method: "POST", body: body({}) }),
+
+  // blackouts
+  listBlackouts: () => request<Blackout[]>("/api/blackouts"),
+  createBlackout: (data: BlackoutInput) => request<Blackout>("/api/blackouts", { method: "POST", body: body(data) }),
+  updateBlackout: (id: string, data: BlackoutInput) => request<Blackout>(`/api/blackouts/${id}`, { method: "PATCH", body: body(data) }),
+  deleteBlackout: (id: string) => request<void>(`/api/blackouts/${id}`, { method: "DELETE" }),
 
   // comments (now on visits)
   listComments: (itemId: string) => request<Comment[]>(`/api/visits/${itemId}/comments`),
