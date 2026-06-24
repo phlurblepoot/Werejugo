@@ -521,3 +521,5 @@ button.primary.is-success {
 .doc-upcoming { color: #fbbf24; }
 .doc-ok, .doc-none { color: #64748b; }
 .er-thumb { width: 28px; text-align: center; flex: 0 0 auto; }
+.renewals { background: #2a1f0a; border: 1px solid #7c5e1e; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+.renewals h4 { margin: 0 0 4px; color: #fbbf24; font-size: 12px; }
