@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { api, type MapSet, type ShareLink } from "../api/client";
+import { useState } from "react";
+import { api, type MapSet } from "../api/client";
 import { useToast } from "./Toast";
 
 interface Props {
@@ -14,44 +14,6 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
   const { toast } = useToast();
   const editing = Boolean(mapSet);
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  const [shares, setShares] = useState<ShareLink[]>([]);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (mapSet) api.listShares(mapSet.id).then(setShares).catch(() => {});
-  }, [mapSet]);
-
-  const shareUrl = (token: string) => `${window.location.origin}/s/${token}`;
-
-  async function createShare() {
-    if (!mapSet) return;
-    try {
-      const link = await api.createShare(mapSet.id);
-      setShares((prev) => [link, ...prev]);
-      toast("Share link created", "success");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Could not create share link", "error");
-    }
-  }
-  async function revokeShare(id: string) {
-    try {
-      await api.deleteShare(id);
-      setShares((prev) => prev.filter((s) => s.id !== id));
-      toast("Share link revoked", "info");
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Could not revoke link", "error");
-    }
-  }
-  async function copyShare(token: string) {
-    try {
-      await navigator.clipboard.writeText(shareUrl(token));
-      setCopied(token);
-      setTimeout(() => setCopied(null), 1500);
-      toast("Link copied to clipboard", "success");
-    } catch {
-      toast("Couldn't copy — select and copy the link manually", "error");
-    }
-  }
 
   async function importFile(file: File) {
     if (!mapSet) return;
@@ -202,21 +164,6 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
               />
             </label>
             {importMsg && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{importMsg}</div>}
-
-            <div className="section-title"><span>Share (read-only links)</span></div>
-            {shares.length === 0 && <div className="empty">No share links yet.</div>}
-            {shares.map((s) => (
-              <div key={s.id} className="item-row">
-                <div className="meta" style={{ overflow: "hidden" }}>
-                  <div className="sub" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {shareUrl(s.token)}
-                  </div>
-                </div>
-                <button className="ghost" onClick={() => copyShare(s.token)}>{copied === s.token ? "✓" : "Copy"}</button>
-                <button className="ghost" onClick={() => revokeShare(s.id)}>Revoke</button>
-              </div>
-            ))}
-            <button onClick={createShare} style={{ marginTop: 6 }}>+ Create share link</button>
           </>
         )}
 
