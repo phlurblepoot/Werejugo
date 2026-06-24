@@ -523,3 +523,19 @@ button.primary.is-success {
 .er-thumb { width: 28px; text-align: center; flex: 0 0 auto; }
 .renewals { background: #2a1f0a; border: 1px solid #7c5e1e; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
 .renewals h4 { margin: 0 0 4px; color: #fbbf24; font-size: 12px; }
+
+/* --- Planning --- */
+.trip-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.trip-col { background: #0b1220; border: 1px solid #1e293b; border-radius: 8px; padding: 8px; min-height: 120px; }
+.trip-col h5 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.trip-card { background: #1e293b; border-radius: 6px; padding: 7px 8px; margin-bottom: 6px; }
+.trip-card .tc-title { color: #e2e8f0; font-weight: 600; cursor: pointer; }
+.trip-card .tc-dates { color: #64748b; font-size: 11px; margin: 2px 0 4px; }
+.trip-timeline { position: relative; }
+.tl-axis { display: flex; justify-content: space-between; color: #64748b; font-size: 10px; margin-bottom: 6px; }
+.tl-row { position: relative; height: 22px; background: #0b1220; border-radius: 4px; margin-bottom: 6px; }
+.tl-bar { position: absolute; top: 3px; height: 16px; border-radius: 3px; cursor: pointer; color: #fff; font-size: 10px; padding: 0 4px; overflow: hidden; white-space: nowrap; }
+.tl-black { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: repeating-linear-gradient(45deg, #3f1d1d, #3f1d1d 4px, #2a1212 4px, #2a1212 8px); }
+.itin-item { display: flex; gap: 8px; align-items: center; background: #1e293b; border-radius: 5px; padding: 5px 8px; margin-bottom: 4px; }
+.itin-item .day { color: #64748b; font-size: 11px; width: 70px; flex: 0 0 auto; }
+.itin-item .t { flex: 1; color: #e2e8f0; }
