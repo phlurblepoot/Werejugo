@@ -1,10 +1,11 @@
 import { Readable } from "node:stream";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { query } from "../db/pool.js";
+import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { signFileUrl } from "../lib/filesign.js";
-import { documentDirFor, saveDocumentUpload } from "../lib/storage.js";
+import { documentDirFor, saveDocumentUpload, deleteStored } from "../lib/storage.js";
+import { reconcileDocument } from "../lib/reconcile.js";
 
 interface DocRow {
   id: string; title: string; doc_type: string;
@@ -155,5 +156,72 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const row = await loadDoc(req.user.familyId, (req.params as { id: string }).id);
     if (!row) return reply.code(404).send({ error: "Not found" });
     return toDto(row);
+  });
+
+  const patchSchema = fieldsSchema.partial();
+
+  app.patch("/api/documents/:id", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const existing = await loadDoc(req.user.familyId, id);
+    if (!existing) return reply.code(404).send({ error: "Not found" });
+    const parsed = patchSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const b = parsed.data;
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+
+    // Validate owner if either owner field is being set.
+    if (has("ownerPersonId") || has("ownerTripId")) {
+      const od = await ownerDir(req.user.familyId, b.ownerPersonId ?? null, b.ownerTripId ?? null);
+      if (!od.ok) return reply.code(od.error.includes("one owner") ? 400 : 404).send({ error: od.error });
+    }
+
+    await tx(async (client) => {
+      await client.query(
+        `UPDATE documents SET
+           title = COALESCE($3, title), doc_type = COALESCE($4, doc_type),
+           owner_person_id = CASE WHEN $5::boolean THEN $6 ELSE owner_person_id END,
+           owner_trip_id  = CASE WHEN $7::boolean THEN $8 ELSE owner_trip_id END,
+           issued_on  = CASE WHEN $9::boolean THEN $10 ELSE issued_on END,
+           expires_on = CASE WHEN $11::boolean THEN $12 ELSE expires_on END,
+           reminder_lead_days = COALESCE($13, reminder_lead_days),
+           notes = COALESCE($14, notes)
+         WHERE id = $1 AND family_id = $2`,
+        [id, req.user.familyId, b.title ?? null, b.docType ?? null,
+         has("ownerPersonId"), b.ownerPersonId ?? null, has("ownerTripId"), b.ownerTripId ?? null,
+         has("issuedOn"), b.issuedOn || null, has("expiresOn"), b.expiresOn || null,
+         b.reminderLeadDays ?? null, b.notes ?? null]);
+      if (has("ownerPersonId") || has("ownerTripId")) await reconcileDocument(client, id);
+    });
+    const row = await loadDoc(req.user.familyId, id);
+    return toDto(row!);
+  });
+
+  app.post("/api/documents/:id/file", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const existing = await loadDoc(req.user.familyId, id);
+    if (!existing) return reply.code(404).send({ error: "Not found" });
+    const part = await req.file();
+    if (!part) return reply.code(400).send({ error: "No file provided" });
+    const od = await ownerDir(req.user.familyId, existing.owner_person_id, existing.owner_trip_id);
+    if (!od.ok) return reply.code(400).send({ error: od.error });
+    let saved: { relPath: string; originalName: string };
+    try {
+      saved = await saveDocumentUpload(part, od.dir);
+    } catch {
+      return reply.code(400).send({ error: "Unsupported file type" });
+    }
+    if (existing.rel_path) await deleteStored(existing.rel_path);
+    await query("UPDATE documents SET rel_path = $1, original_name = $2 WHERE id = $3", [saved.relPath, saved.originalName, id]);
+    const row = await loadDoc(req.user.familyId, id);
+    return toDto(row!);
+  });
+
+  app.delete("/api/documents/:id", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const existing = await loadDoc(req.user.familyId, id);
+    if (!existing) return reply.code(404).send({ error: "Not found" });
+    await query("DELETE FROM documents WHERE id = $1", [id]);
+    if (existing.rel_path) await deleteStored(existing.rel_path);
+    return reply.code(204).send();
   });
 }
