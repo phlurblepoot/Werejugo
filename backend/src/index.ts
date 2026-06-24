@@ -17,6 +17,7 @@ import { uploadRoutes } from "./routes/uploads.js";
 import { lookupRoutes } from "./routes/lookup.js";
 import { tripRoutes } from "./routes/trips.js";
 import { itineraryRoutes } from "./routes/itinerary.js";
+import { blackoutRoutes } from "./routes/blackouts.js";
 import { statsRoutes } from "./routes/stats.js";
 import { exifRoutes } from "./routes/exif.js";
 import { importRoutes } from "./routes/import.js";
@@ -55,6 +56,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(lookupRoutes);
   await app.register(tripRoutes);
   await app.register(itineraryRoutes);
+  await app.register(blackoutRoutes);
   await app.register(statsRoutes);
   await app.register(exifRoutes);
   await app.register(importRoutes);
