@@ -516,3 +516,8 @@ button.primary.is-success {
   background: #ef4444; color: #fff; font-size: 9px; font-weight: 700;
   border-radius: 9px; padding: 0 5px; line-height: 14px; min-width: 14px; text-align: center;
 }
+.doc-status { font-size: 11px; flex: 0 0 auto; }
+.doc-overdue { color: #f87171; font-weight: 700; }
+.doc-upcoming { color: #fbbf24; }
+.doc-ok, .doc-none { color: #64748b; }
+.er-thumb { width: 28px; text-align: center; flex: 0 0 auto; }
