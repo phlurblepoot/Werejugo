@@ -25,7 +25,7 @@ Selected for Phase 8:
 |---|---|
 | Search surface | Command palette (Cmd/Ctrl-K) **and** a visible 🔍 button in the rail; both open the same palette |
 | Search scope | All core types at once (people, trips, visits, photos, documents), grouped results |
-| Backup format | Single `.tar.gz`: `pg_dump` (custom format) DB dump + the full storage tree + `manifest.json` |
+| Backup format | Single `.tar.gz` (via `node-tar`): a JSON dump of every table (geometry via `ST_AsGeoJSON`) + the full storage tree + `manifest.json`. No `pg_dump` dependency — fully testable in the harness |
 | Restore semantics | In-app **full wipe & replace**, owner-only, typed-confirmation guard |
 | Sharing targets | **Trips** and **Albums** only |
 | Maps shareable? | **No** — drop the map Share button; keep the generic public-view plumbing |
@@ -106,24 +106,24 @@ A new **Settings → Backup** area, owner-only.
 
 ### 4.1 Download — `GET /api/backup`
 
-Streams a single `.tar.gz` containing:
+Streams a single `.tar.gz`, built with the `node-tar` library (no external binary), containing:
 
-1. `db.dump` — `pg_dump` in **custom format** (`-Fc`) of the application database. Custom format round-trips PostGIS geometry, sequences, and FK ordering losslessly.
+1. `db.json` — a JSON dump of every application table in FK-safe order. Rows are emitted as-is, except PostGIS geometry columns, which are dumped via `ST_AsGeoJSON` (the same approach `export.ts` already uses) so they round-trip without a binary format.
 2. `storage/` — the entire storage tree (photos, documents, thumbnails) as it exists on disk.
-3. `manifest.json` — app/schema version, ISO timestamp, table list, and counts, so restore can sanity-check the archive before touching anything.
+3. `manifest.json` — app/schema version, ISO timestamp, the table list, and per-table row counts, so restore can sanity-check the archive before touching anything.
 
-**Dependency:** the backend image needs the `postgres-client` binaries (`pg_dump`/`pg_restore`) — one line added to the backend Dockerfile. Documented in the README.
+**No `pg_dump`/`postgres-client` dependency.** The dump uses the existing `pg` pool, so the whole feature — including the round-trip test — runs in any environment, including the test harness.
 
 ### 4.2 Restore — `POST /api/restore`
 
 Owner-only, destructive, guarded by a typed confirmation ("type `restore`") in the UI.
 
-1. Accept the uploaded `.tar.gz` (multipart, raised size limit for this route).
-2. Read and validate `manifest.json` (recognizable archive, compatible schema version) → reject early with a clear error if invalid.
-3. **Wipe & replace:** restore `db.dump` with `pg_restore --clean --if-exists` into the app database, and replace the storage tree with the archive's `storage/`.
-4. Return success with restored counts.
+1. Accept the uploaded `.tar.gz` (multipart, raised size limit for this route) and extract it to a temp directory with `node-tar`.
+2. Read and validate `manifest.json` (recognizable archive, compatible schema version, expected table list) → reject early with a clear error if invalid.
+3. **Wipe & replace, in one transaction:** `TRUNCATE` all application tables `RESTART IDENTITY CASCADE`, then reinsert every table's rows from `db.json` in FK-safe order (geometry via `ST_GeomFromGeoJSON`). Then replace the on-disk storage tree with the archive's `storage/`.
+4. Return success with restored per-table counts.
 
-Because restore swaps the whole world, it is the natural disaster-recovery / server-migration path. It is never available to non-owners and never runs without the typed confirmation.
+Because restore swaps the whole world, it is the natural disaster-recovery / server-migration path. It is never available to non-owners and never runs without the typed confirmation. The table set and FK-safe order are the same list already maintained for test resets (`APP_TABLES` in `backend/src/test/helpers.ts`).
 
 ### 4.3 Frontend — Settings → Backup
 
@@ -134,13 +134,12 @@ Because restore swaps the whole world, it is the natural disaster-recovery / ser
 
 ## 5. Shared empty / loading / error states
 
-Three small shared components in `frontend/src/components/ui` (or `components/shared`), then applied across every module's list/detail views, replacing today's ad-hoc inline handling:
+`frontend/src/components/ui.tsx` **already provides `<EmptyState>` (emoji/title/hint/action) and `<Spinner>` (label)**. Phase 8 adds the missing third — **`<ErrorState>`** (emoji + message + a retry action) — and then applies the trio consistently across every module's list/detail views, replacing today's ad-hoc inline handling.
 
-- **`<EmptyState>`** — icon + message + optional call-to-action button (e.g. "No trips yet — Create your first trip").
-- **`<Loading>`** — consistent spinner/skeleton for query-loading states.
-- **`<ErrorState>`** — message + a retry action for failed queries.
+- **`<ErrorState>`** — new: an error message with a "Try again" button wired to a retry callback.
+- Each module's main views (People, Photos, Documents, Planning, Packing) switch their loading/empty/error branches to `<Spinner>` / `<EmptyState>` / `<ErrorState>`.
 
-Pure UI consolidation; no backend changes. Each module's main views (People, Photos, Documents, Planning, Packing, Map lists) switch to these.
+Pure UI consolidation; no backend changes.
 
 ---
 
@@ -172,7 +171,7 @@ Same gates as Phases 1–7.
 
 Following the established A/B split, Phase 8 breaks into two independently testable plans:
 
-- **Phase 8A (backend):** `GET /api/search`; `share_links` generalization migration + retargeted share routes; `GET /api/backup` + `POST /api/restore` (+ Dockerfile `postgres-client`).
+- **Phase 8A (backend):** `GET /api/search`; `share_links` generalization migration + retargeted share routes; `GET /api/backup` + `POST /api/restore` (using the `node-tar` dependency; JSON table dump, no `pg_dump`).
 - **Phase 8B (frontend):** `CommandPalette` (+ rail button + `api.search`); trip/album Share UI and retired map Share button; `ShareView` rendering for trip + album; Settings → Backup download/restore UI; shared `<EmptyState>`/`<Loading>`/`<ErrorState>` applied across modules; first-run welcome; README.
 
 ---

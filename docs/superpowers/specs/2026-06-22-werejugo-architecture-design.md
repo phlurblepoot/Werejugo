@@ -340,7 +340,7 @@ The full app is reached through eight phases. Each phase after the foundation is
 *(Detailed design: `2026-06-24-polish-completion-design.md`.)*
 
 **Goal:** turn the module set into a finished product.
-**Steps:** global "find anything" search (command palette + rail button across people/trips/visits/photos/documents); generalized read-only sharing repurposed from the map share plumbing, retargeted to **trips + albums** (maps no longer shareable, documents never shareable); full archive **backup & restore** (one `.tar.gz` of a `pg_dump` DB dump + storage tree; owner-only wipe-and-replace restore); consistent empty/loading/error states across modules; docs/onboarding (README + first-run welcome). The read-only **guest role** is dropped — public share links cover external viewers.
+**Steps:** global "find anything" search (command palette + rail button across people/trips/visits/photos/documents); generalized read-only sharing repurposed from the map share plumbing, retargeted to **trips + albums** (maps no longer shareable, documents never shareable); full archive **backup & restore** (one `.tar.gz` via `node-tar`: a JSON table dump + storage tree, no `pg_dump` dependency; owner-only wipe-and-replace restore); consistent empty/loading/error states across modules; docs/onboarding (README + first-run welcome). The read-only **guest role** is dropped — public share links cover external viewers.
 **Delivers:** a cohesive, shareable, backup-able family travel hub. **Depends on:** Phases 1–7.
 
 ### Definition of done — the completed application
