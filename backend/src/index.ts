@@ -26,6 +26,7 @@ import { shareRoutes } from "./routes/share.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { peopleRoutes } from "./routes/people.js";
 import { relationRoutes } from "./routes/relations.js";
+import { searchRoutes } from "./routes/search.js";
 import { documentRoutes } from "./routes/documents.js";
 import { packingRoutes } from "./routes/packing.js";
 
@@ -66,6 +67,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(settingsRoutes);
   await app.register(peopleRoutes);
   await app.register(relationRoutes);
+  await app.register(searchRoutes);
   await app.register(documentRoutes);
   await app.register(packingRoutes);
 
