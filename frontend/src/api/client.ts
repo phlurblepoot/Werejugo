@@ -306,6 +306,41 @@ export interface MediaSuggestions {
   visits: { visitId: string; title: string; mediaIds: string[] }[];
 }
 
+export type DocStatus = "overdue" | "upcoming" | "ok" | "none";
+export type DocType = "passport" | "visa" | "booking" | "insurance" | "other";
+
+export interface DocumentItem {
+  id: string;
+  title: string;
+  docType: DocType;
+  ownerPersonId: string | null;
+  ownerPersonName: string | null;
+  ownerTripId: string | null;
+  ownerTripName: string | null;
+  issuedOn: string | null;
+  expiresOn: string | null;
+  reminderLeadDays: number;
+  notes: string;
+  fileUrl: string | null;
+  originalName: string;
+  createdAt: string;
+  status: DocStatus;
+  daysUntilExpiry: number | null;
+}
+
+export interface DocumentInput {
+  title?: string;
+  docType?: DocType;
+  ownerPersonId?: string | null;
+  ownerTripId?: string | null;
+  issuedOn?: string | null;
+  expiresOn?: string | null;
+  reminderLeadDays?: number;
+  notes?: string;
+}
+
+export interface DocumentFilters { docType?: string; owner?: string; q?: string; due?: string; }
+
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
@@ -538,6 +573,31 @@ export const api = {
     request<PlaceSuggestion[]>(`/api/geo/ports?q=${encodeURIComponent(q)}`),
   searchPlaces: (q: string) =>
     request<PlaceSuggestion[]>(`/api/geo/search?q=${encodeURIComponent(q)}`),
+
+  // documents
+  listDocuments: (f: DocumentFilters = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    return request<DocumentItem[]>(`/api/documents?${qs.toString()}`);
+  },
+  documentsDueCount: () => request<{ count: number }>("/api/documents/due-count"),
+  createDocument: (data: DocumentInput, file?: File | null) => {
+    if (file) {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(data)) if (v !== undefined && v !== null) fd.append(k, String(v));
+      fd.append("file", file);
+      return request<DocumentItem>("/api/documents", { method: "POST", body: fd });
+    }
+    return request<DocumentItem>("/api/documents", { method: "POST", body: body(data) });
+  },
+  updateDocument: (id: string, data: DocumentInput) =>
+    request<DocumentItem>(`/api/documents/${id}`, { method: "PATCH", body: body(data) }),
+  attachDocumentFile: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<DocumentItem>(`/api/documents/${id}/file`, { method: "POST", body: fd });
+  },
+  deleteDocument: (id: string) => request<void>(`/api/documents/${id}`, { method: "DELETE" }),
 };
 
 export { ApiError, API_URL };
