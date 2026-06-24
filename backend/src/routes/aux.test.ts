@@ -23,18 +23,6 @@ test("export includes visits", async () => {
   expect(res.json().visits.length).toBeGreaterThanOrEqual(1);
 });
 
-test("public share returns a map's member visits with a photos array", async () => {
-  const ms = await query<{ id: string }>(
-    "INSERT INTO map_sets (family_id, name) VALUES ($1,'M') RETURNING id", [ctx.familyId]);
-  const v = await query<{ id: string }>(
-    "INSERT INTO visits (family_id, kind, title) VALUES ($1,'food','B') RETURNING id", [ctx.familyId]);
-  await query("INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1,$2)", [ms.rows[0].id, v.rows[0].id]);
-
-  const share = await ctx.app.inject({
-    method: "POST", url: `/api/map-sets/${ms.rows[0].id}/shares`, headers: auth() });
-  const token = share.json().token;
-  const res = await ctx.app.inject({ method: "GET", url: `/api/share/${token}` });
-  expect(res.statusCode).toBe(200);
-  expect(res.json().items).toHaveLength(1);
-  expect(Array.isArray(res.json().items[0].photos)).toBe(true);
-});
+// NOTE: map-set sharing was retired in phase 8A (Task 3/4) — maps are no longer
+// shareable; sharing is now trip/album-based (see share-public.test.ts). The old
+// public map-set share test was removed because it exercised a deleted route.
