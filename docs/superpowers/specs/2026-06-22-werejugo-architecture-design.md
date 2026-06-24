@@ -337,8 +337,10 @@ The full app is reached through eight phases. Each phase after the foundation is
 
 ### Phase 8 — Polish & completion
 
+*(Detailed design: `2026-06-24-polish-completion-design.md`.)*
+
 **Goal:** turn the module set into a finished product.
-**Steps:** consistent empty/loading/error states across modules; cross-module search ("find anything: a person, place, trip, document, photo"); finalize the read-only **guest** experience across all modules; generalized sharing if desired (promoted from §7.3); backup/export of the full family archive (DB + storage tree); docs/onboarding.
+**Steps:** global "find anything" search (command palette + rail button across people/trips/visits/photos/documents); generalized read-only sharing repurposed from the map share plumbing, retargeted to **trips + albums** (maps no longer shareable, documents never shareable); full archive **backup & restore** (one `.tar.gz` of a `pg_dump` DB dump + storage tree; owner-only wipe-and-replace restore); consistent empty/loading/error states across modules; docs/onboarding (README + first-run welcome). The read-only **guest role** is dropped — public share links cover external viewers.
 **Delivers:** a cohesive, shareable, backup-able family travel hub. **Depends on:** Phases 1–7.
 
 ### Definition of done — the completed application
