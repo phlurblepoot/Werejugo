@@ -355,6 +355,11 @@ export interface DocumentInput {
 
 export interface DocumentFilters { docType?: string; owner?: string; q?: string; due?: string; }
 
+export interface PackingItem { id: string; label: string; category: string; qty: number | null; checked: boolean; seq: number; }
+export interface PackingList { id: string; name: string; tripId: string | null; isBuiltin: boolean; itemCount: number; checkedCount: number; }
+export interface PackingListDetail extends PackingList { items: PackingItem[]; }
+export interface PackingItemInput { label?: string; category?: string; qty?: number | null; checked?: boolean; seq?: number; }
+
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
@@ -628,6 +633,22 @@ export const api = {
     return request<DocumentItem>(`/api/documents/${id}/file`, { method: "POST", body: fd });
   },
   deleteDocument: (id: string) => request<void>(`/api/documents/${id}`, { method: "DELETE" }),
+
+  // packing
+  listPackingTemplates: () => request<PackingList[]>("/api/packing/templates"),
+  getPackingList: (id: string) => request<PackingListDetail>(`/api/packing/lists/${id}`),
+  getTripPacking: (tripId: string) => request<{ list: PackingListDetail | null }>(`/api/trips/${tripId}/packing`),
+  createTripPacking: (tripId: string, opts: { name?: string; fromTemplateId?: string; fromTripId?: string } = {}) =>
+    request<PackingListDetail>(`/api/trips/${tripId}/packing`, { method: "POST", body: body(opts) }),
+  addPackingItem: (listId: string, data: { label: string; category?: string; qty?: number | null }) =>
+    request<PackingItem>(`/api/packing/lists/${listId}/items`, { method: "POST", body: body(data) }),
+  updatePackingItem: (id: string, data: PackingItemInput) =>
+    request<PackingItem>(`/api/packing/items/${id}`, { method: "PATCH", body: body(data) }),
+  deletePackingItem: (id: string) => request<void>(`/api/packing/items/${id}`, { method: "DELETE" }),
+  renamePackingList: (id: string, name: string) => request<PackingList>(`/api/packing/lists/${id}`, { method: "PATCH", body: body({ name }) }),
+  deletePackingList: (id: string) => request<void>(`/api/packing/lists/${id}`, { method: "DELETE" }),
+  savePackingTemplate: (data: { name: string; fromListId?: string }) =>
+    request<PackingListDetail>("/api/packing/templates", { method: "POST", body: body(data) }),
 };
 
 export { ApiError, API_URL };
