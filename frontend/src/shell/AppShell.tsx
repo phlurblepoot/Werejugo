@@ -7,6 +7,7 @@ import { PeoplePage } from "../pages/PeoplePage";
 import { PhotosPage } from "../pages/PhotosPage";
 import { DocumentsPage } from "../pages/DocumentsPage";
 import { PlanningPage } from "../pages/PlanningPage";
+import { PackingPage } from "../pages/PackingPage";
 import { Rail } from "./Rail";
 import { ComingSoon } from "./ComingSoon";
 import { MODULES } from "./modules";
@@ -25,6 +26,7 @@ export function AppShell() {
           <Route path="/photos" element={<PhotosPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/packing" element={<PackingPage />} />
           {MODULES.filter((m) => !m.enabled).map((m) => (
             <Route key={m.key} path={m.path} element={<ComingSoon label={m.label} />} />
           ))}
