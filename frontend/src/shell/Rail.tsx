@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { MODULES } from "./modules";
 
-export function Rail({ onSignOut }: { onSignOut: () => void }) {
+export function Rail({ onSignOut, badges = {} }: { onSignOut: () => void; badges?: Record<string, number> }) {
   return (
     <nav className="rail" aria-label="Modules">
       {MODULES.map((m) =>
@@ -13,6 +13,7 @@ export function Rail({ onSignOut }: { onSignOut: () => void }) {
             title={m.label}
           >
             <span className="rail-icon" aria-hidden="true">{m.icon}</span>
+            {badges[m.key] > 0 && <span className="rail-badge">{badges[m.key]}</span>}
             <span>{m.label}</span>
           </NavLink>
         ) : (
