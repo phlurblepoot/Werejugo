@@ -547,3 +547,6 @@ button.primary.is-success {
 .pack-item input[type="checkbox"] { width: auto; }
 .pack-item .done { color: #64748b; text-decoration: line-through; }
 .pack-item button { margin-left: auto; }
+.packing-cols { display: grid; grid-template-columns: 240px 1fr; gap: 12px; padding: 16px; height: 100%; box-sizing: border-box; }
+.packing-side { border-right: 1px solid #1e293b; padding-right: 8px; overflow: auto; }
+.packing-main { overflow: auto; }
