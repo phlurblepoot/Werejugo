@@ -331,9 +331,9 @@ The full app is reached through eight phases. Each phase after the foundation is
 
 ### Phase 7 — Packing
 
-**Goal:** packing lists tied to trips.
-**Steps:** `packing_lists` + `packing_items`; reusable list **templates**; per-trip checklists with check-off state; optionally seed a list from a template or a similar past trip.
-**Delivers:** every trip can carry packing checklists, reused across trips. **Depends on:** Phases 1, 6 (trips/planning).
+**Goal:** packing lists tied to trips. *(Full design: `2026-06-23-packing-design.md`.)*
+**Steps:** `packing_lists` + `packing_items` (label/category/qty/checked); a row is a **template** (no trip) or a **trip list**; built-in starter templates seeded like built-in themes; a shared category-grouped `PackingChecklist`; surfaced as **both** a standalone Packing module and a section in the trip detail; seed a trip list from a template or a past trip, and save any list as a template.
+**Delivers:** every trip can carry a category-grouped packing checklist with check-off, seeded from templates/past trips and saved back as templates. **Depends on:** Phases 1, 6 (trips/planning).
 
 ### Phase 8 — Polish & completion
 
