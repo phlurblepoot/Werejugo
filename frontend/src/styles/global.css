@@ -550,3 +550,14 @@ button.primary.is-success {
 .packing-cols { display: grid; grid-template-columns: 240px 1fr; gap: 12px; padding: 16px; height: 100%; box-sizing: border-box; }
 .packing-side { border-right: 1px solid #1e293b; padding-right: 8px; overflow: auto; }
 .packing-main { overflow: auto; }
+
+.palette-backdrop { position: fixed; inset: 0; background: rgba(2,6,23,.55); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; z-index: 1000; }
+.palette { width: min(560px, 92vw); background: #0f172a; border: 1px solid #334155; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.6); overflow: hidden; }
+.palette-input { width: 100%; border: 0; border-bottom: 1px solid #1e293b; background: transparent; color: inherit; padding: 14px 16px; font-size: 16px; outline: none; box-sizing: border-box; }
+.palette-results { max-height: 56vh; overflow: auto; }
+.palette-hint { padding: 12px 16px; }
+.palette-group-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; padding: 8px 16px 2px; }
+.palette-hit { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; padding: 8px 16px; cursor: pointer; }
+.palette-hit:hover { background: #1e293b; }
+.palette-thumb { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; }
+.palette-thumb.placeholder { background: #1e293b; }
