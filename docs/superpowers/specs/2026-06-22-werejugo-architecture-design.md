@@ -325,9 +325,9 @@ The full app is reached through eight phases. Each phase after the foundation is
 
 ### Phase 6 — Future trip planning
 
-**Goal:** plan trips that haven't happened yet.
-**Steps:** treat a planned trip as a Trip with future dates + a `status` (idea / planning / booked / done); itinerary of planned visits; idea/wishlist visits not yet scheduled; attach bookings (documents) and people; a planning view distinct from the past-trips view.
-**Delivers:** upcoming trips live alongside past ones, with itinerary, bookings, and who's coming. **Depends on:** Phases 1, 2, 5 (visits, people, documents).
+**Goal:** plan trips that haven't happened yet. *(Full design: `2026-06-23-trip-planning-design.md`.)*
+**Steps:** add a trip `status` (idea/planning/booked/done); a Planning module with a **Board** (kanban by status) and a **Timeline** (trip bars + one-off **blackout** date ranges with overlap flags); a separate `itinerary_items` model (scheduled vs wishlist) with **convert-to-visit**; a trip detail aggregating itinerary, wishlist, bookings (trip-owned documents) and travelers (person↔trip links — both reused, no new endpoints).
+**Delivers:** upcoming trips planned on a board/timeline with itineraries, bookings, who's coming, and blackout-aware scheduling. **Depends on:** Phases 1, 2, 5 (visits, people, documents).
 
 ### Phase 7 — Packing
 
