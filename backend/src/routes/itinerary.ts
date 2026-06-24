@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { query } from "../db/pool.js";
+import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 
 interface ItinRow {
@@ -88,5 +88,26 @@ export async function itineraryRoutes(app: FastifyInstance): Promise<void> {
     const res = await query("DELETE FROM itinerary_items WHERE id = $1 AND family_id = $2", [id, req.user.familyId]);
     if (!res.rowCount) return reply.code(404).send({ error: "Not found" });
     return reply.code(204).send();
+  });
+
+  app.post("/api/itinerary/:id/convert", async (req, reply) => {
+    const id = (req.params as { id: string }).id;
+    const item = await loadItem(req.user.familyId, id);
+    if (!item) return reply.code(404).send({ error: "Not found" });
+    if (item.converted_visit_id) return { visitId: item.converted_visit_id, item: toDto(item) };
+
+    const visitId = await tx(async (client) => {
+      const res = await client.query<{ id: string }>(
+        `INSERT INTO visits (family_id, trip_id, kind, title, occurred_on, geom, created_by)
+         VALUES ($1,$2,'place',$3,$4,
+           CASE WHEN $5::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($5,$6),4326) END, $7)
+         RETURNING id`,
+        [req.user.familyId, item.trip_id, item.title, item.scheduled_on, item.lng, item.lat, req.user.id]);
+      const vid = res.rows[0].id;
+      await client.query("UPDATE itinerary_items SET converted_visit_id = $1 WHERE id = $2", [vid, id]);
+      return vid;
+    });
+    const updated = await loadItem(req.user.familyId, id);
+    return { visitId, item: toDto(updated!) };
   });
 }
