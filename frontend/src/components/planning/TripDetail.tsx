@@ -4,6 +4,7 @@ import { api, type ItineraryItem, type Trip } from "../../api/client";
 import { RelatedPanel } from "../shared/RelatedPanel";
 import { DocumentList } from "../documents/DocumentList";
 import { TripPacking } from "../packing/TripPacking";
+import { ShareButton } from "../shared/ShareButton";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const STATUSES: Status[] = ["idea", "planning", "booked", "done"];
@@ -42,6 +43,7 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h2 style={{ flex: 1 }}>{trip.name}</h2>
+          <ShareButton targetType="trip" targetId={trip.id} label="Share" />
           <select value={trip.status} onChange={(e) => setStatus(e.target.value as Status)}>
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>

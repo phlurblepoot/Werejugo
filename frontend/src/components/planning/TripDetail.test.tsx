@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   getTripPacking: vi.fn(async () => ({ list: null })),
   createTripPacking: vi.fn(), listPackingTemplates: vi.fn(async () => []),
   savePackingTemplate: vi.fn(), updatePackingItem: vi.fn(), addPackingItem: vi.fn(), deletePackingItem: vi.fn(),
+  listShares: vi.fn(async () => []), createShare: vi.fn(), deleteShare: vi.fn(),
 }));
 vi.mock("../../api/client", () => ({ API_URL: "", api: h }));
 import { TripDetail } from "./TripDetail";
@@ -27,4 +28,9 @@ test("shows itinerary + wishlist and converts a scheduled item", async () => {
   expect(screen.getByText("Gelato crawl")).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Convert Colosseum to a visit"));
   await waitFor(() => expect(h.convertItineraryItem).toHaveBeenCalledWith("i1"));
+});
+
+test("offers a Share action for the trip", async () => {
+  render(withQC(<TripDetail trip={trip} onClose={() => {}} onChanged={() => {}} />));
+  expect(await screen.findByText(/Share/)).toBeInTheDocument();
 });

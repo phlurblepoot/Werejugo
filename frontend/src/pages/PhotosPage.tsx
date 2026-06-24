@@ -8,10 +8,11 @@ import { PhotoMap } from "../components/photos/PhotoMap";
 import { PhotoDetail } from "../components/photos/PhotoDetail";
 import { UploadReview } from "../components/photos/UploadReview";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { ShareButton } from "../components/shared/ShareButton";
 
-export function PhotosPage() {
+export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<MediaFilters>({});
+  const [filters, setFilters] = useState<MediaFilters>(initialTrip ? { trip: initialTrip } : {});
   const [view, setView] = useState<"grid" | "map">("grid");
   const [selected, setSelected] = useState<MediaItem | null>(null);
   const [uploadedIds, setUploadedIds] = useState<string[] | null>(null);
@@ -38,6 +39,7 @@ export function PhotosPage() {
           <button className={view === "map" ? "active" : ""} onClick={() => setView("map")}>🗺️ Map</button>
         </div>
         <MediaUploader multiple label="⬆ Upload" onUploaded={() => {}} onAllUploaded={(media) => setUploadedIds(media.map((m) => m.id))} />
+        {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
       </header>
 
       <div style={{ padding: "0 16px" }}>
