@@ -121,6 +121,36 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send(toDto(row!));
   });
 
+  app.get("/api/documents/due-count", async (req) => {
+    const { rows } = await query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM documents
+       WHERE family_id = $1 AND expires_on IS NOT NULL
+         AND expires_on <= CURRENT_DATE + make_interval(days => reminder_lead_days)`,
+      [req.user.familyId]);
+    return { count: Number(rows[0].count) };
+  });
+
+  app.get("/api/documents", async (req) => {
+    const q = req.query as Record<string, string | undefined>;
+    const where: string[] = ["d.family_id = $1"];
+    const params: unknown[] = [req.user.familyId];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+
+    if (q.docType) where.push(`d.doc_type = ${add(q.docType)}`);
+    if (q.q) where.push(`d.title ILIKE ${add(`%${q.q}%`)}`);
+    if (q.owner) {
+      const [kind, id] = q.owner.split(":");
+      if (kind === "person" && id) where.push(`d.owner_person_id = ${add(id)}`);
+      else if (kind === "trip" && id) where.push(`d.owner_trip_id = ${add(id)}`);
+    }
+    if (q.due === "1") where.push(`d.expires_on IS NOT NULL AND d.expires_on <= CURRENT_DATE + make_interval(days => d.reminder_lead_days)`);
+
+    const { rows } = await query<DocRow>(
+      `${SELECT} WHERE ${where.join(" AND ")} ORDER BY d.expires_on ASC NULLS LAST, d.created_at DESC`,
+      params);
+    return rows.map(toDto);
+  });
+
   app.get("/api/documents/:id", async (req, reply) => {
     const row = await loadDoc(req.user.familyId, (req.params as { id: string }).id);
     if (!row) return reply.code(404).send({ error: "Not found" });
