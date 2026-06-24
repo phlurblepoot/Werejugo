@@ -155,19 +155,28 @@ export interface Comment {
   author?: string | null;
 }
 
-export interface ShareLink {
-  id: string;
-  token: string;
-  createdAt: string;
+export interface SearchHit { type: string; id: string; label: string; thumbUrl: string | null; to: string; }
+export interface SearchResults {
+  people: SearchHit[]; trips: SearchHit[]; visits: SearchHit[]; photos: SearchHit[]; documents: SearchHit[];
 }
 
-export interface SharePayload {
-  mapSet: Omit<MapSet, "id" | "createdAt">;
-  trips: Array<Pick<Trip, "id" | "name" | "color" | "startDate" | "endDate">>;
-  items: Array<
-    Pick<Item, "id" | "kind" | "title" | "notes" | "color" | "icon" | "occurredOn" | "tripId" | "geometry" | "waypoints" | "photos">
-  >;
+export type ShareTargetType = "trip" | "album";
+export interface ShareLink {
+  id: string; token: string; targetType: ShareTargetType; targetId: string; createdAt: string;
 }
+
+export interface SharedTrip {
+  id: string; name: string; description: string; color: string; startDate: string | null; endDate: string | null;
+}
+export interface SharedPhoto { id: string; url: string; thumbUrl: string | null; mediaType: MediaType; caption: string; seq: number; }
+export interface SharedVisit {
+  id: string; kind: ItemKind; title: string; notes: string; color: string | null; icon: string | null;
+  occurredOn: string | null; geometry: Geometry | null; photos: SharedPhoto[];
+}
+export interface SharedItineraryItem { id: string; title: string; notes: string; scheduledOn: string | null; seq: number; }
+export interface TripSharePayload { targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[]; }
+export interface AlbumSharePayload { targetType: "album"; trip: SharedTrip; photos: SharedPhoto[]; }
+export type SharePayload = TripSharePayload | AlbumSharePayload;
 
 export interface Stats {
   items: number;
@@ -552,12 +561,29 @@ export const api = {
   saveSettings: (settings: FamilySettings) =>
     request<FamilySettings>("/api/settings", { method: "PUT", body: body(settings) }),
 
-  // share links
-  listShares: (mapSetId: string) => request<ShareLink[]>(`/api/map-sets/${mapSetId}/shares`),
-  createShare: (mapSetId: string) =>
-    request<ShareLink>(`/api/map-sets/${mapSetId}/shares`, { method: "POST", body: body({}) }),
+  // global search
+  search: (q: string) => request<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`),
+
+  // share links (trips + albums)
+  listShares: (targetType: ShareTargetType, targetId: string) =>
+    request<ShareLink[]>(`/api/shares?targetType=${targetType}&targetId=${targetId}`),
+  createShare: (targetType: ShareTargetType, targetId: string) =>
+    request<ShareLink>("/api/shares", { method: "POST", body: body({ targetType, targetId }) }),
   deleteShare: (id: string) => request<void>(`/api/shares/${id}`, { method: "DELETE" }),
   getShare: (token: string) => request<SharePayload>(`/api/share/${token}`),
+
+  // backup / restore
+  downloadBackup: async (): Promise<Blob> => {
+    const token = tokenStore.get();
+    const res = await fetch(`${API_URL}/api/backup`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new ApiError(res.status, "Backup failed");
+    return res.blob();
+  },
+  restoreBackup: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ ok: boolean; counts: Record<string, number> }>("/api/restore", { method: "POST", body: fd });
+  },
 
   // themes
   listThemes: () => request<Theme[]>("/api/themes"),
