@@ -73,6 +73,37 @@ async function seedThemes(): Promise<void> {
   console.log(`[seed] built-in themes ensured (${BUILTIN_THEMES.length})`);
 }
 
+const BUILTIN_PACKING: { name: string; items: { label: string; category: string }[] }[] = [
+  { name: "Carry-on essentials", items: [
+    { label: "Passport", category: "Documents" }, { label: "Wallet", category: "Documents" },
+    { label: "Phone charger", category: "Electronics" }, { label: "Headphones", category: "Electronics" },
+    { label: "Toothbrush", category: "Toiletries" }, { label: "Medications", category: "Toiletries" },
+  ] },
+  { name: "Beach trip", items: [
+    { label: "Swimsuit", category: "Clothes" }, { label: "Sandals", category: "Clothes" },
+    { label: "Sunscreen", category: "Toiletries" }, { label: "Sunglasses", category: "Misc" },
+    { label: "Beach towel", category: "Misc" },
+  ] },
+  { name: "Winter", items: [
+    { label: "Heavy coat", category: "Clothes" }, { label: "Gloves", category: "Clothes" },
+    { label: "Thermal layers", category: "Clothes" }, { label: "Lip balm", category: "Toiletries" },
+  ] },
+];
+
+export async function seedPacking(): Promise<void> {
+  for (const tpl of BUILTIN_PACKING) {
+    const existing = await pool.query("SELECT id FROM packing_lists WHERE family_id IS NULL AND is_builtin = true AND name = $1", [tpl.name]);
+    if (existing.rowCount) continue;
+    const ins = await pool.query<{ id: string }>(
+      "INSERT INTO packing_lists (family_id, trip_id, name, is_builtin) VALUES (NULL, NULL, $1, true) RETURNING id", [tpl.name]);
+    const listId = ins.rows[0].id;
+    for (let i = 0; i < tpl.items.length; i++) {
+      await pool.query("INSERT INTO packing_items (list_id, label, category, seq) VALUES ($1,$2,$3,$4)", [listId, tpl.items[i].label, tpl.items[i].category, i]);
+    }
+  }
+  console.log(`[seed] built-in packing templates ensured (${BUILTIN_PACKING.length})`);
+}
+
 async function seedDevData(): Promise<void> {
   if (process.env.SEED_DEV_DATA !== "true") return;
   const fam = await pool.query<{ id: string }>(
@@ -104,6 +135,7 @@ async function seedDevData(): Promise<void> {
 export async function seed(): Promise<void> {
   await seedReference();
   await seedThemes();
+  await seedPacking();
   await seedDevData();
 }
 
