@@ -152,3 +152,19 @@ export async function saveMediaUpload(
   }
   return { relPath, thumbRelPath, kind, width, height };
 }
+
+const DOC_EXT = new Set([".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif", ".doc", ".docx"]);
+
+/** Stream a document file (PDF/image/doc) into relDir. No thumbnail. */
+export async function saveDocumentUpload(
+  part: { filename: string; file: NodeJS.ReadableStream },
+  relDir: string,
+): Promise<{ relPath: string; originalName: string }> {
+  const ext = extname(part.filename).toLowerCase();
+  if (!DOC_EXT.has(ext)) throw new Error("UNSUPPORTED_TYPE");
+  const name = await uniqueName(relDir, part.filename);
+  const relPath = join(relDir, name);
+  await mkdir(absStoragePath(relDir), { recursive: true });
+  await pipeline(part.file, createWriteStream(absStoragePath(relPath)));
+  return { relPath, originalName: part.filename };
+}
