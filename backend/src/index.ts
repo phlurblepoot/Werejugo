@@ -22,6 +22,7 @@ import { statsRoutes } from "./routes/stats.js";
 import { exifRoutes } from "./routes/exif.js";
 import { importRoutes } from "./routes/import.js";
 import { exportRoutes } from "./routes/export.js";
+import { backupRoutes } from "./routes/backup.js";
 import { shareRoutes } from "./routes/share.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { peopleRoutes } from "./routes/people.js";
@@ -63,6 +64,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(exifRoutes);
   await app.register(importRoutes);
   await app.register(exportRoutes);
+  await app.register(backupRoutes);
   await app.register(shareRoutes);
   await app.register(settingsRoutes);
   await app.register(peopleRoutes);
