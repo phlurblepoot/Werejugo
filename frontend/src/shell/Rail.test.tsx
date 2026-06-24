@@ -23,7 +23,9 @@ test("marks the active module", () => {
   expect(screen.getByText("Map").closest(".rail-item")).toHaveClass("active");
 });
 
-test("disables not-yet-built modules", () => {
+test("renders enabled modules as active links, not disabled", () => {
   renderAt("/map");
-  expect(screen.getByText("Packing").closest(".rail-item")).toHaveClass("disabled");
+  const packing = screen.getByText("Packing").closest(".rail-item");
+  expect(packing).not.toHaveClass("disabled");
+  expect(packing).toHaveAttribute("href", "/packing");
 });
