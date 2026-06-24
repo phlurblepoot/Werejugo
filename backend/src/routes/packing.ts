@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { query } from "../db/pool.js";
+import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 
 interface ListRow { id: string; name: string; trip_id: string | null; is_builtin: boolean; item_count: number; checked_count: number; }
@@ -115,5 +115,75 @@ export async function packingRoutes(app: FastifyInstance): Promise<void> {
     if (!guardReply(reply, g)) return;
     await query("DELETE FROM packing_lists WHERE id = $1", [id]);
     return reply.code(204).send();
+  });
+
+  async function ownsTrip(familyId: string, tripId: string): Promise<boolean> {
+    const { rowCount } = await query("SELECT 1 FROM trips WHERE id = $1 AND family_id = $2", [tripId, familyId]);
+    return Boolean(rowCount);
+  }
+  // Copy items from a visible source list into a destination list, unchecked.
+  async function copyItems(client: import("pg").PoolClient, destId: string, sourceId: string) {
+    await client.query(
+      `INSERT INTO packing_items (list_id, label, category, qty, checked, seq)
+       SELECT $1, label, category, qty, false, seq FROM packing_items WHERE list_id = $2 ORDER BY seq`,
+      [destId, sourceId]);
+  }
+
+  app.get("/api/trips/:tripId/packing", async (req, reply) => {
+    const tripId = (req.params as { tripId: string }).tripId;
+    if (!(await ownsTrip(req.user.familyId, tripId))) return reply.code(404).send({ error: "Trip not found" });
+    const { rows } = await query<ListRow>(`${SUMMARY} WHERE l.trip_id = $1 AND l.family_id = $2 LIMIT 1`, [tripId, req.user.familyId]);
+    if (!rows[0]) return { list: null };
+    return { list: { ...summaryDto(rows[0]), items: await itemsOf(rows[0].id) } };
+  });
+
+  app.post("/api/trips/:tripId/packing", async (req, reply) => {
+    const tripId = (req.params as { tripId: string }).tripId;
+    if (!(await ownsTrip(req.user.familyId, tripId))) return reply.code(404).send({ error: "Trip not found" });
+    const existing = await query<{ id: string }>("SELECT id FROM packing_lists WHERE trip_id = $1 AND family_id = $2 LIMIT 1", [tripId, req.user.familyId]);
+    if (existing.rows[0]) {
+      const list = await loadVisible(req.user.familyId, existing.rows[0].id);
+      return reply.code(200).send({ ...summaryDto(list!), items: await itemsOf(existing.rows[0].id) });
+    }
+    const parsed = z.object({ name: z.string().max(160).optional(), fromTemplateId: z.string().uuid().optional(), fromTripId: z.string().uuid().optional() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const b = parsed.data;
+
+    // Resolve a source list id (a visible template, or another trip's list).
+    let sourceId: string | null = null;
+    if (b.fromTemplateId) { if (!(await loadVisible(req.user.familyId, b.fromTemplateId))) return reply.code(404).send({ error: "Template not found" }); sourceId = b.fromTemplateId; }
+    else if (b.fromTripId) {
+      const src = await query<{ id: string }>("SELECT id FROM packing_lists WHERE trip_id = $1 AND family_id = $2 LIMIT 1", [b.fromTripId, req.user.familyId]);
+      if (!src.rows[0]) return reply.code(404).send({ error: "Source trip has no packing list" });
+      sourceId = src.rows[0].id;
+    }
+
+    const id = await tx(async (client) => {
+      const ins = await client.query<{ id: string }>(
+        "INSERT INTO packing_lists (family_id, trip_id, name, created_by) VALUES ($1,$2,$3,$4) RETURNING id",
+        [req.user.familyId, tripId, b.name ?? "Packing", req.user.id]);
+      const newId = ins.rows[0].id;
+      if (sourceId) await copyItems(client, newId, sourceId);
+      return newId;
+    });
+    const list = await loadVisible(req.user.familyId, id);
+    return reply.code(201).send({ ...summaryDto(list!), items: await itemsOf(id) });
+  });
+
+  app.post("/api/packing/templates", async (req, reply) => {
+    const parsed = z.object({ name: z.string().min(1).max(160), fromListId: z.string().uuid().optional() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const b = parsed.data;
+    if (b.fromListId && !(await loadVisible(req.user.familyId, b.fromListId))) return reply.code(404).send({ error: "Source list not found" });
+    const id = await tx(async (client) => {
+      const ins = await client.query<{ id: string }>(
+        "INSERT INTO packing_lists (family_id, trip_id, name, created_by) VALUES ($1,NULL,$2,$3) RETURNING id",
+        [req.user.familyId, b.name, req.user.id]);
+      const newId = ins.rows[0].id;
+      if (b.fromListId) await copyItems(client, newId, b.fromListId);
+      return newId;
+    });
+    const list = await loadVisible(req.user.familyId, id);
+    return reply.code(201).send({ ...summaryDto(list!), items: await itemsOf(id) });
   });
 }
