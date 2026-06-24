@@ -10,17 +10,18 @@ const upsertSchema = z.object({
   endDate: z.string().nullish(),
   coverPhotoUrl: z.string().nullish(),
   color: z.string().max(40).optional(),
+  status: z.enum(["idea", "planning", "booked", "done"]).optional(),
 });
 
 interface TripRow {
   id: string; name: string; description: string;
   start_date: string | null; end_date: string | null;
-  cover_photo_url: string | null; color: string; created_at: string;
+  cover_photo_url: string | null; color: string; status: string; created_at: string;
 }
 const toDto = (r: TripRow) => ({
   id: r.id, name: r.name, description: r.description,
   startDate: r.start_date, endDate: r.end_date,
-  coverPhotoUrl: r.cover_photo_url, color: r.color, createdAt: r.created_at,
+  coverPhotoUrl: r.cover_photo_url, color: r.color, status: r.status, createdAt: r.created_at,
 });
 
 export async function tripRoutes(app: FastifyInstance): Promise<void> {
@@ -38,10 +39,10 @@ export async function tripRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const b = parsed.data;
     const { rows } = await query<TripRow>(
-      `INSERT INTO trips (family_id, name, description, start_date, end_date, cover_photo_url, color, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      `INSERT INTO trips (family_id, name, description, start_date, end_date, cover_photo_url, color, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [req.user.familyId, b.name, b.description ?? "", b.startDate || null, b.endDate || null,
-       b.coverPhotoUrl ?? null, b.color ?? "#2563eb", req.user.id]);
+       b.coverPhotoUrl ?? null, b.color ?? "#2563eb", b.status ?? "idea", req.user.id]);
     return reply.code(201).send(toDto(rows[0]));
   });
 
@@ -58,11 +59,12 @@ export async function tripRoutes(app: FastifyInstance): Promise<void> {
          start_date = CASE WHEN $5::boolean THEN $6 ELSE start_date END,
          end_date = CASE WHEN $7::boolean THEN $8 ELSE end_date END,
          cover_photo_url = CASE WHEN $9::boolean THEN $10 ELSE cover_photo_url END,
-         color = COALESCE($11, color)
+         color = COALESCE($11, color),
+         status = COALESCE($12, status)
        WHERE id = $1 AND family_id = $2 RETURNING *`,
       [id, req.user.familyId, b.name ?? null, b.description ?? null,
        has("startDate"), b.startDate || null, has("endDate"), b.endDate || null,
-       has("coverPhotoUrl"), b.coverPhotoUrl ?? null, b.color ?? null]);
+       has("coverPhotoUrl"), b.coverPhotoUrl ?? null, b.color ?? null, b.status ?? null]);
     if (!rows[0]) return reply.code(404).send({ error: "Not found" });
     return toDto(rows[0]);
   });
