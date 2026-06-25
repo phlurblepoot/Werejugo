@@ -48,9 +48,9 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="app">
+    <div className="page">
       <header className="app-header"><span className="brand">⚙️ Settings</span></header>
-      <div style={{ padding: 16, maxWidth: 560 }}>
+      <div className="page-body" style={{ maxWidth: 560 }}>
         <div className="section-title"><span>Backup</span></div>
         <p className="er-sub">Download your entire hub — database and all photo/document files — as one archive.</p>
         <button className="primary" disabled={busy} onClick={download}>⬇ Download backup</button>

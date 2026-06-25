@@ -25,14 +25,14 @@ export function PeoplePage() {
   }
 
   return (
-    <div className="app">
+    <div className="page">
       <header className="app-header">
         <span className="brand">👤 People</span>
         <span className="spacer" />
         <button className="primary" onClick={() => setAdding(true)}>+ Add person</button>
       </header>
 
-      <div style={{ padding: 16, overflow: "auto" }}>
+      <div className="page-body">
         {isError ? (
           <ErrorState hint="Couldn't load people." onRetry={() => refetch()} />
         ) : isLoading ? (

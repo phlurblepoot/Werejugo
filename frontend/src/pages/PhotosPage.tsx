@@ -30,7 +30,7 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   const refresh = () => qc.invalidateQueries({ queryKey: ["media"] });
 
   return (
-    <div className="app">
+    <div className="page">
       <header className="app-header">
         <span className="brand">🖼️ Photos</span>
         <span className="spacer" />
@@ -46,7 +46,7 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
         <PhotoFilters value={filters} onChange={setFilters} trips={trips} />
       </div>
 
-      <div className="map-area" style={{ position: "relative", overflow: view === "grid" ? "auto" : "hidden" }}>
+      <div className="page-fill" style={{ overflow: view === "grid" ? "auto" : "hidden" }}>
         {mediaQuery.isError ? (
           <ErrorState hint="Couldn't load photos." onRetry={() => mediaQuery.refetch()} />
         ) : mediaQuery.isLoading ? (

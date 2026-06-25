@@ -13,7 +13,7 @@ export function PackingPage() {
   const [sel, setSel] = useState<Sel>(null);
 
   return (
-    <div className="app">
+    <div className="page">
       <header className="app-header"><span className="brand">🎒 Packing</span></header>
       <div className="packing-cols">
         <div className="packing-side">

@@ -28,7 +28,7 @@ export function PlanningPage() {
   }
 
   return (
-    <div className="app">
+    <div className="page">
       <header className="app-header">
         <span className="brand">📅 Planning</span>
         <span className="spacer" />
@@ -40,7 +40,7 @@ export function PlanningPage() {
         <button className="primary" onClick={() => setAdding(true)}>+ Trip</button>
       </header>
 
-      <div style={{ padding: 16, overflow: "auto" }}>
+      <div className="page-body">
         {isError ? (
           <ErrorState hint="Couldn't load trips." onRetry={() => refetch()} />
         ) : isLoading ? (

@@ -27,14 +27,14 @@ export function DocumentsPage() {
   function setType(t: DocType | undefined) { setFilters((f) => ({ ...f, docType: t })); }
 
   return (
-    <div className="app">
+    <div className="page">
       <header className="app-header">
         <span className="brand">🛂 Documents</span>
         <span className="spacer" />
         <button className="primary" onClick={() => setAdding(true)}>+ Add</button>
       </header>
 
-      <div style={{ padding: 16, overflow: "auto" }}>
+      <div className="page-body">
         {isError ? (
           <ErrorState hint="Couldn't load documents." onRetry={() => refetch()} />
         ) : isLoading ? (
