@@ -12,7 +12,7 @@ This is a multi-session project, and conversation context gets lost. The roadmap
 2. **Work from the roadmap.** Anything non-trivial that isn't already in it gets added first: a new checklist item in the right phase, ending `(added YYYY-MM-DD)`, plus a **Changed** log entry. Trivial fixes can go in without that, but they still get a **Note** log entry.
 3. **Starting a phase:** write its detailed implementation plan at `docs/superpowers/plans/YYYY-MM-DD-phase-X.Y-<slug>.md` (same TDD, task-by-task style as the existing plans). Set the phase's status line to `Planned` with the Plan link, then `In progress` when building starts. Update the Status block.
 4. **Tick items as they're finished,** `- [ ]` → `- [x]`, **in the same commit as the work.** Never tick something that isn't done and verified (tests run, behaviour checked).
-5. **PR opened:** status `In review` with the PR link. **PR merged:** status `Done` (every item ticked or dropped), a **Done** log entry naming the phase and linking the PR, and the Status block moved on to the next phase and next step.
+5. **Finishing a phase:** when its work is complete and verified on the milestone branch (tests green, behaviour checked), set it to `Done` with the milestone PR link (every item ticked or dropped), add a **Done** log entry, and move the Status block to the next phase. Use `In review` only for a phase waiting on the owner (for example an approval). The milestone is finished when the owner merges the milestone PR.
 6. **Changing the plan:** never diverge silently. Edit the roadmap in place:
    - New items end with `(added YYYY-MM-DD)`.
    - Dropped items are struck through, never deleted: `- [ ] ~~item~~ (dropped YYYY-MM-DD — reason)`.
@@ -33,8 +33,9 @@ Log entry format (newest date first, under a `### YYYY-MM-DD` heading):
 
 ## Branches and PRs
 
-- Until `main` exists (created in Phase 1.1), work on the branch the session was assigned. After that: a feature branch per phase, and a PR to `main`.
-- PRs follow `.github/pull_request_template.md`, including its Roadmap checklist. CI will run `node scripts/roadmap.mjs --check --changed-since origin/main` (added in Phase 1.1).
+- `main` is the integration branch. Each **milestone** is built on one branch (the session's assigned branch) and reviewed as **one PR to `main`**; the owner reviews, tests and merges at milestone boundaries.
+- Pushes to `claude/**` branches publish preview Docker images tagged with the branch name, so the owner can test a milestone on Unraid before merging.
+- PRs follow `.github/pull_request_template.md`, including its Roadmap checklist. CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` plus both test suites.
 
 ## Running things
 

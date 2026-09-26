@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
 | **Current phase** | 1.1 |
-| **Next step** | Write the Phase 1.1 implementation plan in `docs/superpowers/plans/`, then build it on a branch and open a PR |
+| **Next step** | Build Phase 1.1 tasks 1–8 on `claude/cool-hopper-pku4ne`, then open the Milestone 1 PR to `main` |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -184,20 +184,22 @@ Introduce **pg-boss** (a job queue on the existing Postgres, so no Redis) for Im
 
 ## 4. Milestones
 
-Each phase gets its own detailed implementation plan in `docs/superpowers/plans/` at the start of the phase (same TDD, task-by-task format as Phases 1–8) and lands as one pull request to `main`. The owner reviews and tests on Unraid at the end of each **milestone**. Sizes are relative: S < M < L < XL.
+Each phase gets its own detailed implementation plan in `docs/superpowers/plans/` at the start of the phase (same TDD, task-by-task format as Phases 1–8). All phases of a milestone land on one branch and are reviewed as **one pull request per milestone** to `main`; a phase is `Done` when its work is complete and verified on that branch, and the milestone is finished when the owner merges the PR. The owner reviews and tests on Unraid at the end of each **milestone**. Sizes are relative: S < M < L < XL.
 
 ### Milestone 1 — Foundation: safe, multi-family, new design
 
 #### 1.1 Safety net & project hygiene — S
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-1.1](../plans/2026-09-26-phase-1.1-safety-net.md) · **PR:** —
 
 *(first PR; small, and needed before the app faces the internet)*
 
 - [ ] Create `main` from the current work; CI on every PR: backend + frontend typecheck, backend tests against a PostGIS service container, frontend tests, production builds; images publish only from `main` and `v*` tags; fix the jsdom `Blob` test.
+- [ ] Preview images: pushes to `claude/**` branches publish images tagged with the branch name (never `latest`), so a milestone can be tested on Unraid before it is merged. (added 2026-09-26)
 - [ ] B2: add a `/app/storage` volume to `docker-compose.yml` and the Unraid template; document `STORAGE_DIR`/`UPLOADS_DIR` in `.env.example`; fix README paths.
 - [ ] B4: refuse to boot in production with a missing, default or short `JWT_SECRET`; separate `FILE_SIGNING_SECRET`.
 - [ ] B3 (stopgap until 1.3): disable public registration after the first family (`ALLOW_SIGNUP=false` default); restrict backup/restore to the first family's owner; restore validates the archive's `storage/` before wiping anything.
+- [ ] Backups also include `UPLOADS_DIR` (icons, map overlays, ship images), and restore replaces the storage contents in place (the directory is a volume mount point in Docker). (added 2026-09-26)
 - [ ] B1: make the first-run welcome an inline, dismissible panel that refetches.
 - [ ] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
 - [ ] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
@@ -485,6 +487,11 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-26
+
+- **Changed** — Milestone 1 is built on one branch (`claude/cool-hopper-pku4ne`) and reviewed as one PR to `main`, instead of one PR per phase: the owner reviews per milestone, and this session may only push to its assigned branch. Each phase still gets its own plan, status line and log entries; a phase is `Done` when complete and verified on the branch. `CLAUDE.md` updated to match.
+- **Changed** — Phase 1.1: added preview images for `claude/**` branches (so the milestone can be tested on Unraid before merging) and uploads-in-backup / in-place restore.
+- **Note** — Created `main` at `7f9d3a7` (roadmap + tracking on top of `e1136dd`). GitHub's default branch is still `claude/laughing-edison-sTVtG`; the owner should switch it to `main` in the repo settings.
+- **Note** — Phase 1.1 started; plan at `docs/superpowers/plans/2026-09-26-phase-1.1-safety-net.md`. Found while planning: editing a trip or visit blanked its dates (date inputs received timestamps) — fixed by B6.
 
 - **Changed** — Added progress tracking: the Status block and per-phase status lines in this file, `CLAUDE.md` "Roadmap discipline" rules, `scripts/roadmap.mjs` (summary + `--check`), a `SessionStart` hook in `.claude/settings.json` that prints the status on startup/resume/clear/compact, `.github/pull_request_template.md`, and a README pointer. `.gitignore` now keeps `.claude/settings.json` tracked. Added a CI roadmap check to Phase 1.1.
 - **Decided** — Progress tracking lives in this roadmap (owner request, see §2).
