@@ -9,6 +9,15 @@ export interface User {
   displayName: string;
   role: "owner" | "member";
   color: string;
+  /** Owner of the first family on this server — the only one who can back up or restore it. */
+  isInstanceOwner?: boolean;
+}
+
+export interface AuthConfig {
+  /** No family exists yet: the login page should offer "set up" only. */
+  firstRun: boolean;
+  /** New families may be created from the login page. */
+  signupOpen: boolean;
 }
 
 export interface Family {
@@ -422,6 +431,7 @@ export const api = {
   login: (data: { email: string; password: string }) =>
     request<{ token: string; user: User }>("/api/auth/login", { method: "POST", body: body(data) }),
   me: () => request<{ user: User; family: Family }>("/api/auth/me"),
+  authConfig: () => request<AuthConfig>("/api/auth/config"),
 
   // map sets
   listMapSets: () => request<MapSet[]>("/api/map-sets"),

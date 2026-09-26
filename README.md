@@ -68,7 +68,9 @@ Trips and photo albums can be shared as public, read-only links (`/s/<token>`) �
 
 ## Backup & restore
 
-**Settings → Backup** downloads your entire hub — database **and** all files — as a single `.tar.gz`. An owner can restore an archive from the same page; restore **replaces all current data** and is guarded by a typed confirmation. The archive is a plain gzipped tar (a JSON table dump under `db.json` plus a `storage/` tree), so it is also restorable by hand.
+**Settings → Backup** downloads the whole server — database, photos, videos, documents, custom pin icons and map overlays — as one `.tar.gz`. Only the **server owner** (the owner of the first family created) can back up or restore, because an archive contains every family on the server. Restore **replaces all current data**, is guarded by a typed confirmation, and checks the archive completely before changing anything. The archive is a plain gzipped tar (`db.json` table dump + `storage/` + `uploads/`), so it can also be restored by hand.
+
+Archives larger than ~100 MB can't be uploaded through Cloudflare's free proxy; restore those from your local network address instead.
 
 ## Tests
 

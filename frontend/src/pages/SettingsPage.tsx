@@ -4,9 +4,11 @@ import { useAuth } from "../lib/auth";
 import { useToast } from "../components/Toast";
 
 export function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
-  const isOwner = user?.role === "owner";
+  // Backups contain every family on the server, so only the server owner
+  // (the first family's owner) may make or restore them.
+  const isServerOwner = user?.isInstanceOwner === true;
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState("");
   const [fileName, setFileName] = useState("");
@@ -36,7 +38,9 @@ export function SettingsPage() {
     try {
       const { counts } = await api.restoreBackup(fileRef.current);
       const n = Object.values(counts).reduce((a, b) => a + b, 0);
-      toast(`Restored ${n} rows`, "success");
+      toast(`Restored ${n} rows — signing you out so you can log in to the restored data`, "success");
+      // Accounts were replaced too, so the current session may no longer exist.
+      setTimeout(() => { logout(); window.location.assign("/"); }, 1500);
       setConfirm("");
       setFileName("");
       fileRef.current = null;
@@ -52,11 +56,13 @@ export function SettingsPage() {
       <header className="app-header"><span className="brand">⚙️ Settings</span></header>
       <div className="page-body" style={{ maxWidth: 560 }}>
         <div className="section-title"><span>Backup</span></div>
-        <p className="er-sub">Download your entire hub — database and all photo/document files — as one archive.</p>
-        <button className="primary" disabled={busy} onClick={download}>⬇ Download backup</button>
-
-        {isOwner && (
+        {!isServerOwner && (
+          <p className="er-sub">Backups of this server are managed by the server owner.</p>
+        )}
+        {isServerOwner && (
           <>
+            <p className="er-sub">Download the entire server — database, photos, documents, pin icons and map overlays — as one archive.</p>
+            <button className="primary" disabled={busy} onClick={download}>⬇ Download backup</button>
             <div className="section-title" style={{ marginTop: 20 }}><span>Restore</span></div>
             <p className="er-sub">Replaces <strong>all</strong> current data with the uploaded archive. This cannot be undone.</p>
             <label className="er-sub" htmlFor="restore-file">Restore archive (.tar.gz)</label>

@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { tx, query } from "../db/pool.js";
 import { hashPassword, verifyPassword, requireAuth, type AuthUser } from "../lib/auth.js";
+import { isInstanceOwner } from "../lib/instance.js";
+import { config } from "../config.js";
 
 const inviteCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 8);
 
@@ -37,14 +39,24 @@ interface UserRow {
   color: string;
 }
 
+async function familyCount(): Promise<number> {
+  const { rows } = await query<{ n: number }>("SELECT count(*)::int AS n FROM families");
+  return rows[0].n;
+}
+
+const SIGNUP_CLOSED = "New families can't sign up on this server. Ask a family owner for their invite code to join.";
+
 export async function authRoutes(app: FastifyInstance): Promise<void> {
+  /** Public: what the login page should offer. */
+  app.get("/api/auth/config", async () => {
+    const firstRun = (await familyCount()) === 0;
+    return { firstRun, signupOpen: firstRun || config.allowSignup };
+  });
+
   app.post("/api/auth/register", async (req, reply) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const body = parsed.data;
-
-    const existing = await query("SELECT 1 FROM users WHERE email = $1", [body.email.toLowerCase()]);
-    if (existing.rowCount) return reply.code(409).send({ error: "Email already registered" });
 
     try {
       const user = await tx(async (client) => {
@@ -52,6 +64,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         let role: "owner" | "member";
 
         if (body.mode === "create") {
+          // Serialize family creation so two simultaneous first-run signups
+          // can't both slip through, then re-check inside the transaction.
+          await client.query("SELECT pg_advisory_xact_lock(hashtext('werejugo:create-family'))");
+          const { rows: existing } = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM families");
+          if (existing[0].n > 0 && !config.allowSignup) throw new Error("SIGNUP_CLOSED");
           const fam = await client.query<{ id: string }>(
             "INSERT INTO families (name, invite_code) VALUES ($1, $2) RETURNING id",
             [body.familyName, inviteCode()],
@@ -67,6 +84,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           familyId = fam.rows[0].id;
           role = "member";
         }
+
+        // Checked only after the signup gate / invite code, so a stranger can't
+        // use this endpoint to discover which emails have accounts.
+        const taken = await client.query("SELECT 1 FROM users WHERE email = $1", [body.email.toLowerCase()]);
+        if (taken.rowCount) throw new Error("EMAIL_TAKEN");
 
         const hash = await hashPassword(body.password);
         const u = await client.query<UserRow>(
@@ -93,6 +115,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof Error && err.message === "INVALID_INVITE") {
         return reply.code(400).send({ error: "Invalid invite code" });
       }
+      if (err instanceof Error && err.message === "SIGNUP_CLOSED") {
+        return reply.code(403).send({ error: SIGNUP_CLOSED });
+      }
+      if (err instanceof Error && err.message === "EMAIL_TAKEN") {
+        return reply.code(409).send({ error: "Email already registered" });
+      }
       throw err;
     }
   });
@@ -114,7 +142,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ token, user: publicUser(user) });
   });
 
-  app.get("/api/auth/me", { preHandler: requireAuth }, async (req) => {
+  app.get("/api/auth/me", { preHandler: requireAuth }, async (req, reply) => {
     const auth = req.user;
     const { rows } = await query<UserRow & { family_name: string; invite_code: string }>(
       `SELECT u.id, u.family_id, u.email, u.display_name, u.role, u.color,
@@ -124,8 +152,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       [auth.id],
     );
     const u = rows[0];
+    // The account may have been deleted (e.g. by a restore) while the token lives on.
+    if (!u) return reply.code(401).send({ error: "Unauthorized" });
     return {
-      user: publicUser(u),
+      user: { ...publicUser(u), isInstanceOwner: await isInstanceOwner(auth) },
       family: { id: u.family_id, name: u.family_name, inviteCode: u.invite_code },
     };
   });

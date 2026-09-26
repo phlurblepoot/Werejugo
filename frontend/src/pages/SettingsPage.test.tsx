@@ -5,7 +5,8 @@ const h = vi.hoisted(() => ({
   restoreBackup: vi.fn(async () => ({ ok: true, counts: { trips: 2 } })),
 }));
 vi.mock("../api/client", () => ({ API_URL: "", api: h }));
-vi.mock("../lib/auth", () => ({ useAuth: () => ({ user: { role: "owner" } }) }));
+const auth = vi.hoisted(() => ({ user: { role: "owner", isInstanceOwner: true } as Record<string, unknown>, logout: vi.fn() }));
+vi.mock("../lib/auth", () => ({ useAuth: () => auth }));
 vi.mock("../components/Toast", () => ({ useToast: () => ({ toast: () => {} }) }));
 import { SettingsPage } from "./SettingsPage";
 
@@ -29,4 +30,16 @@ test("restore stays disabled until 'restore' is typed", async () => {
   expect(btn.disabled).toBe(true);
   fireEvent.change(screen.getByPlaceholderText("restore"), { target: { value: "restore" } });
   expect((screen.getByText(/Restore & replace/) as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("only the server owner sees backup and restore", () => {
+  auth.user = { role: "owner", isInstanceOwner: false };
+  try {
+    render(<SettingsPage />);
+    expect(screen.queryByText(/Download backup/)).toBeNull();
+    expect(screen.queryByLabelText(/restore archive/i)).toBeNull();
+    expect(screen.getByText(/managed by the server owner/i)).toBeInTheDocument();
+  } finally {
+    auth.user = { role: "owner", isInstanceOwner: true };
+  }
 });

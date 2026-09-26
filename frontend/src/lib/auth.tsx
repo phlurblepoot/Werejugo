@@ -34,10 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function applyAuth(token: string, u: User) {
+  async function applyAuth(token: string) {
     tokenStore.set(token);
-    setUser(u);
+    // /me carries fields the login response doesn't (e.g. isInstanceOwner).
     const me = await api.me();
+    setUser(me.user);
     setFamily(me.family);
   }
 
@@ -46,12 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     family,
     loading,
     login: async (email, password) => {
-      const { token, user } = await api.login({ email, password });
-      await applyAuth(token, user);
+      const { token } = await api.login({ email, password });
+      await applyAuth(token);
     },
     register: async (data) => {
-      const { token, user } = await api.register(data);
-      await applyAuth(token, user);
+      const { token } = await api.register(data);
+      await applyAuth(token);
     },
     logout: () => {
       tokenStore.clear();
