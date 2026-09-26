@@ -4,7 +4,7 @@ import { config } from "../config.js";
 const TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 export function signPath(relPath: string, exp: string): string {
-  return createHmac("sha256", config.jwtSecret).update(`${relPath}:${exp}`).digest("hex");
+  return createHmac("sha256", config.fileSigningSecret).update(`${relPath}:${exp}`).digest("hex");
 }
 
 /** Build a signed, time-limited URL the browser can load directly in <img>. */

@@ -5,6 +5,7 @@ import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { config } from "./config.js";
+import { ephemeralDataDirs } from "./lib/storage-check.js";
 import { authRoutes } from "./routes/auth.js";
 import { mapSetRoutes } from "./routes/mapsets.js";
 import { fileRoutes } from "./routes/files.js";
@@ -36,6 +37,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.storageDir, { recursive: true });
 
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
+  for (const w of config.startupWarnings) app.log.warn(w);
+  for (const w of ephemeralDataDirs([
+    { name: "STORAGE_DIR", path: config.storageDir },
+    { name: "UPLOADS_DIR", path: config.uploadsDir },
+  ])) app.log.error(w);
 
   await app.register(cors, {
     origin: config.corsOrigin.length ? config.corsOrigin : true,
