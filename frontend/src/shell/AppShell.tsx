@@ -10,11 +10,13 @@ import { DocumentsPage } from "../pages/DocumentsPage";
 import { PlanningPage } from "../pages/PlanningPage";
 import { PackingPage } from "../pages/PackingPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { AdminPage } from "../pages/AdminPage";
 import { Rail } from "./Rail";
 import { BottomNav } from "./BottomNav";
 import { CommandPalette } from "./CommandPalette";
 import { FirstRunWelcome } from "./FirstRunWelcome";
 import { ShellContext } from "./ShellContext";
+import { AdminViewBanner } from "./AdminViewBanner";
 
 export function AppShell() {
   const { logout, user } = useAuth();
@@ -38,19 +40,23 @@ export function AppShell() {
     <ShellContext.Provider value={shell}>
       <div className="shell">
         <Rail onSignOut={logout} onSearch={shell.openSearch} badges={badges} account={user} />
-        <main className="shell-main">
-          <Routes>
-            <Route path="/" element={<Navigate to="/map" replace />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/people" element={<PeoplePage />} />
-            <Route path="/photos" element={<PhotosPage />} />
-            <Route path="/documents" element={<DocumentsPage />} />
-            <Route path="/planning" element={<PlanningPage />} />
-            <Route path="/packing" element={<PackingPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/map" replace />} />
-          </Routes>
-        </main>
+        <div className="shell-col">
+          <AdminViewBanner />
+          <main className="shell-main">
+            <Routes>
+              <Route path="/" element={<Navigate to="/map" replace />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/people" element={<PeoplePage />} />
+              <Route path="/photos" element={<PhotosPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/planning" element={<PlanningPage />} />
+              <Route path="/packing" element={<PackingPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/admin" element={user?.isAdmin ? <AdminPage /> : <Navigate to="/map" replace />} />
+              <Route path="*" element={<Navigate to="/map" replace />} />
+            </Routes>
+          </main>
+        </div>
         <BottomNav onSignOut={logout} onSearch={shell.openSearch} badges={badges} account={user} />
         <FirstRunWelcome />
         <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />

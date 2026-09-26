@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { LogOut, Menu as MenuIcon, Search, Settings } from "lucide-react";
+import { LogOut, Menu as MenuIcon, Search, Settings, Shield } from "lucide-react";
 import { Avatar, Badge, Modal } from "../components/kit";
 import { MODULES } from "./modules";
 import type { AccountInfo } from "./AccountMenu";
@@ -20,7 +20,7 @@ export function BottomNav({
   const [more, setMore] = useState(false);
   const { pathname } = useLocation();
   const extras = MODULES.filter((m) => !m.tab);
-  const moreActive = extras.some((m) => pathname.startsWith(m.path)) || pathname.startsWith("/settings");
+  const moreActive = extras.some((m) => pathname.startsWith(m.path)) || pathname.startsWith("/settings") || pathname.startsWith("/admin");
 
   return (
     <nav className="tabbar" aria-label="Main">
@@ -60,6 +60,11 @@ export function BottomNav({
           <NavLink to="/settings" className="more-row" onClick={() => setMore(false)}>
             <Settings size={20} aria-hidden="true" /> <span>Settings</span>
           </NavLink>
+          {account?.isAdmin && (
+            <NavLink to="/admin" className="more-row" onClick={() => setMore(false)}>
+              <Shield size={20} aria-hidden="true" /> <span>Admin</span>
+            </NavLink>
+          )}
           <button type="button" className="more-row is-danger" onClick={() => { setMore(false); onSignOut(); }}>
             <LogOut size={20} aria-hidden="true" /> <span>Sign out</span>
           </button>

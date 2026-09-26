@@ -41,7 +41,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         await client.query("SELECT pg_advisory_xact_lock(hashtext('werejugo:setup'))");
         const { rows } = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM users");
         if (rows[0].n > 0) throw new Error("ALREADY_SET_UP");
-        const u = await createFamilyWithOwner(client, { ...parsed.data, isAdmin: true });
+        const u = await createFamilyWithOwner(client, { ...parsed.data, isAdmin: true, signedIn: true });
         await audit({ actorId: u.id, action: "server.setup", familyId: u.family_id, target: parsed.data.familyName }, client);
         return u;
       });

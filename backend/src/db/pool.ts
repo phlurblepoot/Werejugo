@@ -8,6 +8,13 @@ pg.types.setTypeParser(1082, (value: string) => value);
 
 export const pool = new pg.Pool({ connectionString: config.databaseUrl });
 
+// An idle connection can be cut by the database (Postgres restarting, an admin
+// terminating sessions). The pool drops that client by itself, but with no
+// listener the "error" event would crash the whole server.
+pool.on("error", (err) => {
+  console.error(`[db] idle connection lost: ${err.message}`);
+});
+
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params: unknown[] = [],

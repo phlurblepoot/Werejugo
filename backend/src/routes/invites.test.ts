@@ -37,6 +37,13 @@ test("a family owner invites a member with a chosen role", async () => {
   expect(preview).toMatchObject({ kind: "member", familyName: "Test Family", role: "member" });
   const res = await post(`/api/invites/${tokenOf(link.path)}/accept`, null, newcomer("kid@test.dev"));
   expect(res.json().user).toMatchObject({ role: "member", familyId: ctx.familyId });
+
+  // They're signed in now, and don't share a colour with anyone already in the family.
+  const family = (await ctx.app.inject({ method: "GET", url: "/api/family", headers: bearer(ctx.token) })).json();
+  const kid = family.members.find((m: { email: string }) => m.email === "kid@test.dev");
+  expect(kid.lastLoginAt).not.toBeNull();
+  const others = family.members.filter((m: { email: string }) => m.email !== "kid@test.dev").map((m: { color: string }) => m.color);
+  expect(others).not.toContain(kid.color);
 });
 
 test("members can't invite; non-admins can't invite families", async () => {

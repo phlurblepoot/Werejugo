@@ -432,7 +432,8 @@ button.primary.is-success { background: var(--color-success) !important; border-
   position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex; align-items: center; gap: 8px;
   background: var(--color-surface); border: 1px solid var(--color-accent); color: var(--color-text);
-  font-size: var(--text-sm); padding: 8px 14px; border-radius: var(--radius-full);
+  font-size: var(--text-sm); padding: 8px 14px; border-radius: var(--radius-lg);
+  width: max-content; max-width: calc(100% - 32px);
   box-shadow: var(--shadow-md); animation: kit-fade-in 0.3s ease;
 }
 .map-empty-hint-emoji { font-size: 16px; }

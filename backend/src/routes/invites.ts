@@ -52,9 +52,9 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
         let u;
         if (invite.kind === "family") {
           if (!body.familyName) throw new Error("FAMILY_NAME");
-          u = await createFamilyWithOwner(client, { ...body, familyName: body.familyName });
+          u = await createFamilyWithOwner(client, { ...body, familyName: body.familyName, signedIn: true });
         } else {
-          u = await createUser(client, { ...body, familyId: invite.family_id!, role: invite.role });
+          u = await createUser(client, { ...body, familyId: invite.family_id!, role: invite.role, signedIn: true });
         }
         await client.query("UPDATE invites SET used_at = now(), used_by = $2 WHERE id = $1", [invite.id, u.id]);
         await audit({

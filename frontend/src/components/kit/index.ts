@@ -3,7 +3,7 @@ export { Field } from "./Field";
 export { SegmentedControl, type SegmentOption } from "./SegmentedControl";
 export { Modal, ConfirmProvider, useConfirm, type ConfirmOptions } from "./Modal";
 export { Menu, type MenuEntry } from "./Menu";
-export { Card, Avatar, Chip, Badge } from "./Display";
+export { Card, Avatar, Chip, Badge, AVATAR_COLORS } from "./Display";
 export { Spinner, EmptyState, ErrorState } from "./States";
 export { PageHeader } from "./PageHeader";
 export { cx } from "./cx";

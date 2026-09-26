@@ -31,3 +31,29 @@ export function formatDateRange(start: Ymd, end: Ymd, locale?: string): string {
   if (!b || b.getTime() === a.getTime()) return fmt.format(a);
   return fmt.formatRange(a, b);
 }
+
+/** A moment in time (ISO timestamp) as "Sep 26, 2026, 3:04 PM". */
+export function formatTimestamp(iso: string | null | undefined, locale?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat(locale, { ...OPTIONS, hour: "numeric", minute: "2-digit" }).format(d);
+}
+
+const UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ["year", 365 * 24 * 3600], ["month", 30 * 24 * 3600], ["week", 7 * 24 * 3600],
+  ["day", 24 * 3600], ["hour", 3600], ["minute", 60],
+];
+
+/** "3 days ago" / "in 5 days" / "just now" relative to `now`. */
+export function formatRelative(iso: string | null | undefined, now = Date.now(), locale?: string): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const secs = Math.round((t - now) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(secs) >= size) return rtf.format(Math.trunc(secs / size), unit);
+  }
+  return "just now";
+}

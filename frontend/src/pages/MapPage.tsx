@@ -279,7 +279,7 @@ export function MapPage() {
             {!itemsQuery.isLoading && items.length === 0 && !pickActive && (
               <div className="map-empty-hint">
                 <span className="map-empty-hint-emoji" aria-hidden="true">📍</span>
-                No pins yet — hit <strong>+ Add to map</strong> to drop your first memory.
+                <span>No pins yet — hit <strong>+ Add to map</strong> to drop your first memory.</span>
               </div>
             )}
             <Legend items={items} kindFilter={kindFilter} onToggleKind={toggleKind} />

@@ -9,21 +9,115 @@ export interface User {
   displayName: string;
   role: "owner" | "member";
   color: string;
-  /** Owner of the first family on this server — the only one who can back up or restore it. */
-  isInstanceOwner?: boolean;
+  /** Server admin: manages every family, backups and the audit log. */
+  isAdmin: boolean;
 }
 
 export interface AuthConfig {
-  /** No family exists yet: the login page should offer "set up" only. */
+  /** No account exists yet: the sign-in page shows the setup form. */
   firstRun: boolean;
-  /** New families may be created from the login page. */
-  signupOpen: boolean;
 }
 
 export interface Family {
   id: string;
   name: string;
-  inviteCode: string;
+}
+
+/** Present while a server admin is looking at another family. */
+export interface AdminView {
+  homeFamilyId: string;
+  homeFamilyName: string;
+}
+
+export interface Session {
+  user: User;
+  family: Family;
+  adminView: AdminView | null;
+}
+
+/** A one-time link (invite or password reset). The token is only ever shown once. */
+export interface IssuedLink {
+  id: string;
+  token: string;
+  path: string;
+  expiresAt: string;
+}
+
+export interface InvitePreview {
+  kind: "family" | "member";
+  familyName: string | null;
+  role: "owner" | "member";
+  invitedBy: string | null;
+  expiresAt: string;
+  adminName: string | null;
+}
+
+export interface FamilyMemberInfo {
+  id: string;
+  displayName: string;
+  email: string;
+  role: "owner" | "member";
+  color: string;
+  isAdmin: boolean;
+  lastLoginAt: string | null;
+  joinedAt: string;
+  isYou: boolean;
+}
+
+export interface PendingInvite {
+  id: string;
+  role: "owner" | "member";
+  note: string;
+  createdAt: string;
+  expiresAt: string;
+  createdByName: string | null;
+}
+
+export interface FamilyDetails {
+  family: { id: string; name: string; createdAt: string };
+  members: FamilyMemberInfo[];
+  invites: PendingInvite[];
+}
+
+export interface AdminFamily {
+  id: string;
+  name: string;
+  createdAt: string;
+  disabled: boolean;
+  memberCount: number;
+  owners: string[];
+}
+
+export interface AdminOverview {
+  families: AdminFamily[];
+  userCount: number;
+  adminCount: number;
+  pendingFamilyInvites: number;
+}
+
+export interface AdminUser {
+  id: string;
+  displayName: string;
+  email: string;
+  familyId: string;
+  familyName: string;
+  role: "owner" | "member";
+  isAdmin: boolean;
+  disabled: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  isYou: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  actorName: string;
+  action: string;
+  familyId: string | null;
+  familyName: string | null;
+  target: string;
+  details: Record<string, unknown>;
 }
 
 export type ItemKind = "place" | "food" | "flight" | "cruise" | "drive" | "custom";
@@ -381,6 +475,8 @@ export interface PackingItemInput { label?: string; category?: string; qty?: num
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
+/** Fired on window when an authenticated request comes back 401. */
+export const UNAUTHORIZED_EVENT = "werejugo:unauthorized";
 
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
@@ -405,8 +501,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
+    // The session ended (revoked, password changed, account removed): let the
+    // app sign out instead of leaving every request failing.
     tokenStore.clear();
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   }
   if (!res.ok) {
     let message = res.statusText;
@@ -426,12 +525,58 @@ const body = (data: unknown) => JSON.stringify(data);
 
 export const api = {
   // auth
-  register: (data: Record<string, unknown>) =>
-    request<{ token: string; user: User }>("/api/auth/register", { method: "POST", body: body(data) }),
   login: (data: { email: string; password: string }) =>
     request<{ token: string; user: User }>("/api/auth/login", { method: "POST", body: body(data) }),
-  me: () => request<{ user: User; family: Family }>("/api/auth/me"),
+  setup: (data: { displayName: string; email: string; password: string; familyName: string }) =>
+    request<{ token: string; user: User }>("/api/auth/setup", { method: "POST", body: body(data) }),
+  me: () => request<Session>("/api/auth/me"),
   authConfig: () => request<AuthConfig>("/api/auth/config"),
+
+  // one-time links (public)
+  invitePreview: (token: string) => request<InvitePreview>(`/api/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string, data: { displayName: string; email: string; password: string; familyName?: string }) =>
+    request<{ token: string; user: User }>(`/api/invites/${encodeURIComponent(token)}/accept`, { method: "POST", body: body(data) }),
+  resetPreview: (token: string) => request<{ displayName: string; email: string }>(`/api/password-resets/${encodeURIComponent(token)}`),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: true }>(`/api/password-resets/${encodeURIComponent(token)}`, { method: "POST", body: body({ password }) }),
+
+  // own account
+  updateAccount: (data: { displayName?: string; color?: string }) =>
+    request<{ user: User }>("/api/account", { method: "PATCH", body: body(data) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ token: string }>("/api/account/password", { method: "POST", body: body({ currentPassword, newPassword }) }),
+  signOutEverywhere: () => request<{ ok: true }>("/api/account/sign-out-everywhere", { method: "POST" }),
+
+  // family
+  getFamily: () => request<FamilyDetails>("/api/family"),
+  renameFamily: (name: string) => request<{ ok: true }>("/api/family", { method: "PATCH", body: body({ name }) }),
+  createMemberInvite: (data: { role: "owner" | "member"; note?: string; expiresInDays?: number }) =>
+    request<IssuedLink>("/api/family/invites", { method: "POST", body: body(data) }),
+  revokeMemberInvite: (id: string) => request<void>(`/api/family/invites/${id}`, { method: "DELETE" }),
+  setMemberRole: (id: string, role: "owner" | "member") =>
+    request<{ ok: true }>(`/api/family/members/${id}`, { method: "PATCH", body: body({ role }) }),
+  removeMember: (id: string) => request<void>(`/api/family/members/${id}`, { method: "DELETE" }),
+  memberResetLink: (id: string) => request<IssuedLink>(`/api/family/members/${id}/reset-link`, { method: "POST" }),
+
+  // server admin
+  adminOverview: () => request<AdminOverview>("/api/admin/overview"),
+  adminFamilyInvites: () => request<Array<{ id: string; note: string; createdAt: string; expiresAt: string }>>("/api/admin/family-invites"),
+  createFamilyInvite: (data: { note?: string; expiresInDays?: number }) =>
+    request<IssuedLink>("/api/admin/family-invites", { method: "POST", body: body(data) }),
+  revokeFamilyInvite: (id: string) => request<void>(`/api/admin/family-invites/${id}`, { method: "DELETE" }),
+  adminUpdateFamily: (id: string, data: { name?: string; disabled?: boolean }) =>
+    request<{ ok: true }>(`/api/admin/families/${id}`, { method: "PATCH", body: body(data) }),
+  adminDeleteFamily: (id: string, confirmName: string) =>
+    request<void>(`/api/admin/families/${id}`, { method: "DELETE", body: body({ confirmName }) }),
+  adminUsers: (q = "") => request<AdminUser[]>(`/api/admin/users?q=${encodeURIComponent(q)}`),
+  adminUpdateUser: (id: string, data: { isAdmin?: boolean; disabled?: boolean; role?: "owner" | "member" }) =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, { method: "PATCH", body: body(data) }),
+  adminResetLink: (id: string) => request<IssuedLink>(`/api/admin/users/${id}/reset-link`, { method: "POST" }),
+  adminViewFamily: (familyId: string) =>
+    request<{ token: string }>("/api/admin/view-family", { method: "POST", body: body({ familyId }) }),
+  adminReturn: () => request<{ token: string }>("/api/admin/return", { method: "POST" }),
+  auditLog: (before?: string) =>
+    request<AuditEntry[]>(`/api/admin/audit${before ? `?before=${encodeURIComponent(before)}` : ""}`),
 
   // map sets
   listMapSets: () => request<MapSet[]>("/api/map-sets"),

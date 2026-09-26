@@ -86,3 +86,51 @@
 .settings-subtitle { margin: 0 0 4px; font-size: var(--text-md); font-weight: 650; }
 .restore-confirm { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
 .restore-confirm .kit-field { margin-bottom: 0; flex: 1 1 200px; }
+.privacy-note { display: flex; gap: 8px; align-items: flex-start; font-size: var(--text-sm); color: var(--color-text-muted); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 12px; margin: 0 0 var(--space-4); }
+.privacy-note svg { flex-shrink: 0; color: var(--color-accent-text); margin-top: 1px; }
+.link-copy { display: flex; gap: var(--space-2); }
+.link-copy input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: var(--text-sm); }
+
+/* Settings: account, family */
+.settings-form { margin-top: var(--space-4); max-width: 420px; }
+.settings-value { flex: 1; min-width: 0; }
+.settings-gap { margin-top: var(--space-5); margin-bottom: var(--space-2); }
+.settings-row-split { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.settings-row-split > div { flex: 1 1 240px; }
+.role-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.color-swatches { border: 0; padding: 0; margin: 0 0 var(--space-4); display: flex; flex-wrap: wrap; gap: 8px; }
+.color-swatches legend { font-size: var(--text-sm); font-weight: 550; margin-bottom: 6px; padding: 0; }
+.color-swatch { width: 30px; height: 30px; min-height: 0; min-width: 0; flex-shrink: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--color-border); cursor: pointer; padding: 0; }
+.color-swatch.is-selected { border-color: var(--color-surface); box-shadow: 0 0 0 2px var(--color-accent); }
+.color-swatch:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.inline-form { display: flex; gap: var(--space-2); flex: 1; flex-wrap: wrap; align-items: center; }
+.inline-form input { flex: 1 1 180px; min-width: 0; }
+.member-list { list-style: none; margin: 0; padding: 0; }
+.member-row { display: flex; align-items: center; gap: var(--space-3); padding: 10px 0; border-top: 1px solid var(--color-border); }
+.member-row:first-child { border-top: none; }
+.member-main { flex: 1; min-width: 0; }
+.member-name { font-weight: 600; display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; min-width: 0; }
+.member-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+.member-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invite-icon { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--color-surface-2); color: var(--color-text-muted); flex-shrink: 0; }
+.kit-modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+
+/* Admin */
+.admin-search { position: relative; margin-bottom: var(--space-3); }
+.admin-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-text-subtle); pointer-events: none; }
+.admin-search input { padding-left: 36px; }
+.audit-list { list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
+.audit-row { display: grid; grid-template-columns: 170px 1fr; gap: var(--space-3); padding: 8px 0; border-top: 1px solid var(--color-border); }
+.audit-row:first-child { border-top: none; }
+.audit-when { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.audit-target { overflow-wrap: anywhere; }
+.audit-more { margin-top: var(--space-3); }
+@media (max-width: 767px) {
+  .audit-row { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* Banner while a server admin is looking at another family */
+.admin-banner { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding: 8px var(--space-4); background: var(--color-warning-soft); color: var(--color-text); border-bottom: 1px solid var(--color-warning); font-size: var(--text-sm); }
+.admin-banner > svg { color: var(--color-warning); flex-shrink: 0; }
+.admin-banner > span { flex: 1; min-width: 180px; }
+.shell-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }

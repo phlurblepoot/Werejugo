@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Compass, Search, Settings } from "lucide-react";
+import { Compass, Search, Settings, Shield } from "lucide-react";
 import { Badge } from "../components/kit";
 import { MODULES } from "./modules";
 import { AccountMenu, type AccountInfo } from "./AccountMenu";
@@ -33,6 +33,12 @@ export function Rail({
         </NavLink>
       ))}
       <span className="rail-spacer" />
+      {account?.isAdmin && (
+        <NavLink to="/admin" className={({ isActive }) => `rail-item${isActive ? " active" : ""}`} title="Admin">
+          <Shield size={21} aria-hidden="true" />
+          <span>Admin</span>
+        </NavLink>
+      )}
       <NavLink to="/settings" className={({ isActive }) => `rail-item${isActive ? " active" : ""}`} title="Settings">
         <Settings size={21} aria-hidden="true" />
         <span>Settings</span>

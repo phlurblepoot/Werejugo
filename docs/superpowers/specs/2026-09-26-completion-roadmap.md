@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.3 |
-| **Next step** | Build Phase 1.3: migration + auth model → public invite/reset/setup routes → account/family/admin routes → frontend |
+| **Current phase** | 1.4 |
+| **Next step** | Plan Phase 1.4 (tenancy & access layer): write the plan, then `access.ts` and migrate every route onto it |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -218,13 +218,13 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.3 Accounts, admin & onboarding — M
 
-**Status:** In progress · **Plan:** [phase-1.3](../plans/2026-09-26-phase-1.3-accounts-admin.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
+**Status:** Done · **Plan:** [phase-1.3](../plans/2026-09-26-phase-1.3-accounts-admin.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] Setup wizard on an empty server (admin + first family); remove open registration for good.
-- [ ] Admin console (§3.1): families, one-time family invites, users, password-reset links, server backup/restore (moved here, admin-only), audit log, "switch into family".
-- [ ] Family settings: members, one-time member invites, roles, remove member.
-- [ ] Account settings: profile, password change, sign out everywhere (`token_version`).
-- [ ] Frontend auth fixes: clear the React Query cache on logout/login; a 401 signs the user out cleanly.
+- [x] Setup wizard on an empty server (admin + first family); remove open registration for good.
+- [x] Admin console (§3.1): families, one-time family invites, users, password-reset links, server backup/restore (moved here, admin-only), audit log, "switch into family".
+- [x] Family settings: members, one-time member invites, roles, remove member.
+- [x] Account settings: profile, password change, sign out everywhere (`token_version`).
+- [x] Frontend auth fixes: clear the React Query cache on logout/login; a 401 signs the user out cleanly.
 
 #### 1.4 Tenancy & access layer — L
 
@@ -487,6 +487,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-26
+
+- **Done** — Phase 1.3 Accounts, admin & onboarding (PR #1): a setup wizard on an empty server creates the admin and first family, and open registration and family invite codes are gone. New families join only through one-time admin invite links, which tell them the admin can see all data. Members join through one-time owner invite links with a chosen role. Password resets are one-time links issued by an owner or the admin. Settings covers profile, colour, password change, sign out everywhere, members and roles, invites and removal. The Admin page covers families (invite, rename, disable, delete by typed name, view as), people (search, admin, disable, reset link, role), backup and restore (moved here, admin only) and the audit log. While an admin views another family a banner shows "Return to my family". Sign-in and sign-out clear the React Query cache, and any 401 signs out cleanly. Verified: backend 164/164, frontend 155/155; a Playwright run on a fresh database under the nginx CSP covered setup → family invite → member invite → reset link (old session signed out) → admin view-as and return → people, audit and backup tabs, at desktop and phone sizes in light and dark, with no overflow or console errors.
+- **Note** — Found during 1.3: the backend crashed whenever Postgres dropped an idle connection (e.g. the database container restarting), because the pool had no `error` listener. It now logs and carries on (`backend/src/db/pool.ts`). Also fixed: new people get distinct avatar colours, joining through an invite counts as a first sign-in, and the map's "no pins yet" hint no longer squashes on phones.
+- **Note** — The database schema changed (migration `0012_accounts`): existing test instances keep working (the oldest family's owner becomes the admin), but a reset is simplest and 1.4 resets anyway when it squashes migrations.
 
 - **Done** — Phase 1.2 Design system & responsive shell (PR #1): tokens with light/dark/system themes, a Lucide + Radix component kit, a desktop rail with account menu, a phone tab bar with a "More" sheet, the same page header on every page, and rebuilt Login and Settings. Verified: frontend 129/129; Playwright screenshots of every page at 1440×900 and 390×844 in light and dark with no horizontal overflow, no off-screen header controls and no console errors; production build under the nginx CSP with no violations.
 - **Note** — Also in 1.2: the invite code moved from the Map header (hidden on phones) to Settings → Family; the Map's JSON export moved to its header menu until 1.6 removes it; the dead "coming soon" code and five one-line tests were removed; the dev-seed invite code is now upper-case (the old `wander-1` could never be joined).

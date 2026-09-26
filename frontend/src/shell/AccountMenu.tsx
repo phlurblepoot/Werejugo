@@ -6,6 +6,8 @@ export interface AccountInfo {
   displayName: string;
   email: string;
   color?: string | null;
+  /** Server admins also get the Admin page. */
+  isAdmin?: boolean;
 }
 
 /** Avatar button → account header, Settings, Sign out. */

@@ -32,7 +32,7 @@ export function Card({
   );
 }
 
-const AVATAR_COLORS = ["#0f766e", "#b45309", "#7c3aed", "#be185d", "#1d4ed8", "#15803d", "#c2410c", "#0e7490"];
+export const AVATAR_COLORS = ["#0f766e", "#b45309", "#7c3aed", "#be185d", "#1d4ed8", "#15803d", "#c2410c", "#0e7490"];
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

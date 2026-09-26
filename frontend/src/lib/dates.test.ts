@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { formatDate, formatDateRange, parseYmd } from "./dates";
+import { formatDate, formatDateRange, formatRelative, parseYmd } from "./dates";
 
 const norm = (s: string) => s.replace(/\s/g, " "); // Intl uses thin/narrow spaces around range dashes
 afterEach(() => { vi.unstubAllEnvs(); });
@@ -38,4 +38,12 @@ test("formatDateRange handles a single or missing end date", () => {
   expect(formatDateRange("2024-06-01", null, "en-US")).toBe("Jun 1, 2024");
   expect(formatDateRange("2024-06-01", "2024-06-01", "en-US")).toBe("Jun 1, 2024");
   expect(formatDateRange(null, null, "en-US")).toBe("");
+});
+
+test("formatRelative describes how long ago something happened", () => {
+  const now = Date.parse("2026-09-26T12:00:00Z");
+  expect(formatRelative("2026-09-23T12:00:00Z", now, "en-US")).toBe("3 days ago");
+  expect(formatRelative("2026-10-03T12:00:00Z", now, "en-US")).toBe("next week");
+  expect(formatRelative("2026-09-26T11:59:40Z", now, "en-US")).toBe("just now");
+  expect(formatRelative(null, now)).toBe("");
 });
