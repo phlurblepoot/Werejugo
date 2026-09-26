@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.2 |
-| **Next step** | Write the Phase 1.2 plan (design system & responsive shell) and build it on `claude/cool-hopper-pku4ne` |
+| **Current phase** | 1.3 |
+| **Next step** | Write the Phase 1.3 plan (accounts, admin & onboarding) and build it |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -209,12 +209,12 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.2 Design system & responsive shell — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-1.2](../plans/2026-09-26-phase-1.2-design-system.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] Tokens (color, type scale, spacing, radius, elevation) with light, dark and "system" themes; an icon set (Lucide) replaces emoji icons.
-- [ ] Core components: PageHeader (with overflow menu), Button/IconButton, form fields (16px on mobile), Select, DatePicker, Modal ↔ bottom Sheet on phones, Tabs, Menu, ConfirmDialog, Toast, Card, Avatar, Chip, EmptyState/Spinner/ErrorState. Consider Radix primitives for accessible dialogs and menus.
-- [ ] Responsive shell: left rail on desktop, bottom tab bar + "More" on phones, safe-area insets, consistent header heights.
-- [ ] Restyle the login, settings and shell now; every later phase builds and restyles its screens on the new system (no module is styled twice).
+- [x] Tokens (color, type scale, spacing, radius, elevation) with light, dark and "system" themes; an icon set (Lucide) replaces emoji icons.
+- [x] Core components: PageHeader (with overflow menu), Button/IconButton, form fields (16px on mobile), Select, DatePicker, Modal ↔ bottom Sheet on phones, Tabs, Menu, ConfirmDialog, Toast, Card, Avatar, Chip, EmptyState/Spinner/ErrorState. Consider Radix primitives for accessible dialogs and menus.
+- [x] Responsive shell: left rail on desktop, bottom tab bar + "More" on phones, safe-area insets, consistent header heights.
+- [x] Restyle the login, settings and shell now; every later phase builds and restyles its screens on the new system (no module is styled twice).
 
 #### 1.3 Accounts, admin & onboarding — M
 
@@ -487,6 +487,9 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-26
+
+- **Done** — Phase 1.2 Design system & responsive shell (PR #1): tokens with light/dark/system themes, a Lucide + Radix component kit, a desktop rail with account menu, a phone tab bar with a "More" sheet, the same page header on every page, and rebuilt Login and Settings. Verified: frontend 129/129; Playwright screenshots of every page at 1440×900 and 390×844 in light and dark with no horizontal overflow, no off-screen header controls and no console errors; production build under the nginx CSP with no violations.
+- **Note** — Also in 1.2: the invite code moved from the Map header (hidden on phones) to Settings → Family; the Map's JSON export moved to its header menu until 1.6 removes it; the dead "coming soon" code and five one-line tests were removed; the dev-seed invite code is now upper-case (the old `wander-1` could never be joined).
 
 - **Note** — Phase 1.1 complete on the milestone branch except deleting `claude/confident-ramanujan-xDIFr`, which waits for the owner's approval (so 1.1 stays `In review`). Verified: backend 131/131 and frontend 112/112 locally; CI green on PR #1 (roadmap check, backend on PostGIS, frontend build); nginx config checked with `nginx -t`; the production build loaded in Chromium under the new CSP with no violations; signup gating, date formatting, backup visibility and search checked in the browser.
 - **Note** — Found during 1.1: restoring a backup into a Docker volume would have crashed half-way (it tried to delete the mount point); fixed by replacing the directory's contents in place.
