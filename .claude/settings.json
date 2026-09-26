@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/roadmap.mjs\" || true",
+            "timeout": 30,
+            "statusMessage": "Loading roadmap status"
+          }
+        ]
+      }
+    ]
+  }
+}

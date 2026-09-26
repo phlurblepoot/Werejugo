@@ -2,6 +2,10 @@
 
 A self-hosted family travel scrapbook: map everywhere you've been, keep a searchable photo library tied to trips/places/people, track travel documents and renewals, plan future trips with itineraries and packing lists, search across everything, share selected trips and albums read-only, and back the whole thing up.
 
+## Project status
+
+Work to finish the app is tracked in the [completion roadmap](docs/superpowers/specs/2026-09-26-completion-roadmap.md): its Status block shows the current phase, each phase shows what's done, and §8 logs every change. Run `node scripts/roadmap.mjs` for a summary.
+
 ## Stack
 
 - **Backend:** Fastify 5 + PostgreSQL 16 / PostGIS, `pg`, `@fastify/jwt`, `zod`, `sharp`.

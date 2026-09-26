@@ -1,9 +1,28 @@
 # Werejugo — Completion Roadmap (v2)
 
-**Date:** 2026-09-26
-**Status:** Draft for owner review
+**Written:** 2026-09-26
 **Supersedes:** the build sequence in `2026-06-22-werejugo-architecture-design.md` §9 (Phases 1–8 are all built; this roadmap takes the app from "feature-complete on paper" to "finished and in daily use").
 **Inputs:** a full audit of the repo at `e1136dd` (both test suites run against a real PostGIS database, the app run locally with demo data and clicked through in a headless browser at desktop and phone widths), plus a Q&A session with the owner whose answers are recorded in §2.
+
+> **This file is the project's source of truth for what is planned, what is done, and what changed.** Every session reads the Status block below before working and updates this file in the same commit as the work. The rules are in `CLAUDE.md` → "Roadmap discipline"; `node scripts/roadmap.mjs` prints a summary and `--check` validates this file.
+
+<!-- status:begin -->
+## Status
+
+| Field | Value |
+|---|---|
+| **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
+| **Current phase** | 1.1 |
+| **Next step** | Write the Phase 1.1 implementation plan in `docs/superpowers/plans/`, then build it on a branch and open a PR |
+| **Blocked on** | Nothing |
+| **Last updated** | 2026-09-26 |
+<!-- status:end -->
+
+**How tracking works**
+
+- Each phase in §4 has a line `**Status:** <state> · **Plan:** <link> · **PR:** <link>`. States: `Not started` → `Planned` (detailed plan written) → `In progress` → `In review` (PR open) → `Done`; or `Dropped` (with the reason in §8).
+- Checklist items are ticked `[x]` in the same commit as the work. Items are never deleted: dropped items are struck through `~~like this~~ (dropped YYYY-MM-DD — reason)`, and new ones end with `(added YYYY-MM-DD)`.
+- Every completed phase, plan change, owner decision and notable finding gets a dated entry in **§8 Progress & change log** (newest first).
 
 ---
 
@@ -90,6 +109,7 @@ Health: backend typecheck clean, **102/102** tests pass; frontend typecheck clea
 | Imports | **Google Maps Timeline, TripIt / booking emails** |
 | Git | **`main` + PRs + CI**; images publish only from `main` and tags |
 | Old branch | Delete `claude/confident-ramanujan-xDIFr` once `main` exists (owner approves at that point) |
+| Progress tracking | This roadmap is the source of truth for where we are, what is done and what changed. It is updated in the same commit as the work, enforced by `CLAUDE.md` rules, a session-start status hook, the PR template and a CI check |
 
 ---
 
@@ -168,7 +188,12 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 ### Milestone 1 — Foundation: safe, multi-family, new design
 
-**1.1 Safety net & project hygiene** — S *(first PR; small, and needed before the app faces the internet)*
+#### 1.1 Safety net & project hygiene — S
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+*(first PR; small, and needed before the app faces the internet)*
+
 - [ ] Create `main` from the current work; CI on every PR: backend + frontend typecheck, backend tests against a PostGIS service container, frontend tests, production builds; images publish only from `main` and `v*` tags; fix the jsdom `Blob` test.
 - [ ] B2: add a `/app/storage` volume to `docker-compose.yml` and the Unraid template; document `STORAGE_DIR`/`UPLOADS_DIR` in `.env.example`; fix README paths.
 - [ ] B4: refuse to boot in production with a missing, default or short `JWT_SECRET`; separate `FILE_SIGNING_SECRET`.
@@ -178,35 +203,51 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [ ] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
 - [ ] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
 - [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`.
+- [ ] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
 
-**1.2 Design system & responsive shell** — M
+#### 1.2 Design system & responsive shell — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Tokens (color, type scale, spacing, radius, elevation) with light, dark and "system" themes; an icon set (Lucide) replaces emoji icons.
 - [ ] Core components: PageHeader (with overflow menu), Button/IconButton, form fields (16px on mobile), Select, DatePicker, Modal ↔ bottom Sheet on phones, Tabs, Menu, ConfirmDialog, Toast, Card, Avatar, Chip, EmptyState/Spinner/ErrorState. Consider Radix primitives for accessible dialogs and menus.
 - [ ] Responsive shell: left rail on desktop, bottom tab bar + "More" on phones, safe-area insets, consistent header heights.
 - [ ] Restyle the login, settings and shell now; every later phase builds and restyles its screens on the new system (no module is styled twice).
 
-**1.3 Accounts, admin & onboarding** — M
+#### 1.3 Accounts, admin & onboarding — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Setup wizard on an empty server (admin + first family); remove open registration for good.
 - [ ] Admin console (§3.1): families, one-time family invites, users, password-reset links, server backup/restore (moved here, admin-only), audit log, "switch into family".
 - [ ] Family settings: members, one-time member invites, roles, remove member.
 - [ ] Account settings: profile, password change, sign out everywhere (`token_version`).
 - [ ] Frontend auth fixes: clear the React Query cache on logout/login; a 401 signs the user out cleanly.
 
-**1.4 Tenancy & access layer** — L
+#### 1.4 Tenancy & access layer — L
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
 - [ ] Tenant-isolation test suite covering every endpoint.
 - [ ] Per-family "download our data" export vs admin full-server backup.
 - [ ] Squash migrations 0001–0011 into a new baseline (one-time reset of the test instance, documented in the release notes).
 - [ ] Fix integrity gaps found in the audit: visit `tripId`/`themeId` ownership checks, document single-owner rule, blackout date order, a unique trip packing list, dangling `links` and `share_links` cleanup on delete.
 
-**1.5 Shared trips & cross-family people** — L
+#### 1.5 Shared trips & cross-family people — L
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] `trip_members` + `trip_invites` (§3.3); invite dialog on a trip (role picker, link with expiry); accept page for the invited family's owner; member management; leave/remove.
 - [ ] Visibility and edit rules per role; per-family-private kinds; attribution chips in every trip view.
 - [ ] `person_links` (§3.4): propose/accept, merged person pages, cross-family tagging inside shared trips.
 - [ ] An `activity` events table (who added what to which shared trip) for the feed and later push notifications.
 - [ ] Dev seed: two families and a shared trip.
 
-**1.6 One map** — M
+#### 1.6 One map — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Drop map sets (§3.5); URL-driven filters (trip, person, year/date, kind, family); shared-trip visits badged.
 - [ ] Remove the legacy Trips/Photos/Stats/Export panels and link out; stats move to the Stats page (4.2).
 - [ ] Search deep links (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`) open the item — on every page.
@@ -215,33 +256,57 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 ### Milestone 2 — Photos on Immich
 
-**2.1 Immich connector & provisioning** — M
+#### 2.1 Immich connector & provisioning — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Admin setup (URL + admin key), version check, health on the admin page; per-family Immich user + API key creation (or link existing); keys encrypted at rest.
 - [ ] Adapter module; fixtures-based unit tests; contract tests against a real Immich in CI (a nightly job if too slow for every PR).
 - [ ] Unraid guide for installing Immich alongside Werejugo (GPU acceleration for face recognition optional).
 
-**2.2 Media references & seamless serving** — M
+#### 2.2 Media references & seamless serving — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
 - [ ] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
 - [ ] pg-boss job queue (§3.7).
 
-**2.3 Uploads at scale** — M
+#### 2.3 Uploads at scale — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Resumable chunked uploads (Cloudflare-safe) with per-file progress, retry and background hand-off to Immich; iPhone HEIC/Live Photos, RAW and video via Immich; duplicate detection surfaced ("already in your library").
 
-**2.4 Library UI** — M
+#### 2.4 Library UI — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
 
-**2.5 Faces → people** — M
+#### 2.5 Faces → people — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Import Immich people per family; mapping UI (Immich face ↔ Werejugo person, including cross-family linked people); auto-tag photos; review queue for new faces.
 
-**2.6 Trip ↔ Immich album sync** — S
+#### 2.6 Trip ↔ Immich album sync — S
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] One Immich album per trip per member family; two-way sync (Werejugo writes immediately; Immich-side changes picked up by polling plus an on-demand "refresh").
 
-**2.7 Suggestions from photos** — M
+#### 2.7 Suggestions from photos — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
 - [ ] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
 
-**2.8 Smart search & smart albums** — S
+#### 2.8 Smart search & smart albums — S
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Immich smart search inside the command palette ("beach sunset").
 - [ ] Smart albums = saved filters (person, place, date range, trip, search text) that update automatically; shareable by link.
 
@@ -249,7 +314,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 ### Milestone 3 — Finish every module (on the new design)
 
-**3.1 Map & routes** — L
+#### 3.1 Map & routes — L
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Editor fixes: photo upload no longer closes the editor; no duplicate visit on retry; pick-on-map can be cancelled; one click opens one detail view (not popup + modal).
 - [ ] **Cruises (essential):** cache CruiseMapper responses and **store the fetched route/ports/ship details on the visit** so they're never re-fetched; clear messages when blocked, with retry; honor `CRUISE_LOOKUP_ENABLED` everywhere; remove or admin-gate the diagnose endpoint; a full world ports list (NGA World Port Index) for manual entry; **sea-routing fallback** (e.g. `searoute-js`) so port-to-port legs follow water instead of crossing land when no sailed track exists; keep "reuse itinerary" for past cruises.
 - [ ] **Flights:** bundle the OurAirports dataset (~9k airports with IATA codes); flight-number lookup via AeroDataBox with multi-leg support and date validation; flight date fills the visit date.
@@ -258,29 +326,44 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [ ] Styling model fix: pins inherit family/kind/cruise-line defaults unless explicitly overridden (today the editor always saves explicit colors, so default changes never apply); legend matches actual pins; theme editing.
 - [ ] Map fits to filtered pins; timeline shows undated items and a clearer axis.
 
-**3.2 Planning & packing** — L
+#### 3.2 Planning & packing — L
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Trip create/edit/delete everywhere (board, trip detail); status stays in sync.
 - [ ] **Day-by-day itinerary:** days with times, places (Photon search) on a mini map, notes, one-tap directions; wishlist → schedule with a real date picker; "→ visit" carries the location onto the map.
 - [ ] **Drag & drop** between board columns and on the timeline; timeline gets month ticks and a "today" marker.
 - [ ] Bookings open their document; trip detail shows description, visits and photos.
 - [ ] **Packing per person:** assign items to people, "my list" view; rename/delete lists and templates, quantities, edit labels; fix template refresh and save-as-template feedback.
 
-**3.3 Documents** — M
+#### 3.3 Documents — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] **Encryption at rest** (AES-256-GCM) for document files, key from a required `DOCUMENTS_ENCRYPTION_KEY`, key-rotation command, and loud docs: back the key up separately (without it, backups can't decrypt documents).
 - [ ] Fix search focus loss and the empty-filter dead end; delete confirmations; the renewals banner uses all documents, not the filtered list.
 - [ ] Bookings on shared trips stay private to the adding family.
 
-**3.4 People, search & settings** — S
+#### 3.4 People, search & settings — S
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] People: delete confirm, no orphan avatar uploads, readable picker labels, the linked account's name.
 - [ ] Command palette: debounce, ↑/↓/Enter navigation, Esc from anywhere, reset on close.
 - [ ] Settings reorganized: Account, Family, Notifications, Appearance, Map defaults (the map's own "Settings" folds in here).
 
-**3.5 Sharing v2** — M
+#### 3.5 Sharing v2 — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Optional **expiry** per link; per-link **allow downloads** toggle (full-size photo/video download through the token).
 - [ ] **Richer trip page**: map fitted to the trip with real routes and clickable pins, day-by-day itinerary, journal entries (after 4.1), photo wall with lightbox.
 - [ ] Share tokens deleted when their trip/album is deleted.
 
-**3.6 Robustness sweep** — M
+#### 3.6 Robustness sweep — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
 - [ ] Error handling and confirmations for every mutation listed in Appendix A.3; consistent cache invalidation (one query-key scheme for trips etc.).
 - [ ] Performance: remove N+1 queries in visit loading; add the missing indexes (media geom/timeline, documents owners, itinerary, people refs).
 - [ ] Trip rename re-homes documents (the `trips.ts:50` TODO).
@@ -290,21 +373,73 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 ### Milestone 4 — Scrapbook & planning features
 
-- [ ] **4.1 Trip journal** — M: day-by-day stories per trip mixing text, photos and "map moments"; on shared trips each family writes its own entries (attributed) and sees the others'.
-- [ ] **4.2 Travel stats & scratch map** — M: countries/states/cities visited, miles flown/sailed/driven, per-year and per-person breakdowns, a travel heatmap, and a scratch-off "visited" map (evolves today's Passport view).
-- [ ] **4.3 Memories** — S: "on this day" flashbacks (home screen + optional push) and an auto-generated year-in-review.
-- [ ] **4.4 Budget & expenses** — M: planned vs actual per trip by category, multiple currencies with conversion (free ECB rates, e.g. frankfurter.app), private per family on shared trips.
-- [ ] **4.5 Printable trip book** — M: a print-optimized trip layout (cover, map, days, journal, photo pages). v1 uses the browser's "Save as PDF" (no extra infrastructure); a server-rendered PDF (headless Chromium job) can follow if needed.
-- [ ] **4.6 Imports** — L:
-  - **Google Maps Timeline** — support the new on-device export (from the Maps app) and the legacy Takeout JSON; produce trip/visit *suggestions* for review rather than auto-creating.
-  - **TripIt** — subscribe to the TripIt iCal feed URL to pull trips and bookings into itineraries.
-  - **Booking emails** — a dedicated mailbox polled via IMAP; parse the schema.org reservation markup most airlines, hotels and cruise lines embed; unstructured emails optionally parsed by an LLM (needs an API key; decide at that phase).
+#### 4.1 Trip journal — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] Day-by-day stories per trip mixing text, photos and "map moments".
+- [ ] On shared trips each family writes its own entries (attributed) and sees the others'.
+
+#### 4.2 Travel stats & scratch map — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] Countries/states/cities visited; miles flown/sailed/driven; per-year and per-person breakdowns.
+- [ ] Travel heatmap and a scratch-off "visited" map (evolves today's Passport view).
+
+#### 4.3 Memories — S
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] "On this day" flashbacks (home screen + optional push).
+- [ ] Auto-generated year-in-review.
+
+#### 4.4 Budget & expenses — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] Planned vs actual per trip, by category.
+- [ ] Multiple currencies with conversion (free ECB rates, e.g. frankfurter.app).
+- [ ] Private per family on shared trips.
+
+#### 4.5 Printable trip book — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] Print-optimized trip layout (cover, map, days, journal, photo pages); v1 uses the browser's "Save as PDF" (no extra infrastructure). A server-rendered PDF (headless Chromium job) can follow if needed.
+
+#### 4.6 Imports — L
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] **Google Maps Timeline** — support the new on-device export (from the Maps app) and the legacy Takeout JSON; produce trip/visit *suggestions* for review rather than auto-creating.
+- [ ] **TripIt** — subscribe to the TripIt iCal feed URL to pull trips and bookings into itineraries.
+- [ ] **Booking emails** — a dedicated mailbox polled via IMAP; parse the schema.org reservation markup most airlines, hotels and cruise lines embed; unstructured emails optionally parsed by an LLM (needs an API key; decide at that phase).
 
 ### Milestone 5 — Mobile, offline & notifications
 
-- [ ] **5.1 PWA hardening** — S: PNG icons (192/512, maskable, Apple touch icon), manifest renamed from "Family Map", an update flow for new versions, install prompts.
-- [ ] **5.2 Offline trip pack** — M: "Make available offline" on a trip caches its itinerary, packing lists, bookings and document copies (with a clear warning that document copies live on that device), plus map tiles for the trip area where the tile provider permits.
-- [ ] **5.3 Web push** — M: VAPID keys, per-device subscriptions and per-user preferences; document renewal reminders (by lead days), shared-trip activity digests, trip countdowns, memories. Note: on iPhone, web push works only for the installed home-screen app (iOS 16.4+). *This phase can be pulled forward into Milestone 3 if renewal reminders are wanted sooner.*
+#### 5.1 PWA hardening — S
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] PNG icons (192/512, maskable, Apple touch icon); manifest renamed from "Family Map".
+- [ ] An update flow for new versions; install prompts.
+
+#### 5.2 Offline trip pack — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+- [ ] "Make available offline" on a trip caches its itinerary, packing lists, bookings and document copies (with a clear warning that document copies live on that device).
+- [ ] Map tiles for the trip area where the tile provider permits.
+
+#### 5.3 Web push — M
+
+**Status:** Not started · **Plan:** — · **PR:** —
+
+*This phase can be pulled forward into Milestone 3 if renewal reminders are wanted sooner.*
+
+- [ ] VAPID keys, per-device subscriptions and per-user preferences.
+- [ ] Document renewal reminders (by lead days), shared-trip activity digests, trip countdowns, memories. On iPhone, web push works only for the installed home-screen app (iOS 16.4+).
 
 ---
 
@@ -342,6 +477,18 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 6. **Base map tiles:** OpenFreeMap (free, no key) stays the default.
 7. **Printed book:** browser "Save as PDF" first; server-rendered PDFs only if needed.
 8. **Immich face recognition hardware:** CPU works; a GPU speeds it up if your Unraid box has one.
+
+---
+
+## 8. Progress & change log
+
+Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
+
+### 2026-09-26
+
+- **Changed** — Added progress tracking: the Status block and per-phase status lines in this file, `CLAUDE.md` "Roadmap discipline" rules, `scripts/roadmap.mjs` (summary + `--check`), a `SessionStart` hook in `.claude/settings.json` that prints the status on startup/resume/clear/compact, `.github/pull_request_template.md`, and a README pointer. `.gitignore` now keeps `.claude/settings.json` tracked. Added a CI roadmap check to Phase 1.1.
+- **Decided** — Progress tracking lives in this roadmap (owner request, see §2).
+- **Note** — Roadmap written from the audit of `e1136dd` and the owner Q&A (commit `7f15f0d`). All phases are `Not started`.
 
 ---
 

@@ -30,6 +30,8 @@ backend/src/data/airports.full.csv
 *.swp
 .superpowers/
 
-# Agent / tooling state (not project work)
-.claude/
+# Agent / tooling state (not project work) — except the shared project
+# settings, which carry the roadmap-status SessionStart hook.
+.claude/*
+!.claude/settings.json
 .omc/
