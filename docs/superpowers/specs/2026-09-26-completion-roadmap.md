@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
 | **Current phase** | 1.4 |
-| **Next step** | Plan Phase 1.4 (tenancy & access layer): write the plan, then `access.ts` and migrate every route onto it |
+| **Next step** | Build Phase 1.4: error handler + validation → `access.ts` → baseline migration → migrate routes → tenant-isolation suite → per-family export |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -228,7 +228,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.4 Tenancy & access layer — L
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-1.4](../plans/2026-09-26-phase-1.4-tenancy-access.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
 - [ ] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
 - [ ] Tenant-isolation test suite covering every endpoint.
