@@ -7,7 +7,7 @@ beforeEach(() => {
   localStorage.setItem("werejugo.token", "tok");
   vi.stubGlobal("fetch", vi.fn(async (url: string, opts: RequestInit = {}) => {
     calls.push({ url, method: opts.method ?? "GET", body: opts.body });
-    if (url.includes("/api/backup")) return new Response(new Blob(["x"]), { status: 200 });
+    if (url.includes("/api/backup")) return new Response("x", { status: 200 });
     return new Response(JSON.stringify({ id: "s1", token: "t".repeat(20), targetType: "trip", targetId: "tr1", createdAt: "" }),
       { status: 200, headers: { "Content-Type": "application/json" } });
   }));
@@ -33,7 +33,10 @@ test("listShares passes target in the query string", async () => {
 test("downloadBackup fetches the archive as a blob", async () => {
   const blob = await api.downloadBackup();
   expect(calls[0].url).toContain("/api/backup");
-  expect(blob).toBeInstanceOf(Blob);
+  // Assert on behaviour, not `instanceof`: jsdom's Blob and Node's Response
+  // blob come from different realms.
+  expect(blob.size).toBe(1);
+  expect(await blob.text()).toBe("x");
 });
 
 test("restoreBackup posts the file as multipart", async () => {

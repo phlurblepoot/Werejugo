@@ -1,0 +1,82 @@
+name: CI
+
+# Runs on every pull request and on pushes to main. Everything here must be
+# green before a milestone PR is merged.
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  roadmap:
+    name: Roadmap check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate roadmap
+        run: node scripts/roadmap.mjs --check
+      - name: Require a roadmap update when app code changes
+        if: github.event_name == 'pull_request'
+        run: node scripts/roadmap.mjs --check --changed-since "origin/${{ github.base_ref }}"
+
+  backend:
+    name: Backend (typecheck + tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: werejugo
+          POSTGRES_PASSWORD: change-me-in-production
+          POSTGRES_DB: werejugo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U werejugo -d werejugo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx tsc -p tsconfig.json --noEmit
+      - run: npm test
+
+  frontend:
+    name: Frontend (typecheck + tests + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
