@@ -1,4 +1,5 @@
 import type { Trip } from "../../api/client";
+import { formatDateRange } from "../../lib/dates";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const COLUMNS: { key: Status; label: string }[] = [
@@ -21,7 +22,7 @@ export function TripBoard({ trips, onOpen, onStatusChange }: Props) {
           {trips.filter((t) => t.status === col.key).map((t) => (
             <div key={t.id} className="trip-card" style={{ borderLeft: `3px solid ${t.color}` }}>
               <div className="tc-title" onClick={() => onOpen(t)}>{t.name}</div>
-              <div className="tc-dates">{t.startDate ? `${t.startDate}${t.endDate ? ` – ${t.endDate}` : ""}` : "no dates"}</div>
+              <div className="tc-dates">{t.startDate ? formatDateRange(t.startDate, t.endDate) : "no dates"}</div>
               <select aria-label={`Status for ${t.name}`} value={t.status} onChange={(e) => onStatusChange(t, e.target.value as Status)}>
                 {COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.key}</option>)}
               </select>

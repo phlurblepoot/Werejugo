@@ -4,6 +4,7 @@ import { api, type Item, type Trip, type User } from "../api/client";
 import { KIND_LABELS } from "../lib/style";
 import { renderMarkdown } from "../lib/markdown";
 import { MediaThumb } from "./MediaThumb";
+import { formatDate } from "../lib/dates";
 
 interface Props {
   item: Item;
@@ -52,7 +53,7 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
 
         <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>
           {KIND_LABELS[item.kind]}
-          {item.occurredOn ? ` · ${item.occurredOn}` : ""}
+          {item.occurredOn ? ` · ${formatDate(item.occurredOn)}` : ""}
           {trip ? <span className="tag" style={{ background: trip.color, color: "#fff" }}>{trip.name}</span> : null}
           {item.createdByName ? ` · added by ${item.createdByName}` : ""}
           {cruiseMeta && <div style={{ marginTop: 2 }}>{cruiseMeta}</div>}

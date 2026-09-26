@@ -1,9 +1,10 @@
 import type { DocumentItem } from "../../api/client";
+import { formatDate } from "../../lib/dates";
 
 function statusText(d: DocumentItem): string {
   if (d.status === "overdue" && d.daysUntilExpiry != null) return `overdue ${Math.abs(d.daysUntilExpiry)} days`;
   if (d.status === "upcoming" && d.daysUntilExpiry != null) return `in ${d.daysUntilExpiry} days`;
-  if (d.status === "ok") return d.expiresOn ? `expires ${d.expiresOn}` : "";
+  if (d.status === "ok") return d.expiresOn ? `expires ${formatDate(d.expiresOn)}` : "";
   return "no expiry";
 }
 

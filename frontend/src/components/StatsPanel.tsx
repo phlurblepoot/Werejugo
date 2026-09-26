@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { KIND_LABELS } from "../lib/style";
+import { formatDateRange } from "../lib/dates";
 
 interface Props {
   mapSetId: string;
@@ -55,7 +56,7 @@ export function StatsPanel({ mapSetId, onClose }: Props) {
             ))}
 
             {data.firstDate && (
-              <p className="hint">Spanning {data.firstDate} → {data.lastDate}</p>
+              <p className="hint">Spanning {formatDateRange(data.firstDate, data.lastDate)}</p>
             )}
           </>
         )}

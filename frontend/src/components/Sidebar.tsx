@@ -2,6 +2,7 @@ import type { FamilySettings, Item, ItemKind, MapSet, Theme, Trip } from "../api
 import { API_URL } from "../api/client";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { resolveItemStyle, KIND_LABELS } from "../lib/style";
+import { formatDate } from "../lib/dates";
 
 const ALL_KINDS: ItemKind[] = ["place", "food", "flight", "cruise", "drive", "custom"];
 
@@ -103,7 +104,7 @@ export function Sidebar(props: Props) {
               <div className="title">{item.title}</div>
               <div className="sub">
                 {KIND_LABELS[item.kind]}
-                {item.occurredOn ? ` · ${item.occurredOn}` : ""}
+                {item.occurredOn ? ` · ${formatDate(item.occurredOn)}` : ""}
                 {item.waypoints.length ? <span className="tag">{item.waypoints.length} stops</span> : null}
                 {item.photos.length ? <span className="tag">📷 {item.photos.length}</span> : null}
               </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type Trip } from "../api/client";
 import { PALETTE } from "./StylePicker";
 import { useToast } from "./Toast";
+import { formatDateRange } from "../lib/dates";
 
 interface Props {
   mapSetId: string;
@@ -79,7 +80,7 @@ export function TripsPanel({ mapSetId, trips, onClose, onChanged }: Props) {
             <div className="meta">
               <div className="title">{t.name}</div>
               <div className="sub">
-                {t.startDate ?? "?"}{t.endDate ? ` – ${t.endDate}` : ""}
+                {t.startDate ? formatDateRange(t.startDate, t.endDate) : "no dates"}
               </div>
             </div>
             <button className="ghost" onClick={() => startEdit(t)} aria-label={`Edit ${t.name}`} title="Edit trip">✎</button>

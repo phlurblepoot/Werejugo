@@ -202,7 +202,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [x] Backups also include `UPLOADS_DIR` (icons, map overlays, ship images), and restore replaces the storage contents in place (the directory is a volume mount point in Docker). (added 2026-09-26)
 - [x] B1: make the first-run welcome an inline, dismissible panel that refetches.
 - [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
-- [ ] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
+- [x] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
 - [ ] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
 - [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`.
 - [ ] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)

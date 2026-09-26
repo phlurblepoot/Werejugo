@@ -7,6 +7,7 @@ import { glyphFor, isImageIcon } from "../lib/icons";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
 import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
+import { formatDate } from "../lib/dates";
 
 export interface ItemStyle {
   color: string;
@@ -410,7 +411,7 @@ export function MapView(props: Props) {
         : "") +
       `<div class="title">${escapeHtml(item.title)}</div>` +
       (label ? `<div class="sub">${escapeHtml(label)}</div>` : "") +
-      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(item.occurredOn)}</div>` : "") +
+      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(formatDate(item.occurredOn))}</div>` : "") +
       (item.photos.length > 1 ? `<div class="sub">${item.photos.length} photos</div>` : "");
     return new maplibregl.Popup({ offset: 18, maxWidth: "260px" }).setHTML(html);
   }

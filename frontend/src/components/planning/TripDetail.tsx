@@ -5,6 +5,7 @@ import { RelatedPanel } from "../shared/RelatedPanel";
 import { DocumentList } from "../documents/DocumentList";
 import { TripPacking } from "../packing/TripPacking";
 import { ShareButton } from "../shared/ShareButton";
+import { formatDate, formatDateRange } from "../../lib/dates";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const STATUSES: Status[] = ["idea", "planning", "booked", "done"];
@@ -29,7 +30,7 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
 
   const itinRow = (i: ItineraryItem, scheduledView: boolean) => (
     <div key={i.id} className="itin-item">
-      {scheduledView && <span className="day">{i.scheduledOn}</span>}
+      {scheduledView && <span className="day">{formatDate(i.scheduledOn)}</span>}
       <span className="t">{i.title}</span>
       {i.convertedVisitId ? <span className="chip">✓ visit</span>
         : scheduledView ? <button aria-label={`Convert ${i.title} to a visit`} onClick={() => convert.mutate(i.id)}>→ visit</button>
@@ -49,7 +50,7 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
           </select>
           <button className="ghost" aria-label="Close" onClick={onClose}>✕</button>
         </div>
-        <div className="er-sub" style={{ marginBottom: 8 }}>{trip.startDate ? `${trip.startDate} – ${trip.endDate ?? "?"}` : "no dates"}</div>
+        <div className="er-sub" style={{ marginBottom: 8 }}>{trip.startDate ? formatDateRange(trip.startDate, trip.endDate) : "no dates"}</div>
 
         <div className="section-title"><span>🗺️ Itinerary</span></div>
         {scheduled.map((i) => itinRow(i, true))}
