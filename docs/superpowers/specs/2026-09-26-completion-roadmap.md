@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.1 |
-| **Next step** | Build Phase 1.1 tasks 1–8 on `claude/cool-hopper-pku4ne`, then open the Milestone 1 PR to `main` |
+| **Current phase** | 1.2 |
+| **Next step** | Write the Phase 1.2 plan (design system & responsive shell) and build it on `claude/cool-hopper-pku4ne` |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -190,12 +190,12 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.1 Safety net & project hygiene — S
 
-**Status:** In progress · **Plan:** [phase-1.1](../plans/2026-09-26-phase-1.1-safety-net.md) · **PR:** —
+**Status:** In review · **Plan:** [phase-1.1](../plans/2026-09-26-phase-1.1-safety-net.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
 *(first PR; small, and needed before the app faces the internet)*
 
-- [ ] Create `main` from the current work; CI on every PR: backend + frontend typecheck, backend tests against a PostGIS service container, frontend tests, production builds; images publish only from `main` and `v*` tags; fix the jsdom `Blob` test.
-- [ ] Preview images: pushes to `claude/**` branches publish images tagged with the branch name (never `latest`), so a milestone can be tested on Unraid before it is merged. (added 2026-09-26)
+- [x] Create `main` from the current work; CI on every PR: backend + frontend typecheck, backend tests against a PostGIS service container, frontend tests, production builds; images publish only from `main` and `v*` tags; fix the jsdom `Blob` test.
+- [x] Preview images: pushes to `claude/**` branches publish images tagged with the branch name (never `latest`), so a milestone can be tested on Unraid before it is merged. (added 2026-09-26)
 - [x] B2: add a `/app/storage` volume to `docker-compose.yml` and the Unraid template; document `STORAGE_DIR`/`UPLOADS_DIR` in `.env.example`; fix README paths.
 - [x] B4: refuse to boot in production with a missing, default or short `JWT_SECRET`; separate `FILE_SIGNING_SECRET`.
 - [x] B3 (stopgap until 1.3): disable public registration after the first family (`ALLOW_SIGNUP=false` default); restrict backup/restore to the first family's owner; restore validates the archive's `storage/` before wiping anything.
@@ -204,8 +204,8 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
 - [x] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
 - [x] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
-- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`.
-- [ ] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
+- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`. *(Waiting on the owner's approval at the Milestone 1 review.)*
+- [x] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
 
 #### 1.2 Design system & responsive shell — M
 
@@ -487,6 +487,9 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-26
+
+- **Note** — Phase 1.1 complete on the milestone branch except deleting `claude/confident-ramanujan-xDIFr`, which waits for the owner's approval (so 1.1 stays `In review`). Verified: backend 131/131 and frontend 112/112 locally; CI green on PR #1 (roadmap check, backend on PostGIS, frontend build); nginx config checked with `nginx -t`; the production build loaded in Chromium under the new CSP with no violations; signup gating, date formatting, backup visibility and search checked in the browser.
+- **Note** — Found during 1.1: restoring a backup into a Docker volume would have crashed half-way (it tried to delete the mount point); fixed by replacing the directory's contents in place.
 
 - **Changed** — Milestone 1 is built on one branch (`claude/cool-hopper-pku4ne`) and reviewed as one PR to `main`, instead of one PR per phase: the owner reviews per milestone, and this session may only push to its assigned branch. Each phase still gets its own plan, status line and log entries; a phase is `Done` when complete and verified on the branch. `CLAUDE.md` updated to match.
 - **Changed** — Phase 1.1: added preview images for `claude/**` branches (so the milestone can be tested on Unraid before merging) and uploads-in-backup / in-place restore.
