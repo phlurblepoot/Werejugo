@@ -10,6 +10,50 @@ server {
   # Allow photo / icon / overlay uploads (backend caps at 25 MB).
   client_max_body_size 30m;
 
+  # Security headers for the app itself. `always` so they're sent on errors too.
+  # CSP: scripts only from this origin (the build has no inline scripts); styles
+  # allow inline because React style attributes are used throughout; images,
+  # map tiles/styles and fonts may come from any HTTPS host (the map style URL
+  # is configurable); MapLibre runs its workers from blob: URLs.
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self' data: https:; worker-src 'self' blob:; child-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+
+  # Backup download: can be large and slow to build — stream it, don't buffer.
+  location = /api/backup {
+    resolver 127.0.0.11 valid=30s;
+    set $backup_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_pass $backup_upstream$request_uri;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+  }
+
+  # Restore upload: no size cap here (the backend allows 2 GB), streamed
+  # straight through, with time to unpack. Behind Cloudflare's free plan
+  # uploads over 100 MB are refused before they reach us — restore large
+  # archives from the LAN address instead.
+  location = /api/restore {
+    resolver 127.0.0.11 valid=30s;
+    set $restore_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_pass $restore_upstream$request_uri;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 0;
+    proxy_request_buffering off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
   # Reverse-proxy the API. Using a variable + Docker's embedded DNS resolver
   # (127.0.0.11) means nginx tolerates the backend starting later or moving IP.
   location ^~ /api/ {
@@ -36,8 +80,11 @@ server {
     try_files $uri $uri/ /index.html;
   }
 
+  # Hashed build assets. (add_header here would replace the server-level
+  # security headers, so repeat them.)
   location ~* \.(js|css|png|jpg|jpeg|gif|svg|woff2?)$ {
     expires 7d;
     add_header Cache-Control "public";
+    add_header X-Content-Type-Options "nosniff" always;
   }
 }

@@ -203,7 +203,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [x] B1: make the first-run welcome an inline, dismissible panel that refetches.
 - [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
 - [x] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
-- [ ] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
+- [x] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
 - [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`.
 - [ ] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
 

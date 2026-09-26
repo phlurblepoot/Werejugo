@@ -44,6 +44,9 @@ async function familyCount(): Promise<number> {
   return rows[0].n;
 }
 
+let dummy: Promise<string> | null = null;
+const dummyHash = () => (dummy ??= hashPassword("werejugo-timing-equalizer"));
+
 const SIGNUP_CLOSED = "New families can't sign up on this server. Ask a family owner for their invite code to join.";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -53,7 +56,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { firstRun, signupOpen: firstRun || config.allowSignup };
   });
 
-  app.post("/api/auth/register", async (req, reply) => {
+  app.post("/api/auth/register", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
     const body = parsed.data;
@@ -125,7 +128,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/api/auth/login", async (req, reply) => {
+  app.post("/api/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
 
@@ -135,7 +138,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       [parsed.data.email.toLowerCase()],
     );
     const user = rows[0];
-    if (!user || !(await verifyPassword(parsed.data.password, user.password_hash))) {
+    // Compare against a dummy hash for unknown emails so response time doesn't
+    // reveal which accounts exist.
+    const hash = user?.password_hash ?? (await dummyHash());
+    const ok = await verifyPassword(parsed.data.password, hash);
+    if (!user || !ok) {
       return reply.code(401).send({ error: "Invalid email or password" });
     }
     const token = await reply.jwtSign(toAuthUser(user));

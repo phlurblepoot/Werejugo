@@ -1,6 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import jwt from "@fastify/jwt";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
@@ -36,7 +38,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.uploadsDir, { recursive: true });
   await mkdir(config.storageDir, { recursive: true });
 
-  const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
+  // trustProxy: requests arrive through nginx (and often cloudflared), so the
+  // real client address is in X-Forwarded-For.
+  const app = Fastify({ logger: process.env.NODE_ENV !== "test", trustProxy: true });
   for (const w of config.startupWarnings) app.log.warn(w);
   for (const w of ephemeralDataDirs([
     { name: "STORAGE_DIR", path: config.storageDir },
@@ -47,9 +51,28 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: config.corsOrigin.length ? config.corsOrigin : true,
     credentials: true,
   });
+  // Security headers on every response. The app's HTML (and its CSP) is served
+  // by nginx; HSTS is left to the TLS terminator (e.g. Cloudflare) so a LAN or
+  // plain-HTTP install isn't pinned to HTTPS.
+  await app.register(helmet, { contentSecurityPolicy: false, hsts: false });
+  // Per-route limits (login/register); keyed on Cloudflare's client IP when
+  // present, otherwise the proxied client address.
+  await app.register(rateLimit, {
+    global: false,
+    keyGenerator: (req) => (req.headers["cf-connecting-ip"] as string | undefined) || req.ip,
+  });
   await app.register(jwt, { secret: config.jwtSecret, sign: { expiresIn: config.jwtExpiresIn } });
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
-  await app.register(fastifyStatic, { root: config.uploadsDir, prefix: "/uploads/" });
+  await app.register(fastifyStatic, {
+    root: config.uploadsDir,
+    prefix: "/uploads/",
+    // User-supplied files: never sniffed, never allowed to run script (older
+    // installs may still hold SVG uploads).
+    setHeaders: (res) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+    },
+  });
 
   app.get("/api/health", async () => ({ ok: true }));
 
