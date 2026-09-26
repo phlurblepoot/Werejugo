@@ -37,7 +37,7 @@ services:
       # Photos, videos and documents. Without this volume they are lost when
       # the container is recreated.
       - storage:/app/storage
-      # Custom pin icons and map overlays.
+      # Custom pin icons.
       - uploads:/app/uploads
     # The backend is reached through the frontend's nginx proxy, so it only needs
     # to be visible inside the compose network — not published to the host.
