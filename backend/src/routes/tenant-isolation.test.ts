@@ -41,6 +41,10 @@ beforeAll(async () => {
   A.link = await one("INSERT INTO links (family_id, from_type, from_id, to_type, to_id) VALUES ($1, 'person', $2, 'trip', $3) RETURNING id", [fa, A.person, A.trip]);
   A.share = await one("INSERT INTO share_links (token, family_id, target_type, target_id) VALUES ('secret-a-token', $1, 'trip', $2) RETURNING id", [fa, A.trip]);
   await query(`UPDATE families SET settings = '{"note": "${CANARY} settings"}' WHERE id = $1`, [fa]);
+  A.tripInvite = await one("INSERT INTO trip_invites (trip_id, role, token_hash, expires_at) VALUES ($1, 'contributor', 'hash-a', now() + interval '1 day') RETURNING id", [A.trip]);
+  A.person2 = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person 2') RETURNING id`, [fa]);
+  A.personLink = await one("INSERT INTO person_links (person_a, person_b) VALUES ($1, $2) RETURNING id", [A.person, A.person2]);
+  await query(`INSERT INTO activity (trip_id, family_id, kind, summary) VALUES ($1, $2, 'visit.added', '${CANARY} activity')`, [A.trip, fa]);
 
   const fb = b.familyId;
   B.trip = await one("INSERT INTO trips (family_id, name) VALUES ($1, 'B trip') RETURNING id", [fb]);
@@ -76,6 +80,10 @@ async function snapshotA(): Promise<string> {
     packing_items: "SELECT i.* FROM packing_items i JOIN packing_lists l ON l.id = i.list_id WHERE l.family_id = $1",
     links: "SELECT * FROM links WHERE family_id = $1",
     share_links: "SELECT * FROM share_links WHERE family_id = $1",
+    trip_members: "SELECT m.* FROM trip_members m JOIN trips t ON t.id = m.trip_id WHERE t.family_id = $1",
+    trip_invites: "SELECT i.* FROM trip_invites i JOIN trips t ON t.id = i.trip_id WHERE t.family_id = $1",
+    person_links: "SELECT l.* FROM person_links l JOIN people p ON p.id = l.person_a WHERE p.family_id = $1",
+    activity: "SELECT a.* FROM activity a JOIN trips t ON t.id = a.trip_id WHERE t.family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -203,7 +211,20 @@ const CASES: Case[] = [
   c("GET /api/stats", () => "/api/stats", "clean"),
   c("GET /api/search", () => `/api/search?q=${CANARY}`, "clean"),
 
-  // Sharing
+  // Sharing a trip with other families (B is on none of A's trips)
+  c("GET /api/trips/:id/members", () => `/api/trips/${A.trip}/members`, 404),
+  c("POST /api/trips/:id/invites", () => `/api/trips/${A.trip}/invites`, 404, () => ({ role: "coowner" })),
+  c("DELETE /api/trips/:id/invites/:inviteId", () => `/api/trips/${A.trip}/invites/${A.tripInvite}`, 404),
+  c("PATCH /api/trips/:id/members/:familyId", () => `/api/trips/${A.trip}/members/${b.familyId}`, 404, () => ({ role: "coowner" })),
+  c("DELETE /api/trips/:id/members/:familyId", () => `/api/trips/${A.trip}/members/${b.familyId}`, 404),
+  c("GET /api/trips/:id/activity", () => `/api/trips/${A.trip}/activity`, 404),
+  c("GET /api/trips/:id/people", () => `/api/trips/${A.trip}/people`, 404),
+  c("GET /api/person-links", () => "/api/person-links", "clean"),
+  c("POST /api/person-links", () => "/api/person-links", 404, () => ({ personId: B.person, otherPersonId: A.person }), "their person, no shared trip"),
+  c("POST /api/person-links/:id/accept", () => `/api/person-links/${A.personLink}/accept`, 404),
+  c("DELETE /api/person-links/:id", () => `/api/person-links/${A.personLink}`, 404),
+
+  // Public share links
   c("GET /api/shares", () => `/api/shares?targetType=trip&targetId=${A.trip}`, "clean"),
   c("POST /api/shares", () => "/api/shares", 404, () => ({ targetType: "trip", targetId: A.trip })),
   c("DELETE /api/shares/:id", () => `/api/shares/${A.share}`, 404),
@@ -222,6 +243,8 @@ const EXEMPT: Record<string, string> = {
   "GET /api/password-resets/:token": "public one-time link (password-resets.test.ts)",
   "POST /api/password-resets/:token": "public one-time link (password-resets.test.ts)",
   "GET /api/share/:token": "public share link: only the shared trip (share-public.test.ts)",
+  "GET /api/trip-invites/:token": "the token itself is the invitation (trip-sharing.test.ts)",
+  "POST /api/trip-invites/:token/accept": "the token itself is the invitation; owners only (trip-sharing.test.ts)",
   "PATCH /api/account": "the caller's own account (account.test.ts)",
   "POST /api/account/password": "the caller's own account (account.test.ts)",
   "POST /api/account/sign-out-everywhere": "the caller's own account (account.test.ts)",

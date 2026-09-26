@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { assertRefs, loadEditable, scopeOf } from "../lib/access.js";
+import { assertRefs, loadEditable, readableWhere, scopeOf } from "../lib/access.js";
+import { recordActivity } from "../lib/activity.js";
 import { badRequest, notFound } from "../lib/errors.js";
 import { uuid, ymd } from "../lib/validate.js";
 import { mediaDirFor, saveMediaUpload, deleteStored, absStoragePath } from "../lib/storage.js";
@@ -15,6 +16,7 @@ interface MediaRow {
   rel_path: string; thumb_rel_path: string | null;
   original_name: string; caption: string; taken_at: string | null;
   width: number | null; height: number | null; created_at: string;
+  family_id: string; family_name?: string;
 }
 
 function toDto(r: MediaRow) {
@@ -24,6 +26,8 @@ function toDto(r: MediaRow) {
     thumbUrl: r.thumb_rel_path ? signFileUrl(r.thumb_rel_path) : null,
     originalName: r.original_name, caption: r.caption,
     takenAt: r.taken_at, width: r.width, height: r.height, createdAt: r.created_at,
+    // Another family's photo on a shared trip: shown with who added it, view-only.
+    familyId: r.family_id, familyName: r.family_name ?? null,
   };
 }
 
@@ -32,7 +36,7 @@ interface MediaListRow extends MediaRow {
 }
 function toListDto(r: MediaListRow) {
   return {
-    id: r.id, kind: r.kind, tripId: r.trip_id,
+    id: r.id, kind: r.kind, tripId: r.trip_id, familyId: r.family_id, familyName: r.family_name ?? null,
     url: signFileUrl(r.rel_path),
     thumbUrl: r.thumb_rel_path ? signFileUrl(r.thumb_rel_path) : null,
     caption: r.caption, takenAt: r.taken_at, createdAt: r.created_at,
@@ -43,7 +47,8 @@ function toListDto(r: MediaListRow) {
 
 async function loadMedia(familyId: string, id: string): Promise<MediaRow> {
   const { rows } = await query<MediaRow>(
-    "SELECT * FROM media WHERE id = $1 AND family_id = $2", [id, familyId],
+    `SELECT t.*, f.name AS family_name FROM media t JOIN families f ON f.id = t.family_id
+      WHERE t.id = $1 AND ${readableWhere("media", "t", "$2")}`, [id, familyId],
   );
   if (!rows[0]) throw notFound("Photo or video not found");
   return rows[0];
@@ -102,11 +107,13 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/media", async (req) => {
     const q = listQuery.parse(req.query);
-    const where: string[] = ["m.family_id = $1"];
     const params: unknown[] = [req.user.familyId];
     const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
-
-    if (q.trip) where.push(`m.trip_id = ${add(q.trip)}`);
+    // The library is my family's photos. A trip's album is everyone's photos on
+    // that trip that I may see (other families' only when it's shared with us).
+    const where: string[] = q.trip
+      ? [`m.trip_id = ${add(q.trip)}`, readableWhere("media", "m", "$1")]
+      : ["m.family_id = $1"];
     if (q.person) {
       const ph = add(q.person); // capture the "$N" placeholder once; use it in both directions
       where.push(`EXISTS (SELECT 1 FROM links l WHERE l.family_id = m.family_id
@@ -137,8 +144,8 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
 
     const { rows } = await query<MediaListRow>(
       `SELECT m.*, ST_X(m.geom) AS lng, ST_Y(m.geom) AS lat,
-              COALESCE(m.taken_at, m.created_at) AS sort_ts
-       FROM media m
+              COALESCE(m.taken_at, m.created_at) AS sort_ts, f.name AS family_name
+       FROM media m JOIN families f ON f.id = m.family_id
        WHERE ${where.join(" AND ")}
        ORDER BY COALESCE(m.taken_at, m.created_at) DESC, m.id DESC
        LIMIT ${limit}`,
@@ -169,6 +176,7 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
       await tx(async (client) => {
         await client.query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [b.tripId ?? null, id, scope.familyId]);
         await reconcileMediaTrip(client, id);
+        await recordActivity({ tripId: b.tripId, familyId: scope.familyId, userId: scope.userId, kind: "photo.added", targetType: "media", targetId: id }, client);
       });
     }
     return toDto(await loadMedia(scope.familyId, id));

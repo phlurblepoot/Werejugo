@@ -4,6 +4,7 @@ import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { reconcileMediaTrip } from "../lib/reconcile.js";
 import { assertRefs, scopeOf } from "../lib/access.js";
+import { recordActivity } from "../lib/activity.js";
 
 const idsSchema = z.object({ mediaIds: z.array(z.string().uuid()).min(1).max(500) });
 
@@ -46,7 +47,8 @@ export async function mediaSuggestRoutes(app: FastifyInstance): Promise<void> {
     const mediaIds = [...new Set(parsed.mediaIds)];
     const scope = scopeOf(req);
     const fam = scope.familyId;
-    await assertRefs(scope, { media: mediaIds, trip: tripId, visit: visitId });
+    await assertRefs(scope, { media: mediaIds }, { mode: "own" }); // these photos are changed
+    await assertRefs(scope, { trip: tripId, visit: visitId });
 
     await tx(async (client) => {
       if (tripId !== undefined) {
@@ -54,6 +56,8 @@ export async function mediaSuggestRoutes(app: FastifyInstance): Promise<void> {
           await client.query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [tripId, id, fam]);
           await reconcileMediaTrip(client, id);
         }
+        await recordActivity({ tripId, familyId: fam, userId: scope.userId, kind: "photo.added",
+          summary: `${mediaIds.length} photo${mediaIds.length === 1 ? "" : "s"}` }, client);
       }
       if (visitId) {
         for (const id of mediaIds) {

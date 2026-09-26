@@ -4,7 +4,8 @@ import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { signFileUrl } from "../lib/filesign.js";
-import { assertRefs, loadEditable, loadReadable, scopeOf } from "../lib/access.js";
+import { assertRefs, editableWhere, loadEditable, loadReadable, readableWhere, scopeOf } from "../lib/access.js";
+import { recordActivity } from "../lib/activity.js";
 import { badRequest, notFound } from "../lib/errors.js";
 import { endsBeforeStart, optionalYmd } from "../lib/validate.js";
 import { lat, lng, visitGeometry } from "../lib/geojson.js";
@@ -37,9 +38,10 @@ export async function loadVisit(familyId: string, id: string) {
   const { rows } = await query<any>(
     `SELECT v.id, v.trip_id, v.kind, v.title, v.notes, v.theme_id, v.color, v.icon,
             v.occurred_on, v.occurred_end, v.properties, v.created_by, v.created_at,
-            u.display_name AS created_by_name, ST_AsGeoJSON(v.geom) AS geom
-     FROM visits v LEFT JOIN users u ON u.id = v.created_by
-     WHERE v.id = $1 AND v.family_id = $2`,
+            u.display_name AS created_by_name, ST_AsGeoJSON(v.geom) AS geom,
+            v.family_id, f.name AS family_name
+     FROM visits v LEFT JOIN users u ON u.id = v.created_by JOIN families f ON f.id = v.family_id
+     WHERE v.id = $1 AND ${readableWhere("visit", "v", "$2")}`,
     [id, familyId],
   );
   if (!rows[0]) return null;
@@ -51,8 +53,8 @@ export async function loadVisit(familyId: string, id: string) {
   const photoRows = await query<any>(
     `SELECT m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
      FROM links l JOIN media m ON m.id = CASE
-        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END AND m.family_id = l.family_id
-     WHERE l.family_id = $2
+        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
+     WHERE ${readableWhere("media", "m", "$2")}
        AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=$1)
          OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=$1))
      ORDER BY m.created_at ASC`,
@@ -63,6 +65,8 @@ export async function loadVisit(familyId: string, id: string) {
     themeId: r.theme_id, color: r.color, icon: r.icon,
     occurredOn: r.occurred_on, occurredEnd: r.occurred_end, properties: r.properties,
     createdBy: r.created_by, createdByName: r.created_by_name, createdAt: r.created_at,
+    // Who added it (another family's, on a shared trip, when familyId isn't mine).
+    familyId: r.family_id, familyName: r.family_name,
     geometry: r.geom ? JSON.parse(r.geom) : null,
     waypoints: wps.rows.map((w) => ({
       id: w.id, label: w.label, kind: w.kind, seq: w.seq, lng: w.lng, lat: w.lat,
@@ -95,7 +99,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/visits", async (req) => {
     const { rows } = await query<{ id: string }>(
-      "SELECT id FROM visits WHERE family_id = $1 ORDER BY occurred_on NULLS LAST, created_at ASC",
+      `SELECT t.id FROM visits t WHERE ${readableWhere("visit", "t", "$1")} ORDER BY t.occurred_on NULLS LAST, t.created_at ASC`,
       [req.user.familyId],
     );
     return Promise.all(rows.map((r) => loadVisit(req.user.familyId, r.id)));
@@ -120,6 +124,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
       );
       const vid = res.rows[0].id;
       if (b.waypoints?.length) await insertWaypoints(client, vid, b.waypoints);
+      await recordActivity({ tripId: b.tripId, familyId: scope.familyId, userId: scope.userId, kind: "visit.added", targetType: "visit", targetId: vid, summary: b.title }, client);
       return vid;
     });
     return reply.code(201).send(await loadVisit(req.user.familyId, id));
@@ -158,7 +163,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
              ELSE geom END,
            properties = CASE WHEN $19::boolean THEN COALESCE($20::jsonb,'{}'::jsonb) ELSE properties END,
            updated_at = now()
-         WHERE id = $1 AND family_id = $21`,
+         WHERE id = $1 AND ${editableWhere("visit", "visits", "$21")}`,
         [id, b.kind ?? null, b.title ?? null, b.notes ?? null,
          has("themeId"), b.themeId ?? null, has("color"), b.color ?? null,
          has("icon"), b.icon ?? null, has("occurredOn"), b.occurredOn ?? null,
@@ -177,7 +182,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/api/visits/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
     await loadEditable("visit", id, scopeOf(req));
-    await query("DELETE FROM visits WHERE id = $1 AND family_id = $2", [id, req.user.familyId]);
+    await query(`DELETE FROM visits WHERE id = $1 AND ${editableWhere("visit", "visits", "$2")}`, [id, req.user.familyId]);
     return reply.code(204).send();
   });
 
@@ -186,22 +191,24 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const id = (req.params as { id: string }).id;
     await loadReadable("visit", id, scopeOf(req));
     const { rows } = await query<any>(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name AS author
-       FROM comments c LEFT JOIN users u ON u.id = c.user_id
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name AS author, f.name AS family_name
+       FROM comments c LEFT JOIN users u ON u.id = c.user_id LEFT JOIN families f ON f.id = u.family_id
        WHERE c.visit_id = $1 ORDER BY c.created_at ASC`, [id],
     );
-    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, author: r.author }));
+    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, author: r.author, familyName: r.family_name }));
   });
 
   app.post("/api/visits/:id/comments", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    await loadReadable("visit", id, scopeOf(req));
+    const scope = scopeOf(req);
+    const visit = await loadReadable<{ trip_id: string | null; title: string }>("visit", id, scope);
     const { body } = z.object({ body: z.string().min(1).max(4000) }).parse(req.body);
     const { rows } = await query<any>(
       `INSERT INTO comments (visit_id, user_id, body) VALUES ($1,$2,$3)
        RETURNING id, body, created_at, user_id`, [id, req.user.id, body],
     );
     const r = rows[0];
+    await recordActivity({ tripId: visit.trip_id, familyId: scope.familyId, userId: scope.userId, kind: "comment.added", targetType: "visit", targetId: id, summary: visit.title });
     return reply.code(201).send({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id });
   });
 
@@ -209,7 +216,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const id = (req.params as { id: string }).id;
     const res = await query(
       `DELETE FROM comments c USING visits v
-       WHERE c.id = $1 AND c.visit_id = v.id AND v.family_id = $2 AND c.user_id = $3`,
+       WHERE c.id = $1 AND c.visit_id = v.id AND c.user_id = $3 AND ${readableWhere("visit", "v", "$2")}`,
       [id, req.user.familyId, req.user.id],
     );
     if (!res.rowCount) throw notFound("Comment not found");

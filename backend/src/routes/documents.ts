@@ -44,7 +44,7 @@ const SELECT = `
          (d.expires_on - CURRENT_DATE) AS days_until
   FROM documents d
   LEFT JOIN people p ON p.id = d.owner_person_id AND p.family_id = d.family_id
-  LEFT JOIN trips t ON t.id = d.owner_trip_id AND t.family_id = d.family_id`;
+  LEFT JOIN trips t ON t.id = d.owner_trip_id`;
 
 async function loadDoc(familyId: string, id: string): Promise<DocRow> {
   const { rows } = await query<DocRow>(`${SELECT} WHERE d.family_id = $1 AND d.id = $2`, [familyId, id]);
@@ -88,7 +88,8 @@ async function ownerDir(scope: Scope, owners: { person: string | null; trip: str
   }
   if (owners.trip) {
     const t = await query<{ name: string; start: string | null }>(
-      "SELECT name, to_char(start_date,'YYYY-MM-DD') AS start FROM trips WHERE id = $1 AND family_id = $2", [owners.trip, scope.familyId]);
+      // Checked by assertRefs already: ours, or a trip shared with us (our booking for it stays private).
+      "SELECT name, to_char(start_date,'YYYY-MM-DD') AS start FROM trips WHERE id = $1", [owners.trip]);
     return documentDirFor(scope.familyId, { tripName: t.rows[0].name, tripStart: t.rows[0].start }, null);
   }
   return documentDirFor(scope.familyId, null, null);
@@ -125,7 +126,9 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const scope = scopeOf(req);
     const b = fieldsSchema.parse(body);
     const owners = mergedOwners({ person: null, trip: null }, b);
-    await assertRefs(scope, { person: owners.person, trip: owners.trip });
+    // A document is private: its person is ours; its trip may be one shared with us.
+    await assertRefs(scope, { person: owners.person }, { mode: "own" });
+    await assertRefs(scope, { trip: owners.trip });
     const saved = pendingFile
       ? await saveOrReject(pendingFile.filename, Readable.from(pendingFile.buf), await ownerDir(scope, owners))
       : null;
@@ -196,7 +199,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
     const ownersChange = has("ownerPersonId") || has("ownerTripId");
     const owners = mergedOwners({ person: existing.owner_person_id, trip: existing.owner_trip_id }, b);
-    await assertRefs(scope, { person: owners.person, trip: owners.trip });
+    await assertRefs(scope, { person: owners.person }, { mode: "own" });
+    await assertRefs(scope, { trip: owners.trip });
 
     await tx(async (client) => {
       await client.query(

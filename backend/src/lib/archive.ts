@@ -11,10 +11,11 @@ export const BACKUP_TABLES = [
   "icons", "documents", "links", "map_set_visits", "visit_waypoints", "comments",
   "itinerary_items", "packing_lists", "packing_items", "blackout_periods", "share_links",
   "invites", "password_resets", "audit_log",
+  "trip_members", "trip_invites", "person_links", "activity",
 ] as const;
 
 /** Tables with a serial id whose sequence must follow the restored rows. */
-const SERIAL_TABLES = ["audit_log"] as const;
+const SERIAL_TABLES = ["audit_log", "activity"] as const;
 
 /** Dump every table to a `{ [table]: rows[] }` object. Geometry is encoded as
  *  GeoJSON automatically by to_jsonb and round-trips via jsonb_populate_recordset. */

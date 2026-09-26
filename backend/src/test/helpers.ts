@@ -16,6 +16,7 @@ const APP_TABLES = [
   "links", "comments", "visit_waypoints", "map_set_visits",
   "media", "documents", "visits", "trips", "people", "packing_lists",
   "icons", "themes", "map_sets", "share_links", "invites", "password_resets", "audit_log",
+  "trip_members", "trip_invites", "person_links", "activity",
   "users", "families",
 ];
 
