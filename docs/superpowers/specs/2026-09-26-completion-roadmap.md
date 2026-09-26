@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
 | **Current phase** | 1.5 |
-| **Next step** | Plan Phase 1.5 (shared trips & cross-family people): write the plan, then `trip_members`/`trip_invites` on top of `lib/access.ts` |
+| **Next step** | Build Phase 1.5: migration → access rules → sharing/invite/member API → content attribution → activity → person links → seed → frontend |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -239,7 +239,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.5 Shared trips & cross-family people — L
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-1.5](../plans/2026-09-26-phase-1.5-shared-trips.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
 - [ ] `trip_members` + `trip_invites` (§3.3); invite dialog on a trip (role picker, link with expiry); accept page for the invited family's owner; member management; leave/remove.
 - [ ] Visibility and edit rules per role; per-family-private kinds; attribution chips in every trip view.
