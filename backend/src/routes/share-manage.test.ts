@@ -36,7 +36,7 @@ test("rejects an unknown target type", async () => {
 
 test("rejects a target the family does not own", async () => {
   const fam2 = (await query<{ id: string }>(
-    "INSERT INTO families (name, invite_code) VALUES ('Other','inv-x') RETURNING id")).rows[0].id;
+    "INSERT INTO families (name) VALUES ('Other') RETURNING id")).rows[0].id;
   const foreign = (await query<{ id: string }>(
     "INSERT INTO trips (family_id, name) VALUES ($1,'Foreign') RETURNING id", [fam2])).rows[0].id;
   const c = await ctx.app.inject({ method: "POST", url: "/api/shares", headers: auth(),

@@ -9,6 +9,7 @@ import { api, type AdminFamily, type AdminUser, type AuditEntry, type IssuedLink
 import { useAuth } from "../lib/auth";
 import { formatDate, formatRelative, formatTimestamp } from "../lib/dates";
 import { useToast } from "../components/Toast";
+import { startDownload } from "../lib/download";
 import { OneTimeLinkModal } from "../components/OneTimeLink";
 import {
   Avatar, Badge, Button, Card, EmptyState, ErrorState, Field, IconButton, Menu, Modal, PageHeader,
@@ -446,14 +447,8 @@ function BackupTab() {
   async function download() {
     setBusy(true);
     try {
-      const blob = await api.downloadBackup();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `werejugo-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast("Backup downloaded", "success");
+      await startDownload("backup");
+      toast("Your backup is downloading — large servers can take a while", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Backup failed", "error");
     } finally {

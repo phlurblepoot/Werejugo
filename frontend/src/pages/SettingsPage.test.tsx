@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   setMemberRole: vi.fn(async () => ({ ok: true })),
   revokeMemberInvite: vi.fn(async () => undefined),
   renameFamily: vi.fn(async () => ({ ok: true })),
+  downloadLink: vi.fn(async () => "/api/family/export?ticket=abc"),
 }));
 vi.mock("../api/client", () => ({ API_URL: "", api: h }));
 const OWNER = { id: "u1", familyId: "f1", role: "owner", isAdmin: false, displayName: "Pat", email: "pat@test.dev", color: "#0f766e" };
@@ -121,6 +122,12 @@ test("an owner can't reset or remove the server admin", async () => {
   expect(screen.queryByRole("menuitem", { name: /password reset/ })).toBeNull();
 });
 
+test("owners can download their family's data", async () => {
+  renderPage();
+  await userEvent.click(screen.getByRole("button", { name: "Download" }));
+  await waitFor(() => expect(h.downloadLink).toHaveBeenCalledWith("family-export"));
+});
+
 test("members see who's in the family but can't manage it", async () => {
   auth.user = { ...OWNER, role: "member" };
   h.getFamily.mockResolvedValueOnce({
@@ -133,6 +140,7 @@ test("members see who's in the family but can't manage it", async () => {
   expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Manage Kid" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Rename family" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
 });
 
 test("backups are no longer here; admins get a pointer to Admin", async () => {

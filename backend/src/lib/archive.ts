@@ -34,10 +34,16 @@ export async function restoreDatabase(client: pg.PoolClient, db: Record<string, 
   await client.query(`TRUNCATE ${tableList} RESTART IDENTITY CASCADE`);
   const counts: Record<string, number> = {};
   for (const table of BACKUP_TABLES) {
-    const rows = db[table] ?? [];
+    const rows = (db[table] ?? []) as Array<Record<string, unknown>>;
     if (rows.length > 0) {
+      // Only the columns the archive has: a backup from an older version lacks
+      // newer columns, which then get their defaults instead of NULL.
+      const { rows: cols } = await client.query<{ column_name: string }>(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1", [table]);
+      const inArchive = new Set(rows.flatMap((r) => Object.keys(r)));
+      const list = cols.map((c) => c.column_name).filter((c) => inArchive.has(c)).map((c) => `"${c}"`).join(", ");
       await client.query(
-        `INSERT INTO "${table}" SELECT * FROM jsonb_populate_recordset(NULL::"${table}", $1::jsonb)`,
+        `INSERT INTO "${table}" (${list}) SELECT ${list} FROM jsonb_populate_recordset(NULL::"${table}", $1::jsonb)`,
         [JSON.stringify(rows)]);
     }
     counts[table] = rows.length;
@@ -46,5 +52,12 @@ export async function restoreDatabase(client: pg.PoolClient, db: Record<string, 
     await client.query(
       `SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM "${table}"`);
   }
+  // Archives from before server admins existed: the oldest family's first owner
+  // becomes the admin, so the server is never left without one.
+  await client.query(`
+    UPDATE users SET is_admin = true
+     WHERE NOT EXISTS (SELECT 1 FROM users WHERE is_admin)
+       AND id = (SELECT u.id FROM users u JOIN families f ON f.id = u.family_id
+                  WHERE u.role = 'owner' ORDER BY f.created_at, u.created_at LIMIT 1)`);
   return counts;
 }

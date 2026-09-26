@@ -17,7 +17,7 @@ beforeAll(async () => {
 
   // A second family whose data must never leak into the first family's results.
   const fam2 = (await query<{ id: string }>(
-    "INSERT INTO families (name, invite_code) VALUES ('Other','inv-other') RETURNING id")).rows[0].id;
+    "INSERT INTO families (name) VALUES ('Other') RETURNING id")).rows[0].id;
   await query("INSERT INTO trips (family_id, name) VALUES ($1,'Venice Foreign')", [fam2]);
 });
 afterAll(async () => { await closeTestApp(ctx); });

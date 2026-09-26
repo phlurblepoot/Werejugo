@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Crown, KeyRound, LogOut, Monitor, Moon, MoreHorizontal, Pencil, Settings as SettingsIcon, Sun,
+  Crown, Download, KeyRound, LogOut, Monitor, Moon, MoreHorizontal, Pencil, Settings as SettingsIcon, Sun,
   UserMinus, UserPlus, User as UserIcon, X,
 } from "lucide-react";
 import { api, type FamilyMemberInfo, type IssuedLink } from "../api/client";
@@ -11,6 +11,7 @@ import { useTheme, type ThemePreference } from "../lib/theme";
 import { formatRelative } from "../lib/dates";
 import { useToast } from "../components/Toast";
 import { OneTimeLinkModal } from "../components/OneTimeLink";
+import { startDownload } from "../lib/download";
 import {
   AVATAR_COLORS, Avatar, Badge, Button, Card, ErrorState, Field, IconButton, Menu, Modal, PageHeader,
   SegmentedControl, Spinner, cx, useConfirm, type MenuEntry,
@@ -233,6 +234,15 @@ function FamilyCard() {
     }
   }
 
+  async function downloadOurData() {
+    try {
+      await startDownload("family-export");
+      toast("Your family's data is downloading — with lots of photos this can take a while", "success");
+    } catch (err) {
+      toast(errorText(err), "error");
+    }
+  }
+
   async function revokeInvite(id: string) {
     const ok = await confirm({ title: "Cancel this invite?", message: "The link will stop working.", confirmLabel: "Cancel invite", danger: true });
     if (ok) await run(() => api.revokeMemberInvite(id), "Invite cancelled");
@@ -330,6 +340,19 @@ function FamilyCard() {
               </ul>
             </>
           )}
+        </>
+      )}
+
+      {isOwner && (
+        <>
+          <div className="settings-divider" />
+          <div className="settings-row-split">
+            <div>
+              <h3 className="settings-subtitle">Download our data</h3>
+              <p className="er-sub">Everything your family has added — trips, places, people, photos, videos and documents — as one archive.</p>
+            </div>
+            <Button icon={Download} onClick={() => void downloadOurData()}>Download</Button>
+          </div>
         </>
       )}
 

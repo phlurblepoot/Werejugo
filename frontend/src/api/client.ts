@@ -120,6 +120,8 @@ export interface AuditEntry {
   details: Record<string, unknown>;
 }
 
+export type DownloadPurpose = "backup" | "family-export";
+
 export type ItemKind = "place" | "food" | "flight" | "cruise" | "drive" | "custom";
 
 export interface Waypoint {
@@ -709,7 +711,6 @@ export const api = {
       body: fd,
     });
   },
-  exportData: () => request<unknown>("/api/export"),
 
   // family settings
   getSettings: () => request<FamilySettings>("/api/settings"),
@@ -727,12 +728,11 @@ export const api = {
   deleteShare: (id: string) => request<void>(`/api/shares/${id}`, { method: "DELETE" }),
   getShare: (token: string) => request<SharePayload>(`/api/share/${token}`),
 
-  // backup / restore
-  downloadBackup: async (): Promise<Blob> => {
-    const token = tokenStore.get();
-    const res = await fetch(`${API_URL}/api/backup`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) throw new ApiError(res.status, "Backup failed");
-    return res.blob();
+  // big downloads (server backup, a family's data): followed as a plain link
+  // carrying a short-lived ticket, so the browser streams them to disk
+  downloadLink: async (purpose: DownloadPurpose): Promise<string> => {
+    const { url } = await request<{ url: string }>("/api/downloads/ticket", { method: "POST", body: body({ purpose }) });
+    return `${API_URL}${url}`;
   },
   restoreBackup: (file: File) => {
     const fd = new FormData();

@@ -106,3 +106,23 @@ test("a malformed archive is rejected", async () => {
   const res = await ctx.app.inject({ method: "POST", url: "/api/restore", headers: { ...auth(), ...form.getHeaders() }, payload: form.getBuffer() });
   expect(res.statusCode).toBe(400);
 });
+
+// Keep last: it replaces every account, including the test admin.
+test("a backup from an older version restores: missing columns get defaults, someone is admin", async () => {
+  const famId = "11111111-1111-4111-8111-111111111111";
+  const res = await restore(await makeArchive({
+    "manifest.json": JSON.stringify({ version: 1, app: "werejugo", tables: ["families", "users"] }),
+    "db.json": JSON.stringify({
+      // pre-1.3 rows: families still have invite_code; users lack is_admin, token_version, …
+      families: [{ id: famId, name: "Old Timers", invite_code: "OLD1", created_at: "2025-01-01T00:00:00Z", settings: {} }],
+      users: [{
+        id: "22222222-2222-4222-8222-222222222222", family_id: famId, email: "old@test.dev", display_name: "Old",
+        password_hash: "x", role: "owner", color: "#2563eb", created_at: "2025-01-01T00:00:00Z",
+      }],
+    }),
+    "storage/.keep": "",
+  }));
+  expect(res.statusCode).toBe(200);
+  const u = (await query<{ is_admin: boolean; token_version: number }>("SELECT is_admin, token_version FROM users WHERE email = 'old@test.dev'")).rows[0];
+  expect(u).toEqual({ is_admin: true, token_version: 0 });
+});

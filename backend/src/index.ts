@@ -8,6 +8,7 @@ import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { config } from "./config.js";
 import { ephemeralDataDirs } from "./lib/storage-check.js";
+import { installErrorHandling } from "./lib/errors.js";
 import { authRoutes } from "./routes/auth.js";
 import { mapSetRoutes } from "./routes/mapsets.js";
 import { fileRoutes } from "./routes/files.js";
@@ -24,7 +25,6 @@ import { blackoutRoutes } from "./routes/blackouts.js";
 import { statsRoutes } from "./routes/stats.js";
 import { exifRoutes } from "./routes/exif.js";
 import { importRoutes } from "./routes/import.js";
-import { exportRoutes } from "./routes/export.js";
 import { backupRoutes } from "./routes/backup.js";
 import { shareRoutes } from "./routes/share.js";
 import { settingsRoutes } from "./routes/settings.js";
@@ -37,6 +37,8 @@ import { inviteRoutes } from "./routes/invites.js";
 import { passwordResetRoutes } from "./routes/password-resets.js";
 import { accountRoutes } from "./routes/account.js";
 import { familyRoutes } from "./routes/family.js";
+import { familyExportRoutes } from "./routes/family-export.js";
+import { downloadRoutes } from "./routes/downloads.js";
 import { adminRoutes } from "./routes/admin.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -79,6 +81,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
+  // Before the routes, so the error handler and the id check apply to all of them.
+  installErrorHandling(app);
+
   app.get("/api/health", async () => ({ ok: true }));
 
   await app.register(authRoutes);
@@ -97,7 +102,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(statsRoutes);
   await app.register(exifRoutes);
   await app.register(importRoutes);
-  await app.register(exportRoutes);
   await app.register(backupRoutes);
   await app.register(shareRoutes);
   await app.register(settingsRoutes);
@@ -110,6 +114,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(passwordResetRoutes);
   await app.register(accountRoutes);
   await app.register(familyRoutes);
+  await app.register(familyExportRoutes);
+  await app.register(downloadRoutes);
   await app.register(adminRoutes);
 
   return app;

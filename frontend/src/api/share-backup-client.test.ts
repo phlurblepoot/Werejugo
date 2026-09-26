@@ -7,7 +7,9 @@ beforeEach(() => {
   localStorage.setItem("werejugo.token", "tok");
   vi.stubGlobal("fetch", vi.fn(async (url: string, opts: RequestInit = {}) => {
     calls.push({ url, method: opts.method ?? "GET", body: opts.body });
-    if (url.includes("/api/backup")) return new Response("x", { status: 200 });
+    if (url.includes("/api/downloads/ticket")) {
+      return new Response(JSON.stringify({ url: "/api/backup?ticket=abc" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     return new Response(JSON.stringify({ id: "s1", token: "t".repeat(20), targetType: "trip", targetId: "tr1", createdAt: "" }),
       { status: 200, headers: { "Content-Type": "application/json" } });
   }));
@@ -30,13 +32,12 @@ test("listShares passes target in the query string", async () => {
   expect(calls[0].url).toContain("/api/shares?targetType=trip&targetId=tr1");
 });
 
-test("downloadBackup fetches the archive as a blob", async () => {
-  const blob = await api.downloadBackup();
-  expect(calls[0].url).toContain("/api/backup");
-  // Assert on behaviour, not `instanceof`: jsdom's Blob and Node's Response
-  // blob come from different realms.
-  expect(blob.size).toBe(1);
-  expect(await blob.text()).toBe("x");
+test("big downloads get a ticketed link instead of loading the file into memory", async () => {
+  const url = await api.downloadLink("backup");
+  expect(calls[0].url).toContain("/api/downloads/ticket");
+  expect(JSON.parse(calls[0].body)).toEqual({ purpose: "backup" });
+  expect(url).toBe("/api/backup?ticket=abc");
+  expect(calls).toHaveLength(1);
 });
 
 test("restoreBackup posts the file as multipart", async () => {

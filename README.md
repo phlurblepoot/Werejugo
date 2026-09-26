@@ -71,6 +71,17 @@ Trips and photo albums can be shared as public, read-only links (`/s/<token>`) �
 
 Archives larger than ~100 MB can't be uploaded through Cloudflare's free proxy; restore those from your local network address instead.
 
+### Resetting the database
+
+The database schema was restarted from a single baseline in September 2026. A database created before that (it still has the old `0001_init.sql` … `0012_accounts.sql` migrations) can't be upgraded in place: the backend stops at start-up with a message saying so, and changes nothing. To move to the new schema:
+
+1. If you want to keep the data, download a backup first (Admin → Backup) with the **old** version still running.
+2. Stop Werejugo and delete the database data: `docker compose down` then `docker volume rm werejugo_db-data` (the name may carry your project prefix; see `docker volume ls`). On Unraid, stop the containers and delete the database appdata folder (by default `/mnt/user/appdata/werejugo/db`).
+3. Start Werejugo again. It builds an empty database and shows the setup screen.
+4. To bring the data back, complete the setup screen, then restore the backup from Admin → Backup. Backups from older versions restore into the new schema (new settings get their defaults, and if the backup has no server admin, the oldest family's first owner becomes one).
+
+Photos, videos and documents live in the `storage` volume, not the database, so they aren't touched by step 2.
+
 ## Tests
 
 ```bash

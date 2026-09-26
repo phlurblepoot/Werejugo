@@ -14,7 +14,12 @@ export interface TokenClaims {
   tv?: number;
   /** Present while a server admin is viewing another family. */
   adminView?: { homeFamilyId: string };
+  /** Set on download tickets: only good for that one download, never as a login. */
+  purpose?: DownloadPurpose;
 }
+
+/** Big downloads the browser fetches by URL (so they stream to disk, not into memory). */
+export type DownloadPurpose = "backup" | "family-export";
 
 /** The authenticated user as routes see it: token claims refreshed from the database. */
 export interface AuthUser extends TokenClaims {
@@ -77,6 +82,47 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Pro
     await reply.code(401).send({ error: "Unauthorized" });
     return;
   }
+  // A download ticket in an Authorization header is not a login.
+  if (req.user.purpose) {
+    await reply.code(401).send({ error: "Unauthorized" });
+    return;
+  }
+  await checkSession(req, reply);
+}
+
+/**
+ * preHandler for a big download: a normal login, or a short-lived ticket for
+ * exactly this download in `?ticket=` (the browser follows a plain link, so the
+ * file streams to disk). Either way the account is checked like requireAuth.
+ */
+export function requireAuthOrTicket(purpose: DownloadPurpose) {
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const ticket = (req.query as { ticket?: unknown } | undefined)?.ticket;
+    if (typeof ticket !== "string") return requireAuth(req, reply);
+    try {
+      req.user = req.server.jwt.verify<TokenClaims>(ticket) as AuthUser;
+    } catch {
+      await reply.code(401).send({ error: "This download link has expired — start the download again" });
+      return;
+    }
+    if (req.user.purpose !== purpose) {
+      await reply.code(401).send({ error: "Unauthorized" });
+      return;
+    }
+    await checkSession(req, reply);
+  };
+}
+
+/** A two-minute ticket for one download, carrying the caller's session. */
+export function signDownloadTicket(app: FastifyInstance, user: AuthUser, purpose: DownloadPurpose): string {
+  const claims: TokenClaims = {
+    id: user.id, familyId: user.familyId, role: user.role, tv: user.tv, purpose,
+    ...(user.adminView ? { adminView: user.adminView } : {}),
+  };
+  return app.jwt.sign(claims, { expiresIn: "2m" });
+}
+
+async function checkSession(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const claims = req.user;
   const { rows } = await query<SessionRow>(
     `SELECT u.family_id, u.role, u.is_admin, u.token_version,

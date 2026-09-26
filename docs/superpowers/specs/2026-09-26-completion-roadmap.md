@@ -232,8 +232,8 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 - [ ] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
 - [ ] Tenant-isolation test suite covering every endpoint.
-- [ ] Per-family "download our data" export vs admin full-server backup.
-- [ ] Squash migrations 0001–0011 into a new baseline (one-time reset of the test instance, documented in the release notes).
+- [x] Per-family "download our data" export vs admin full-server backup.
+- [x] Squash migrations 0001–0012 into a new baseline (one-time reset of the test instance, documented in the release notes). *(0012 was added by 1.3, so the squash covers it too; old backups still restore.)*
 - [ ] Fix integrity gaps found in the audit: visit `tripId`/`themeId` ownership checks, document single-owner rule, blackout date order, a unique trip packing list, dangling `links` and `share_links` cleanup on delete.
 
 #### 1.5 Shared trips & cross-family people — L

@@ -16,11 +16,9 @@ test("stats endpoint returns counts over visits", async () => {
   expect(res.json().items).toBe(1);
 });
 
-test("export includes visits", async () => {
+test("the old map-set JSON export is gone (replaced by the family export)", async () => {
   const res = await ctx.app.inject({ method: "GET", url: "/api/export", headers: auth() });
-  expect(res.statusCode).toBe(200);
-  expect(Array.isArray(res.json().visits)).toBe(true);
-  expect(res.json().visits.length).toBeGreaterThanOrEqual(1);
+  expect(res.statusCode).toBe(404);
 });
 
 // NOTE: map-set sharing was retired in phase 8A (Task 3/4) — maps are no longer

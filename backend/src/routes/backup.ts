@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import * as tar from "tar";
-import { requireAdmin, requireAuth } from "../lib/auth.js";
+import { requireAdmin, requireAuth, requireAuthOrTicket } from "../lib/auth.js";
 import { audit } from "../lib/audit.js";
 import { config } from "../config.js";
 import { BACKUP_TABLES, dumpDatabase, restoreDatabase } from "../lib/archive.js";
@@ -52,7 +52,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
   // A backup holds every family on the server, so only server admins may make or restore one.
   const guard = { preHandler: [requireAuth, requireAdmin] };
 
-  app.get("/api/backup", guard, async (req, reply) => {
+  app.get("/api/backup", { preHandler: [requireAuthOrTicket("backup"), requireAdmin] }, async (req, reply) => {
     await audit({ actorId: req.user.id, action: "backup.downloaded" });
     const stage = await mkdtemp(join(tmpdir(), "wj-backup-"));
     const db = await dumpDatabase();

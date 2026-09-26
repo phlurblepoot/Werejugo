@@ -14,7 +14,7 @@ const h = vi.hoisted(() => ({
   adminUsers: vi.fn(async () => []),
   adminUpdateUser: vi.fn(async () => ({ ok: true })),
   auditLog: vi.fn(async () => []),
-  downloadBackup: vi.fn(async () => new Blob(["x"])),
+  downloadLink: vi.fn(async () => "/api/backup?ticket=abc"),
   restoreBackup: vi.fn(async () => ({ ok: true, counts: { trips: 2 } })),
 }));
 vi.mock("../api/client", () => ({ API_URL: "", api: h }));
@@ -117,7 +117,7 @@ test("people: promote to admin after confirming", async () => {
 test("backup and restore live here now", async () => {
   renderAt("/admin?tab=backup");
   await userEvent.click(screen.getByRole("button", { name: /Download backup/ }));
-  await waitFor(() => expect(h.downloadBackup).toHaveBeenCalled());
+  await waitFor(() => expect(h.downloadLink).toHaveBeenCalledWith("backup"));
   await userEvent.upload(screen.getByLabelText(/restore archive/i), new File(["x"], "b.tar.gz"));
   const btn = screen.getByRole("button", { name: /Restore & replace/ });
   expect(btn).toBeDisabled();
