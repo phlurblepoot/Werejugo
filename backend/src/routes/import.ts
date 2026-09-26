@@ -72,9 +72,11 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           geom = { type: "LineString", coordinates: g.coordinates };
           kind = "drive";
         } else if (g.type === "MultiLineString") {
-          const lines = g.coordinates as number[][][];
-          if (lines[0]) {
-            geom = { type: "LineString", coordinates: lines[0] };
+          // A GPX track with several segments (pauses, signal loss): keep every
+          // part, joined in order, as one drive.
+          const points = (g.coordinates as number[][][]).flat();
+          if (points.length >= 2) {
+            geom = { type: "LineString", coordinates: points };
             kind = "drive";
           }
         }
@@ -83,8 +85,9 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           continue;
         }
         const ins = await client.query<{ id: string }>(
+          // GPX/KML usually carry elevation; visits store 2D geometry.
           `INSERT INTO visits (family_id, kind, title, geom, created_by)
-           VALUES ($1, $2, $3, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326), $5) RETURNING id`,
+           VALUES ($1, $2, $3, ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($4), 4326)), $5) RETURNING id`,
           [req.user.familyId, kind, title, JSON.stringify(geom), req.user.id],
         );
         await client.query(
@@ -95,6 +98,6 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       }
     });
 
-    return { imported, skipped };
+    return { imported, skipped, truncated: Math.max(0, features.length - MAX_FEATURES) };
   });
 }

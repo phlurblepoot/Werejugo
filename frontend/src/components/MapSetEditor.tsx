@@ -19,8 +19,12 @@ export function MapSetEditor({ mapSet, onClose, onSaved, onDeleted, onImported }
     if (!mapSet) return;
     setImportMsg("Importing…");
     try {
-      const { imported, skipped } = await api.importFile(mapSet.id, file);
-      const msg = `Imported ${imported} item(s)${skipped ? `, skipped ${skipped}` : ""}.`;
+      const { imported, skipped, truncated } = await api.importFile(mapSet.id, file);
+      const notes = [
+        skipped ? `skipped ${skipped} unsupported shape(s)` : "",
+        truncated ? `left out ${truncated} beyond the 2,000-item limit` : "",
+      ].filter(Boolean).join(", ");
+      const msg = `Imported ${imported} item(s)${notes ? ` — ${notes}` : ""}.`;
       setImportMsg(msg);
       onImported();
       toast(msg, "success");

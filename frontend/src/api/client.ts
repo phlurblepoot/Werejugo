@@ -559,7 +559,7 @@ export const api = {
   importFile: (mapSetId: string, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return request<{ imported: number; skipped: number }>(`/api/map-sets/${mapSetId}/import`, {
+    return request<{ imported: number; skipped: number; truncated: number }>(`/api/map-sets/${mapSetId}/import`, {
       method: "POST",
       body: fd,
     });

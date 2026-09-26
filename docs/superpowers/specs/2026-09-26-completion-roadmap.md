@@ -201,7 +201,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [x] B3 (stopgap until 1.3): disable public registration after the first family (`ALLOW_SIGNUP=false` default); restrict backup/restore to the first family's owner; restore validates the archive's `storage/` before wiping anything.
 - [x] Backups also include `UPLOADS_DIR` (icons, map overlays, ship images), and restore replaces the storage contents in place (the directory is a volume mount point in Docker). (added 2026-09-26)
 - [x] B1: make the first-run welcome an inline, dismissible panel that refetches.
-- [ ] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
+- [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
 - [ ] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
 - [ ] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
 - [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`.
