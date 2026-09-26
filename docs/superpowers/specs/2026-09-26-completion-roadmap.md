@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
 | **Current phase** | 1.3 |
-| **Next step** | Write the Phase 1.3 plan (accounts, admin & onboarding) and build it |
+| **Next step** | Build Phase 1.3: migration + auth model → public invite/reset/setup routes → account/family/admin routes → frontend |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -218,7 +218,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.3 Accounts, admin & onboarding — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-1.3](../plans/2026-09-26-phase-1.3-accounts-admin.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
 - [ ] Setup wizard on an empty server (admin + first family); remove open registration for good.
 - [ ] Admin console (§3.1): families, one-time family invites, users, password-reset links, server backup/restore (moved here, admin-only), audit log, "switch into family".
