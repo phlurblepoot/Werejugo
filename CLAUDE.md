@@ -37,6 +37,14 @@ Log entry format (newest date first, under a `### YYYY-MM-DD` heading):
 - Pushes to `claude/**` branches publish preview Docker images tagged with the branch name, so the owner can test a milestone on Unraid before merging.
 - PRs follow `.github/pull_request_template.md`, including its Roadmap checklist. CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` plus both test suites.
 
+## Backend conventions
+
+- **Tenancy goes through `backend/src/lib/access.ts`.** Load rows by id with `loadReadable`/`loadEditable` (404, never 403), check every id you store with `assertRefs` (400 "Unknown …"), and keep `family_id` in every `UPDATE`/`DELETE`. Shared trips (1.5) widen these helpers, not the routes.
+- **Every new route needs a case in `routes/tenant-isolation.test.ts`** (or an `EXEMPT` entry with a reason) — the suite fails on any registered route it doesn't know.
+- Throw `HttpError`s (`lib/errors.ts`) and parse bodies with zod `.parse()`; the global error handler turns them (and Postgres input errors) into 400/404/409. Dates use `ymd`/`optionalYmd` from `lib/validate.ts`; coordinates use `lib/geojson.ts`.
+- Files live under `families/<familyId>/…` in `STORAGE_DIR`, with never-reused names (`lib/storage.ts`).
+- Schema changes are new migrations after `0001_baseline.sql`; never edit an applied migration.
+
 ## Running things
 
 Backend tests need PostgreSQL 16 with PostGIS on `localhost:5432`, with role `werejugo` / password `change-me-in-production` (or set `TEST_DATABASE_URL`). In a fresh cloud container, this worked:

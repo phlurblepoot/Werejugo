@@ -12,7 +12,7 @@ afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 test("saves a PDF into the target dir with a readable name", async () => {
   const { saveDocumentUpload, absStoragePath } = await import("./storage.js");
   const r = await saveDocumentUpload({ filename: "Dad Passport.pdf", file: Readable.from(Buffer.from("%PDF-1.4")) }, "people/dad");
-  expect(r.relPath).toBe("people/dad/dad-passport.pdf");
+  expect(r.relPath).toMatch(/^people\/dad\/dad-passport-[0-9a-f]{8}\.pdf$/);
   expect(r.originalName).toBe("Dad Passport.pdf");
   expect(existsSync(absStoragePath(r.relPath))).toBe(true);
 });

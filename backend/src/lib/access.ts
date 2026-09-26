@@ -48,6 +48,7 @@ const ENTITIES = {
   comment: { table: "comments", label: "comment", join: "JOIN visits v ON v.id = t.visit_id", family: "v.family_id" },
   link: { table: "links", label: "link" },
   share_link: { table: "share_links", label: "share link" },
+  user: { table: "users", label: "family member" },
 } satisfies Record<string, EntityDef>;
 
 export type EntityKind = keyof typeof ENTITIES;

@@ -3,6 +3,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import { gpx, kml } from "@tmcw/togeojson";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { visitGeometry } from "../lib/geojson.js";
 
 const MAX_FEATURES = 2000;
 
@@ -80,7 +81,8 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
             kind = "drive";
           }
         }
-        if (!geom) {
+        // Out-of-range or malformed coordinates: skip the feature, don't fail the import.
+        if (!geom || !visitGeometry.safeParse(geom).success) {
           skipped++;
           continue;
         }

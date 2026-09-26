@@ -3,6 +3,7 @@ import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { parseRef, TABLE_FOR, CORE_TYPES, type CoreType } from "../lib/refs.js";
 import { signFileUrl } from "../lib/filesign.js";
+import { likeEscape } from "../lib/validate.js";
 
 export interface EntitySummary {
   type: CoreType; id: string; label: string; subtitle: string | null; thumbUrl: string | null;
@@ -23,7 +24,7 @@ async function summariesFor(familyId: string, type: CoreType, ids: string[]): Pr
   } else if (type === "person") {
     const { rows } = await query<any>(
       `SELECT p.id, p.display_name, p.relationship, m.rel_path, m.thumb_rel_path
-       FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id
+       FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id AND m.family_id = p.family_id
        WHERE p.family_id = $1 AND p.id = ANY($2::uuid[])`, [familyId, ids]);
     for (const r of rows) {
       const rel = r.thumb_rel_path ?? r.rel_path;
@@ -81,7 +82,7 @@ export async function relationRoutes(app: FastifyInstance): Promise<void> {
     }
     const term = (q ?? "").trim();
     if (term.length === 0) return [];
-    const like = `%${term}%`;
+    const like = `%${likeEscape(term)}%`;
     const fam = req.user.familyId;
     const t = type as CoreType;
 
@@ -98,7 +99,7 @@ export async function relationRoutes(app: FastifyInstance): Promise<void> {
     if (t === "person") {
       const { rows } = await query<any>(
         `SELECT p.id, p.display_name, m.rel_path, m.thumb_rel_path
-         FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id
+         FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id AND m.family_id = p.family_id
          WHERE p.family_id = $1 AND p.display_name ILIKE $2 ORDER BY p.display_name ASC LIMIT 20`, [fam, like]);
       return rows.map((r) => {
         const rel = r.thumb_rel_path ?? r.rel_path;

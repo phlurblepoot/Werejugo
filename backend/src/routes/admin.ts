@@ -4,7 +4,8 @@ import { query, tx } from "../db/pool.js";
 import { requireAdmin, requireAuth, signToken, type Role } from "../lib/auth.js";
 import { audit } from "../lib/audit.js";
 import { createInvite, createResetLink } from "../lib/links-onetime.js";
-import { deleteStored } from "../lib/storage.js";
+import { deleteFamilyFiles, deleteStored } from "../lib/storage.js";
+import { likeEscape } from "../lib/validate.js";
 
 const UUID = z.string().uuid();
 const id = (params: unknown) => (params as { id: string }).id;
@@ -111,6 +112,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       await audit({ actorId: req.user.id, action: "family.deleted", target: fam.name, details: { familyId, files: files.length } }, client);
     });
     for (const p of files) await deleteStored(p);
+    await deleteFamilyFiles(familyId);
     return reply.code(204).send();
   });
 
@@ -126,7 +128,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
          FROM users u JOIN families f ON f.id = u.family_id
         WHERE $1 = '' OR u.display_name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%' OR f.name ILIKE '%' || $1 || '%'
         ORDER BY f.name ASC, u.display_name ASC`,
-      [q]);
+      [likeEscape(q)]);
     return rows.map((u) => ({
       id: u.id, displayName: u.display_name, email: u.email, familyId: u.family_id, familyName: u.family_name,
       role: u.role, isAdmin: u.is_admin, disabled: u.disabled_at !== null, lastLoginAt: u.last_login_at, createdAt: u.created_at,

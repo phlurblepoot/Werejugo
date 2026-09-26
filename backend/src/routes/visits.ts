@@ -4,12 +4,16 @@ import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { signFileUrl } from "../lib/filesign.js";
+import { assertRefs, loadEditable, loadReadable, scopeOf } from "../lib/access.js";
+import { badRequest, notFound } from "../lib/errors.js";
+import { endsBeforeStart, optionalYmd } from "../lib/validate.js";
+import { lat, lng, visitGeometry } from "../lib/geojson.js";
 
-const geometrySchema = z.object({ type: z.enum(["Point", "LineString"]), coordinates: z.any() }).nullable();
+const geometrySchema = visitGeometry.nullable();
 const waypointSchema = z.object({
   label: z.string().min(1).max(200),
   kind: z.enum(["origin", "stop", "destination", "port"]).default("stop"),
-  lng: z.number(), lat: z.number(), seq: z.number().int().optional(),
+  lng, lat, seq: z.number().int().min(0).max(100000).optional(),
   arriveAt: z.string().datetime().nullish(), departAt: z.string().datetime().nullish(),
 });
 const visitSchema = z.object({
@@ -20,17 +24,14 @@ const visitSchema = z.object({
   tripId: z.string().uuid().nullish(),
   color: z.string().max(40).nullish(),
   icon: z.string().max(200).nullish(),
-  occurredOn: z.string().nullish(),
-  occurredEnd: z.string().nullish(),
+  occurredOn: optionalYmd,
+  occurredEnd: optionalYmd,
   properties: z.record(z.unknown()).optional(),
   geometry: geometrySchema.optional(),
-  waypoints: z.array(waypointSchema).optional(),
+  waypoints: z.array(waypointSchema).max(500).optional(),
 });
 
-async function ownsVisit(familyId: string, id: string): Promise<boolean> {
-  const { rowCount } = await query("SELECT 1 FROM visits WHERE id = $1 AND family_id = $2", [id, familyId]);
-  return Boolean(rowCount);
-}
+const DATE_ORDER = "The end date can't be before the start date";
 
 export async function loadVisit(familyId: string, id: string) {
   const { rows } = await query<any>(
@@ -50,7 +51,7 @@ export async function loadVisit(familyId: string, id: string) {
   const photoRows = await query<any>(
     `SELECT m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
      FROM links l JOIN media m ON m.id = CASE
-        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
+        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END AND m.family_id = l.family_id
      WHERE l.family_id = $2
        AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=$1)
          OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=$1))
@@ -101,9 +102,10 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/visits", async (req, reply) => {
-    const parsed = visitSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const b = visitSchema.parse(req.body);
+    const scope = scopeOf(req);
+    if (endsBeforeStart(b.occurredOn, b.occurredEnd)) throw badRequest(DATE_ORDER);
+    await assertRefs(scope, { trip: b.tripId, theme: b.themeId });
     const id = await tx(async (client) => {
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
       const res = await client.query<{ id: string }>(
@@ -123,22 +125,25 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send(await loadVisit(req.user.familyId, id));
   });
 
-  app.get("/api/visits/:id", async (req, reply) => {
+  app.get("/api/visits/:id", async (req) => {
     const v = await loadVisit(req.user.familyId, (req.params as { id: string }).id);
-    if (!v) return reply.code(404).send({ error: "Not found" });
+    if (!v) throw notFound("Place not found");
     return v;
   });
 
-  app.patch("/api/visits/:id", async (req, reply) => {
+  app.patch("/api/visits/:id", async (req) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    const parsed = visitSchema.partial().safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const scope = scopeOf(req);
+    const current = await loadEditable<{ occurred_on: string | null; occurred_end: string | null }>("visit", id, scope);
+    const b = visitSchema.partial().parse(req.body);
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+    const start = has("occurredOn") ? b.occurredOn : current.occurred_on;
+    const end = has("occurredEnd") ? b.occurredEnd : current.occurred_end;
+    if (endsBeforeStart(start, end)) throw badRequest(DATE_ORDER);
+    await assertRefs(scope, { trip: b.tripId, theme: b.themeId });
     await tx(async (client) => {
       const geomProvided = Object.prototype.hasOwnProperty.call(b, "geometry");
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
-      const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
       await client.query(
         `UPDATE visits SET
            kind = COALESCE($2, kind), title = COALESCE($3, title), notes = COALESCE($4, notes),
@@ -153,12 +158,13 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
              ELSE geom END,
            properties = CASE WHEN $19::boolean THEN COALESCE($20::jsonb,'{}'::jsonb) ELSE properties END,
            updated_at = now()
-         WHERE id = $1`,
+         WHERE id = $1 AND family_id = $21`,
         [id, b.kind ?? null, b.title ?? null, b.notes ?? null,
          has("themeId"), b.themeId ?? null, has("color"), b.color ?? null,
          has("icon"), b.icon ?? null, has("occurredOn"), b.occurredOn ?? null,
          has("occurredEnd"), b.occurredEnd ?? null, has("tripId"), b.tripId ?? null,
-         geomProvided, geomJson, has("properties"), b.properties ? JSON.stringify(b.properties) : null],
+         geomProvided, geomJson, has("properties"), b.properties ? JSON.stringify(b.properties) : null,
+         scope.familyId],
       );
       if (b.waypoints) {
         await client.query("DELETE FROM visit_waypoints WHERE visit_id = $1", [id]);
@@ -170,15 +176,15 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete("/api/visits/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    await query("DELETE FROM visits WHERE id = $1", [id]);
+    await loadEditable("visit", id, scopeOf(req));
+    await query("DELETE FROM visits WHERE id = $1 AND family_id = $2", [id, req.user.familyId]);
     return reply.code(204).send();
   });
 
   // --- Comments (now on visits) ---
-  app.get("/api/visits/:id/comments", async (req, reply) => {
+  app.get("/api/visits/:id/comments", async (req) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
+    await loadReadable("visit", id, scopeOf(req));
     const { rows } = await query<any>(
       `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name AS author
        FROM comments c LEFT JOIN users u ON u.id = c.user_id
@@ -189,12 +195,11 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/api/visits/:id/comments", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    const parsed = z.object({ body: z.string().min(1).max(4000) }).safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    await loadReadable("visit", id, scopeOf(req));
+    const { body } = z.object({ body: z.string().min(1).max(4000) }).parse(req.body);
     const { rows } = await query<any>(
       `INSERT INTO comments (visit_id, user_id, body) VALUES ($1,$2,$3)
-       RETURNING id, body, created_at, user_id`, [id, req.user.id, parsed.data.body],
+       RETURNING id, body, created_at, user_id`, [id, req.user.id, body],
     );
     const r = rows[0];
     return reply.code(201).send({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id });
@@ -207,7 +212,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
        WHERE c.id = $1 AND c.visit_id = v.id AND v.family_id = $2 AND c.user_id = $3`,
       [id, req.user.familyId, req.user.id],
     );
-    if (!res.rowCount) return reply.code(404).send({ error: "Not found" });
+    if (!res.rowCount) throw notFound("Comment not found");
     return reply.code(204).send();
   });
 }

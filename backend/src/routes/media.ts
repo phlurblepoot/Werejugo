@@ -2,6 +2,9 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { assertRefs, loadEditable, scopeOf } from "../lib/access.js";
+import { badRequest, notFound } from "../lib/errors.js";
+import { uuid, ymd } from "../lib/validate.js";
 import { mediaDirFor, saveMediaUpload, deleteStored, absStoragePath } from "../lib/storage.js";
 import { reconcileMediaTrip } from "../lib/reconcile.js";
 import { extractExif } from "../lib/exif.js";
@@ -38,12 +41,24 @@ function toListDto(r: MediaListRow) {
   };
 }
 
-async function loadMedia(familyId: string, id: string): Promise<MediaRow | null> {
+async function loadMedia(familyId: string, id: string): Promise<MediaRow> {
   const { rows } = await query<MediaRow>(
     "SELECT * FROM media WHERE id = $1 AND family_id = $2", [id, familyId],
   );
-  return rows[0] ?? null;
+  if (!rows[0]) throw notFound("Photo or video not found");
+  return rows[0];
 }
+
+const listQuery = z.object({
+  trip: uuid.optional(),
+  person: uuid.optional(),
+  visit: uuid.optional(),
+  from: ymd.optional(),
+  to: ymd.optional(),
+  bbox: z.string().max(200).optional(),
+  before: z.string().regex(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z__[0-9a-f-]{36}$/i, "Bad cursor").optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
 
 export async function mediaRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
@@ -57,17 +72,18 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
       if (part.type === "file") {
         originalName = part.filename;
         try {
-          saved = await saveMediaUpload(part, mediaDirFor(null, new Date()));
-        } catch {
-          return reply.code(400).send({ error: "Unsupported file type" });
+          saved = await saveMediaUpload(part, mediaDirFor(req.user.familyId, null, new Date()));
+        } catch (err) {
+          if (err instanceof Error && err.message === "UNSUPPORTED_TYPE") throw badRequest("Unsupported file type");
+          throw err;
         }
       } else if (part.fieldname === "caption" && typeof part.value === "string") {
         caption = part.value.slice(0, 500);
       }
     }
-    if (!saved) return reply.code(400).send({ error: "No file provided" });
+    if (!saved) throw badRequest("No file provided");
     const exif = await extractExif(absStoragePath(saved.relPath));
-    const { rows } = await query<MediaRow>(
+    const inserted = await query<MediaRow>(
       `INSERT INTO media (family_id, kind, rel_path, thumb_rel_path, original_name, caption, width, height, taken_at, geom, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
          CASE WHEN $10::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($10,$11),4326) END,
@@ -75,12 +91,17 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
        RETURNING *`,
       [req.user.familyId, saved.kind, saved.relPath, saved.thumbRelPath, originalName, caption,
        saved.width, saved.height, exif.takenAt, exif.lng, exif.lat, req.user.id],
-    );
-    return reply.code(201).send(toDto(rows[0]));
+    ).catch(async (err) => {
+      // Don't leave the file behind if the row couldn't be saved.
+      await deleteStored(saved!.relPath);
+      await deleteStored(saved!.thumbRelPath);
+      throw err;
+    });
+    return reply.code(201).send(toDto(inserted.rows[0]));
   });
 
-  app.get("/api/media", async (req, reply) => {
-    const q = req.query as Record<string, string | undefined>;
+  app.get("/api/media", async (req) => {
+    const q = listQuery.parse(req.query);
     const where: string[] = ["m.family_id = $1"];
     const params: unknown[] = [req.user.familyId];
     const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
@@ -112,7 +133,7 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
       const id = q.before.slice(sep + 2);
       where.push(`(COALESCE(m.taken_at, m.created_at), m.id) < (${add(ts)}::timestamptz, ${add(id)}::uuid)`);
     }
-    const limit = Math.min(Math.max(Number(q.limit) || 60, 1), 200);
+    const limit = q.limit ?? 60;
 
     const { rows } = await query<MediaListRow>(
       `SELECT m.*, ST_X(m.geom) AS lng, ST_Y(m.geom) AS lat,
@@ -127,50 +148,39 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
     return { items, nextCursor: items.length === limit ? items[items.length - 1].cursor : null };
   });
 
-  app.get("/api/media/:id", async (req, reply) => {
-    const row = await loadMedia(req.user.familyId, (req.params as { id: string }).id);
-    if (!row) return reply.code(404).send({ error: "Not found" });
-    return toDto(row);
-  });
+  app.get("/api/media/:id", async (req) => toDto(await loadMedia(req.user.familyId, (req.params as { id: string }).id)));
 
   const patchSchema = z.object({
     caption: z.string().max(500).optional(),
     tripId: z.string().uuid().nullable().optional(),
   });
 
-  app.patch("/api/media/:id", async (req, reply) => {
+  app.patch("/api/media/:id", async (req) => {
     const id = (req.params as { id: string }).id;
-    const row = await loadMedia(req.user.familyId, id);
-    if (!row) return reply.code(404).send({ error: "Not found" });
-    const parsed = patchSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const scope = scopeOf(req);
+    await loadEditable("media", id, scope);
+    const b = patchSchema.parse(req.body);
+    await assertRefs(scope, { trip: b.tripId });
 
     if (b.caption !== undefined) {
-      await query("UPDATE media SET caption = $2 WHERE id = $1", [id, b.caption]);
+      await query("UPDATE media SET caption = $2 WHERE id = $1 AND family_id = $3", [id, b.caption, scope.familyId]);
     }
     if (Object.prototype.hasOwnProperty.call(b, "tripId")) {
-      // Validate the trip belongs to the family (when non-null).
-      if (b.tripId) {
-        const t = await query("SELECT 1 FROM trips WHERE id = $1 AND family_id = $2", [b.tripId, req.user.familyId]);
-        if (!t.rowCount) return reply.code(404).send({ error: "Trip not found" });
-      }
       await tx(async (client) => {
-        await client.query("UPDATE media SET trip_id = $1 WHERE id = $2", [b.tripId ?? null, id]);
+        await client.query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [b.tripId ?? null, id, scope.familyId]);
         await reconcileMediaTrip(client, id);
       });
     }
-    const updated = await loadMedia(req.user.familyId, id);
-    return toDto(updated!);
+    return toDto(await loadMedia(scope.familyId, id));
   });
 
   app.delete("/api/media/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const row = await loadMedia(req.user.familyId, id);
-    if (!row) return reply.code(404).send({ error: "Not found" });
-    await query("DELETE FROM media WHERE id = $1", [id]);
+    const scope = scopeOf(req);
+    const row = await loadEditable<MediaRow>("media", id, scope);
+    await query("DELETE FROM media WHERE id = $1 AND family_id = $2", [id, scope.familyId]);
     await deleteStored(row.rel_path);
-    if (row.thumb_rel_path) await deleteStored(row.thumb_rel_path);
+    await deleteStored(row.thumb_rel_path);
     return reply.code(204).send();
   });
 }

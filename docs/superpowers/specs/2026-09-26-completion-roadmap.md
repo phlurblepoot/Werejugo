@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.4 |
-| **Next step** | Build Phase 1.4: error handler + validation → `access.ts` → baseline migration → migrate routes → tenant-isolation suite → per-family export |
+| **Current phase** | 1.5 |
+| **Next step** | Plan Phase 1.5 (shared trips & cross-family people): write the plan, then `trip_members`/`trip_invites` on top of `lib/access.ts` |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -228,13 +228,14 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.4 Tenancy & access layer — L
 
-**Status:** In progress · **Plan:** [phase-1.4](../plans/2026-09-26-phase-1.4-tenancy-access.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
+**Status:** Done · **Plan:** [phase-1.4](../plans/2026-09-26-phase-1.4-tenancy-access.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
-- [ ] Tenant-isolation test suite covering every endpoint.
+- [x] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
+- [x] Tenant-isolation test suite covering every endpoint.
 - [x] Per-family "download our data" export vs admin full-server backup.
 - [x] Squash migrations 0001–0012 into a new baseline (one-time reset of the test instance, documented in the release notes). *(0012 was added by 1.3, so the squash covers it too; old backups still restore.)*
-- [ ] Fix integrity gaps found in the audit: visit `tripId`/`themeId` ownership checks, document single-owner rule, blackout date order, a unique trip packing list, dangling `links` and `share_links` cleanup on delete.
+- [x] Fix integrity gaps found in the audit: visit `tripId`/`themeId` ownership checks, document single-owner rule, blackout date order, a unique trip packing list, dangling `links` and `share_links` cleanup on delete.
+- [x] Per-family storage folders and never-reused file names, so no family's file can be served, overwritten or deleted through another family's path. (added 2026-09-26 — found by the 1.4 audit)
 
 #### 1.5 Shared trips & cross-family people — L
 
@@ -487,6 +488,11 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-26
+
+- **Done** — Phase 1.4 Tenancy & access layer (PR #1): `lib/access.ts` decides who can see and change what (`loadReadable`/`loadEditable` → 404, `assertRefs` → 400), and every route uses it or a family-filtered statement. A global error handler turns bad input (zod, non-UUID ids, bad dates, out-of-range coordinates, Postgres input errors) into 400/404/409 instead of 500. The tenant-isolation suite runs 90 cross-family attempts over every registered route, fails on any new route it doesn't cover, and was shown to fail when a check is removed. Migrations 0001–0012 are squashed into `0001_baseline.sql` (pg_dump diff checked); a pre-baseline database is refused at start-up with reset steps. Owners can "Download our data" (the family's rows and files); big downloads stream through a two-minute ticket link. Verified: backend 275/275, frontend 156/156; Playwright on a fresh baseline database: the full 1.3 walkthrough, a family export containing only that family's rows and photo, the admin backup download, and a ticket refused as a login.
+- **Note** — Found by the 1.4 audit and fixed (added to 1.4): photos and documents from different families shared storage folders (`loose/<year>`, `people/<name>`…) and reused file names, so two families' uploads could collide and an old photo link could show another family's file. Files now live under `families/<familyId>/`, names carry a random suffix and are created exclusively, and moves never overwrite.
+- **Changed** — "Download our data" and the admin backup now download through a short-lived, single-purpose link instead of being loaded into browser memory (a 20k-photo library wouldn't fit). The old map-set JSON export (`GET /api/export`, the Map's "Export map data") is removed. Old backups still restore into the new schema.
+- **Note** — Left for later phases (not tenancy leaks): any family member (not only owners) can change family settings, delete trips and create share links; `/uploads/*` (pin icons, map overlays) is public; signed file URLs stay valid for 24 h after a share link is revoked; photos are filed under the upload year rather than the EXIF year. Listed in the 1.4 plan's "Outcome".
 
 - **Done** — Phase 1.3 Accounts, admin & onboarding (PR #1): a setup wizard on an empty server creates the admin and first family, and open registration and family invite codes are gone. New families join only through one-time admin invite links, which tell them the admin can see all data. Members join through one-time owner invite links with a chosen role. Password resets are one-time links issued by an owner or the admin. Settings covers profile, colour, password change, sign out everywhere, members and roles, invites and removal. The Admin page covers families (invite, rename, disable, delete by typed name, view as), people (search, admin, disable, reset link, role), backup and restore (moved here, admin only) and the audit log. While an admin views another family a banner shows "Return to my family". Sign-in and sign-out clear the React Query cache, and any 401 signs out cleanly. Verified: backend 164/164, frontend 155/155; a Playwright run on a fresh database under the nginx CSP covered setup → family invite → member invite → reset link (old session signed out) → admin view-as and return → people, audit and backup tabs, at desktop and phone sizes in light and dark, with no overflow or console errors.
 - **Note** — Found during 1.3: the backend crashed whenever Postgres dropped an idle connection (e.g. the database container restarting), because the pool had no `error` listener. It now logs and carries on (`backend/src/db/pool.ts`). Also fixed: new people get distinct avatar colours, joining through an invite counts as a first sign-in, and the map's "no pins yet" hint no longer squashes on phones.

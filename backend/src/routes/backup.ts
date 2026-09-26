@@ -75,7 +75,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     await tar.c({ gzip: true, file: archive, cwd: stage }, ["db.json", "manifest.json", "storage", "uploads"]);
 
     reply.header("Content-Type", "application/gzip");
-    reply.header("Content-Disposition", `attachment; filename="werejugo-backup.tar.gz"`);
+    reply.header("Content-Disposition", `attachment; filename="werejugo-backup-${new Date().toISOString().slice(0, 10)}.tar.gz"`);
     const stream = createReadStream(archive);
     stream.on("close", () => { void rm(stage, { recursive: true, force: true }); });
     return reply.send(stream);

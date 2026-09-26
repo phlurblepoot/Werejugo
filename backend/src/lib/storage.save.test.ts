@@ -26,8 +26,8 @@ test("saveMediaUpload stores an image and a thumbnail", async () => {
   );
 
   expect(result.kind).toBe("image");
-  expect(result.relPath).toBe("loose/2024/sunset-photo.png");
-  expect(result.thumbRelPath).toBe("loose/2024/sunset-photo.thumb.jpg");
+  expect(result.relPath).toMatch(/^loose\/2024\/sunset-photo-[0-9a-f]{8}\.png$/);
+  expect(result.thumbRelPath).toBe(result.relPath.replace(".png", ".thumb.jpg"));
   expect(existsSync(absStoragePath(result.relPath))).toBe(true);
   expect(existsSync(absStoragePath(result.thumbRelPath!))).toBe(true);
 });

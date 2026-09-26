@@ -2,13 +2,16 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { loadEditable, scopeOf } from "../lib/access.js";
+import { badRequest, notFound } from "../lib/errors.js";
+import { endsBeforeStart, optionalYmd } from "../lib/validate.js";
 
 const upsertSchema = z.object({
   name: z.string().min(1).max(160),
   description: z.string().max(4000).optional(),
-  startDate: z.string().nullish(),
-  endDate: z.string().nullish(),
-  coverPhotoUrl: z.string().nullish(),
+  startDate: optionalYmd,
+  endDate: optionalYmd,
+  coverPhotoUrl: z.string().max(2000).nullish(),
   color: z.string().max(40).optional(),
   status: z.enum(["idea", "planning", "booked", "done"]).optional(),
 });
@@ -24,6 +27,8 @@ const toDto = (r: TripRow) => ({
   coverPhotoUrl: r.cover_photo_url, color: r.color, status: r.status, createdAt: r.created_at,
 });
 
+const DATE_ORDER = "The trip can't end before it starts";
+
 export async function tripRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
@@ -35,24 +40,25 @@ export async function tripRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/trips", async (req, reply) => {
-    const parsed = upsertSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const b = upsertSchema.parse(req.body);
+    if (endsBeforeStart(b.startDate, b.endDate)) throw badRequest(DATE_ORDER);
     const { rows } = await query<TripRow>(
       `INSERT INTO trips (family_id, name, description, start_date, end_date, cover_photo_url, color, status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.familyId, b.name, b.description ?? "", b.startDate || null, b.endDate || null,
+      [req.user.familyId, b.name, b.description ?? "", b.startDate ?? null, b.endDate ?? null,
        b.coverPhotoUrl ?? null, b.color ?? "#2563eb", b.status ?? "idea", req.user.id]);
     return reply.code(201).send(toDto(rows[0]));
   });
 
-  app.patch("/api/trips/:id", async (req, reply) => {
+  app.patch("/api/trips/:id", async (req) => {
     // TODO(phase-1b): re-home media on trip rename
     const id = (req.params as { id: string }).id;
-    const parsed = upsertSchema.partial().safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const current = await loadEditable<{ start_date: string | null; end_date: string | null }>("trip", id, scopeOf(req));
+    const b = upsertSchema.partial().parse(req.body);
     const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+    if (endsBeforeStart(has("startDate") ? b.startDate : current.start_date, has("endDate") ? b.endDate : current.end_date)) {
+      throw badRequest(DATE_ORDER);
+    }
     const { rows } = await query<TripRow>(
       `UPDATE trips SET
          name = COALESCE($3, name), description = COALESCE($4, description),
@@ -63,16 +69,16 @@ export async function tripRoutes(app: FastifyInstance): Promise<void> {
          status = COALESCE($12, status)
        WHERE id = $1 AND family_id = $2 RETURNING *`,
       [id, req.user.familyId, b.name ?? null, b.description ?? null,
-       has("startDate"), b.startDate || null, has("endDate"), b.endDate || null,
+       has("startDate"), b.startDate ?? null, has("endDate"), b.endDate ?? null,
        has("coverPhotoUrl"), b.coverPhotoUrl ?? null, b.color ?? null, b.status ?? null]);
-    if (!rows[0]) return reply.code(404).send({ error: "Not found" });
+    if (!rows[0]) throw notFound("Trip not found");
     return toDto(rows[0]);
   });
 
   app.delete("/api/trips/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
     const res = await query("DELETE FROM trips WHERE id = $1 AND family_id = $2", [id, req.user.familyId]);
-    if (!res.rowCount) return reply.code(404).send({ error: "Not found" });
+    if (!res.rowCount) throw notFound("Trip not found");
     return reply.code(204).send();
   });
 }

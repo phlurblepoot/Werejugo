@@ -57,3 +57,17 @@ test("unsupported geometries are counted as skipped, not fatal", async () => {
   expect(res.statusCode).toBe(200);
   expect(res.json()).toMatchObject({ imported: 1, skipped: 1, truncated: 0 });
 });
+
+test("features with broken coordinates are skipped instead of failing the whole import", async () => {
+  const geojson = JSON.stringify({
+    type: "FeatureCollection",
+    features: [
+      { type: "Feature", properties: { name: "Nowhere" }, geometry: { type: "Point", coordinates: [999, 999] } },
+      { type: "Feature", properties: { name: "Garbled" }, geometry: { type: "LineString", coordinates: "oops" } },
+      { type: "Feature", properties: { name: "Fine" }, geometry: { type: "Point", coordinates: [2.35, 48.85] } },
+    ],
+  });
+  const res = await importFile("broken.geojson", geojson);
+  expect(res.statusCode).toBe(200);
+  expect(res.json()).toMatchObject({ imported: 1, skipped: 2 });
+});

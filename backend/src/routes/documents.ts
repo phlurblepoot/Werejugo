@@ -3,9 +3,12 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
+import { assertRefs, loadEditable, scopeOf, type Scope } from "../lib/access.js";
+import { badRequest, notFound } from "../lib/errors.js";
 import { signFileUrl } from "../lib/filesign.js";
 import { documentDirFor, saveDocumentUpload, deleteStored } from "../lib/storage.js";
 import { reconcileDocument } from "../lib/reconcile.js";
+import { likeEscape, optionalYmd, uuid } from "../lib/validate.js";
 
 interface DocRow {
   id: string; title: string; doc_type: string;
@@ -40,40 +43,64 @@ const SELECT = `
               ELSE 'ok' END AS status,
          (d.expires_on - CURRENT_DATE) AS days_until
   FROM documents d
-  LEFT JOIN people p ON p.id = d.owner_person_id
-  LEFT JOIN trips t ON t.id = d.owner_trip_id`;
+  LEFT JOIN people p ON p.id = d.owner_person_id AND p.family_id = d.family_id
+  LEFT JOIN trips t ON t.id = d.owner_trip_id AND t.family_id = d.family_id`;
 
-async function loadDoc(familyId: string, id: string): Promise<DocRow | null> {
+async function loadDoc(familyId: string, id: string): Promise<DocRow> {
   const { rows } = await query<DocRow>(`${SELECT} WHERE d.family_id = $1 AND d.id = $2`, [familyId, id]);
-  return rows[0] ?? null;
+  if (!rows[0]) throw notFound("Document not found");
+  return rows[0];
 }
 
 const fieldsSchema = z.object({
   title: z.string().min(1).max(200),
   docType: z.enum(["passport", "visa", "booking", "insurance", "other"]),
-  ownerPersonId: z.string().uuid().nullish(),
-  ownerTripId: z.string().uuid().nullish(),
-  issuedOn: z.string().nullish(),
-  expiresOn: z.string().nullish(),
+  ownerPersonId: z.preprocess((v) => (v === "" ? null : v), uuid.nullish()),
+  ownerTripId: z.preprocess((v) => (v === "" ? null : v), uuid.nullish()),
+  issuedOn: optionalYmd,
+  expiresOn: optionalYmd,
   reminderLeadDays: z.coerce.number().int().min(0).max(3650).optional(),
   notes: z.string().max(4000).optional(),
 });
 
-/** Validate the owner is one-of and belongs to the family; return its storage dir. */
-async function ownerDir(familyId: string, personId?: string | null, tripId?: string | null):
-  Promise<{ ok: true; dir: string } | { ok: false; error: string }> {
-  if (personId && tripId) return { ok: false, error: "A document has at most one owner" };
-  if (personId) {
-    const p = await query<{ display_name: string }>("SELECT display_name FROM people WHERE id = $1 AND family_id = $2", [personId, familyId]);
-    if (!p.rows[0]) return { ok: false, error: "Person not found" };
-    return { ok: true, dir: documentDirFor(null, { personName: p.rows[0].display_name }) };
+const TWO_OWNERS = "A document belongs to one person or one trip, not both";
+
+/**
+ * The owners a document will have after this change: setting one kind of
+ * owner clears the other, so a document can never end up with two.
+ */
+function mergedOwners(
+  current: { person: string | null; trip: string | null },
+  b: { ownerPersonId?: string | null; ownerTripId?: string | null },
+): { person: string | null; trip: string | null } {
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+  if (b.ownerPersonId && b.ownerTripId) throw badRequest(TWO_OWNERS);
+  if (b.ownerPersonId) return { person: b.ownerPersonId, trip: null };
+  if (b.ownerTripId) return { person: null, trip: b.ownerTripId };
+  return { person: has("ownerPersonId") ? null : current.person, trip: has("ownerTripId") ? null : current.trip };
+}
+
+/** The storage folder for a document with these (already checked) owners. */
+async function ownerDir(scope: Scope, owners: { person: string | null; trip: string | null }): Promise<string> {
+  if (owners.person) {
+    const p = await query<{ display_name: string }>("SELECT display_name FROM people WHERE id = $1 AND family_id = $2", [owners.person, scope.familyId]);
+    return documentDirFor(scope.familyId, null, { personName: p.rows[0].display_name });
   }
-  if (tripId) {
-    const t = await query<{ name: string; start: string | null }>("SELECT name, to_char(start_date,'YYYY-MM-DD') AS start FROM trips WHERE id = $1 AND family_id = $2", [tripId, familyId]);
-    if (!t.rows[0]) return { ok: false, error: "Trip not found" };
-    return { ok: true, dir: documentDirFor({ tripName: t.rows[0].name, tripStart: t.rows[0].start }, null) };
+  if (owners.trip) {
+    const t = await query<{ name: string; start: string | null }>(
+      "SELECT name, to_char(start_date,'YYYY-MM-DD') AS start FROM trips WHERE id = $1 AND family_id = $2", [owners.trip, scope.familyId]);
+    return documentDirFor(scope.familyId, { tripName: t.rows[0].name, tripStart: t.rows[0].start }, null);
   }
-  return { ok: true, dir: documentDirFor(null, null) };
+  return documentDirFor(scope.familyId, null, null);
+}
+
+async function saveOrReject(filename: string, file: NodeJS.ReadableStream, dir: string) {
+  try {
+    return await saveDocumentUpload({ filename, file }, dir);
+  } catch (err) {
+    if (err instanceof Error && err.message === "UNSUPPORTED_TYPE") throw badRequest("Unsupported file type");
+    throw err;
+  }
 }
 
 export async function documentRoutes(app: FastifyInstance): Promise<void> {
@@ -82,7 +109,6 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/documents", async (req, reply) => {
     // Accept either JSON (no file) or multipart (with file). Collect fields + optional file.
     let body: Record<string, string> = {};
-    let saved: { relPath: string; originalName: string } | null = null;
     let pendingFile: { filename: string; buf: Buffer } | null = null;
 
     if (req.isMultipart()) {
@@ -96,30 +122,31 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       body = (req.body ?? {}) as Record<string, string>;
     }
 
-    const parsed = fieldsSchema.safeParse(body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
-    const dir = await ownerDir(req.user.familyId, b.ownerPersonId, b.ownerTripId);
-    if (!dir.ok) return reply.code(dir.error.includes("one owner") ? 400 : 404).send({ error: dir.error });
+    const scope = scopeOf(req);
+    const b = fieldsSchema.parse(body);
+    const owners = mergedOwners({ person: null, trip: null }, b);
+    await assertRefs(scope, { person: owners.person, trip: owners.trip });
+    const saved = pendingFile
+      ? await saveOrReject(pendingFile.filename, Readable.from(pendingFile.buf), await ownerDir(scope, owners))
+      : null;
 
-    if (pendingFile) {
-      try {
-        saved = await saveDocumentUpload({ filename: pendingFile.filename, file: Readable.from(pendingFile.buf) }, dir.dir);
-      } catch {
-        return reply.code(400).send({ error: "Unsupported file type" });
-      }
+    let id: string;
+    try {
+      const ins = await query<{ id: string }>(
+        `INSERT INTO documents (family_id, title, doc_type, owner_person_id, owner_trip_id,
+          issued_on, expires_on, reminder_lead_days, notes, rel_path, original_name, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+        [scope.familyId, b.title, b.docType, owners.person, owners.trip,
+         b.issuedOn ?? null, b.expiresOn ?? null, b.reminderLeadDays ?? 30, b.notes ?? "",
+         saved?.relPath ?? null, saved?.originalName ?? "", scope.userId],
+      );
+      id = ins.rows[0].id;
+    } catch (err) {
+      // Don't leave the uploaded file behind if the row couldn't be saved.
+      await deleteStored(saved?.relPath ?? null);
+      throw err;
     }
-
-    const ins = await query<{ id: string }>(
-      `INSERT INTO documents (family_id, title, doc_type, owner_person_id, owner_trip_id,
-        issued_on, expires_on, reminder_lead_days, notes, rel_path, original_name, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-      [req.user.familyId, b.title, b.docType, b.ownerPersonId ?? null, b.ownerTripId ?? null,
-       b.issuedOn || null, b.expiresOn || null, b.reminderLeadDays ?? 30, b.notes ?? "",
-       saved?.relPath ?? null, saved?.originalName ?? "", req.user.id],
-    );
-    const row = await loadDoc(req.user.familyId, ins.rows[0].id);
-    return reply.code(201).send(toDto(row!));
+    return reply.code(201).send(toDto(await loadDoc(scope.familyId, id)));
   });
 
   app.get("/api/documents/due-count", async (req) => {
@@ -132,17 +159,22 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/documents", async (req) => {
-    const q = req.query as Record<string, string | undefined>;
+    const q = z.object({
+      docType: z.string().max(40).optional(),
+      q: z.string().max(200).optional(),
+      owner: z.string().regex(/^(person|trip):[0-9a-f-]{36}$/i, "Use person:<id> or trip:<id>").optional(),
+      due: z.string().optional(),
+    }).parse(req.query);
     const where: string[] = ["d.family_id = $1"];
     const params: unknown[] = [req.user.familyId];
     const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
 
     if (q.docType) where.push(`d.doc_type = ${add(q.docType)}`);
-    if (q.q) where.push(`d.title ILIKE ${add(`%${q.q}%`)}`);
+    if (q.q) where.push(`d.title ILIKE ${add(`%${likeEscape(q.q)}%`)}`);
     if (q.owner) {
       const [kind, id] = q.owner.split(":");
-      if (kind === "person" && id) where.push(`d.owner_person_id = ${add(id)}`);
-      else if (kind === "trip" && id) where.push(`d.owner_trip_id = ${add(id)}`);
+      uuid.parse(id);
+      where.push(kind === "person" ? `d.owner_person_id = ${add(id)}` : `d.owner_trip_id = ${add(id)}`);
     }
     if (q.due === "1") where.push(`d.expires_on IS NOT NULL AND d.expires_on <= CURRENT_DATE + make_interval(days => d.reminder_lead_days)`);
 
@@ -152,76 +184,64 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     return rows.map(toDto);
   });
 
-  app.get("/api/documents/:id", async (req, reply) => {
-    const row = await loadDoc(req.user.familyId, (req.params as { id: string }).id);
-    if (!row) return reply.code(404).send({ error: "Not found" });
-    return toDto(row);
-  });
+  app.get("/api/documents/:id", async (req) => toDto(await loadDoc(req.user.familyId, (req.params as { id: string }).id)));
 
   const patchSchema = fieldsSchema.partial();
 
-  app.patch("/api/documents/:id", async (req, reply) => {
+  app.patch("/api/documents/:id", async (req) => {
     const id = (req.params as { id: string }).id;
-    const existing = await loadDoc(req.user.familyId, id);
-    if (!existing) return reply.code(404).send({ error: "Not found" });
-    const parsed = patchSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const scope = scopeOf(req);
+    const existing = await loadDoc(scope.familyId, id);
+    const b = patchSchema.parse(req.body);
     const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
-
-    // Validate owner if either owner field is being set.
-    if (has("ownerPersonId") || has("ownerTripId")) {
-      const od = await ownerDir(req.user.familyId, b.ownerPersonId ?? null, b.ownerTripId ?? null);
-      if (!od.ok) return reply.code(od.error.includes("one owner") ? 400 : 404).send({ error: od.error });
-    }
+    const ownersChange = has("ownerPersonId") || has("ownerTripId");
+    const owners = mergedOwners({ person: existing.owner_person_id, trip: existing.owner_trip_id }, b);
+    await assertRefs(scope, { person: owners.person, trip: owners.trip });
 
     await tx(async (client) => {
       await client.query(
         `UPDATE documents SET
            title = COALESCE($3, title), doc_type = COALESCE($4, doc_type),
-           owner_person_id = CASE WHEN $5::boolean THEN $6 ELSE owner_person_id END,
-           owner_trip_id  = CASE WHEN $7::boolean THEN $8 ELSE owner_trip_id END,
-           issued_on  = CASE WHEN $9::boolean THEN $10 ELSE issued_on END,
-           expires_on = CASE WHEN $11::boolean THEN $12 ELSE expires_on END,
-           reminder_lead_days = COALESCE($13, reminder_lead_days),
-           notes = COALESCE($14, notes)
+           owner_person_id = $5, owner_trip_id = $6,
+           issued_on  = CASE WHEN $7::boolean THEN $8 ELSE issued_on END,
+           expires_on = CASE WHEN $9::boolean THEN $10 ELSE expires_on END,
+           reminder_lead_days = COALESCE($11, reminder_lead_days),
+           notes = COALESCE($12, notes)
          WHERE id = $1 AND family_id = $2`,
-        [id, req.user.familyId, b.title ?? null, b.docType ?? null,
-         has("ownerPersonId"), b.ownerPersonId ?? null, has("ownerTripId"), b.ownerTripId ?? null,
-         has("issuedOn"), b.issuedOn || null, has("expiresOn"), b.expiresOn || null,
+        [id, scope.familyId, b.title ?? null, b.docType ?? null, owners.person, owners.trip,
+         has("issuedOn"), b.issuedOn ?? null, has("expiresOn"), b.expiresOn ?? null,
          b.reminderLeadDays ?? null, b.notes ?? null]);
-      if (has("ownerPersonId") || has("ownerTripId")) await reconcileDocument(client, id);
+      if (ownersChange) await reconcileDocument(client, id);
     });
-    const row = await loadDoc(req.user.familyId, id);
-    return toDto(row!);
+    return toDto(await loadDoc(scope.familyId, id));
   });
 
-  app.post("/api/documents/:id/file", async (req, reply) => {
+  app.post("/api/documents/:id/file", async (req) => {
     const id = (req.params as { id: string }).id;
-    const existing = await loadDoc(req.user.familyId, id);
-    if (!existing) return reply.code(404).send({ error: "Not found" });
+    const scope = scopeOf(req);
+    const existing = await loadDoc(scope.familyId, id);
     const part = await req.file();
-    if (!part) return reply.code(400).send({ error: "No file provided" });
-    const od = await ownerDir(req.user.familyId, existing.owner_person_id, existing.owner_trip_id);
-    if (!od.ok) return reply.code(400).send({ error: od.error });
-    let saved: { relPath: string; originalName: string };
-    try {
-      saved = await saveDocumentUpload(part, od.dir);
-    } catch {
-      return reply.code(400).send({ error: "Unsupported file type" });
+    if (!part) throw badRequest("No file provided");
+    const dir = await ownerDir(scope, { person: existing.owner_person_id, trip: existing.owner_trip_id });
+    const saved = await saveOrReject(part.filename, part.file, dir);
+    const { rowCount } = await query(
+      "UPDATE documents SET rel_path = $1, original_name = $2 WHERE id = $3 AND family_id = $4",
+      [saved.relPath, saved.originalName, id, scope.familyId]);
+    if (!rowCount) {
+      await deleteStored(saved.relPath);
+      throw notFound("Document not found");
     }
-    if (existing.rel_path) await deleteStored(existing.rel_path);
-    await query("UPDATE documents SET rel_path = $1, original_name = $2 WHERE id = $3", [saved.relPath, saved.originalName, id]);
-    const row = await loadDoc(req.user.familyId, id);
-    return toDto(row!);
+    // Only now that the new file is recorded, remove the old one.
+    await deleteStored(existing.rel_path);
+    return toDto(await loadDoc(scope.familyId, id));
   });
 
   app.delete("/api/documents/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    const existing = await loadDoc(req.user.familyId, id);
-    if (!existing) return reply.code(404).send({ error: "Not found" });
-    await query("DELETE FROM documents WHERE id = $1", [id]);
-    if (existing.rel_path) await deleteStored(existing.rel_path);
+    const scope = scopeOf(req);
+    const existing = await loadEditable<{ rel_path: string | null }>("document", id, scope);
+    await query("DELETE FROM documents WHERE id = $1 AND family_id = $2", [id, scope.familyId]);
+    await deleteStored(existing.rel_path);
     return reply.code(204).send();
   });
 }

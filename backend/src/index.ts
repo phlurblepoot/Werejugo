@@ -41,6 +41,17 @@ import { familyExportRoutes } from "./routes/family-export.js";
 import { downloadRoutes } from "./routes/downloads.js";
 import { adminRoutes } from "./routes/admin.js";
 
+export interface RegisteredRoute {
+  method: string;
+  url: string;
+}
+
+declare module "fastify" {
+  interface FastifyInstance {
+    registeredRoutes: RegisteredRoute[];
+  }
+}
+
 export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.uploadsDir, { recursive: true });
   await mkdir(config.storageDir, { recursive: true });
@@ -83,6 +94,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Before the routes, so the error handler and the id check apply to all of them.
   installErrorHandling(app);
+
+  // Every route, so the tenant-isolation suite can prove it covers them all.
+  const routes: RegisteredRoute[] = [];
+  app.addHook("onRoute", (r) => {
+    for (const method of [r.method].flat()) if (method !== "HEAD") routes.push({ method, url: r.url });
+  });
+  app.decorate("registeredRoutes", routes);
 
   app.get("/api/health", async () => ({ ok: true }));
 

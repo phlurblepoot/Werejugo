@@ -27,8 +27,8 @@ test("patch updates fields and moves the file when the owner changes", async () 
   expect(res.statusCode).toBe(200);
   expect(res.json().notes).toBe("renew early");
   const row = await query<{ rel_path: string }>("SELECT rel_path FROM documents WHERE id = $1", [doc.rows[0].id]);
-  expect(row.rows[0].rel_path).toBe("people/dad/p.pdf");
-  expect(existsSync(absStoragePath("people/dad/p.pdf"))).toBe(true);
+  expect(row.rows[0].rel_path).toBe(`families/${ctx.familyId}/people/dad/p.pdf`);
+  expect(existsSync(absStoragePath(row.rows[0].rel_path))).toBe(true);
 });
 
 test("deletes a document", async () => {

@@ -26,5 +26,21 @@ test("rejects an owner that isn't the family's", async () => {
     method: "POST", url: "/api/documents", headers: auth(),
     payload: { title: "X", docType: "other", ownerPersonId: "11111111-1111-1111-1111-111111111111" },
   });
-  expect(res.statusCode).toBe(404);
+  expect(res.statusCode).toBe(400);
+  expect(res.json().error).toBe("Unknown person");
+});
+
+test("a document never ends up with two owners", async () => {
+  const person = (await query<{ id: string }>("INSERT INTO people (family_id, display_name) VALUES ($1, 'Mum') RETURNING id", [ctx.familyId])).rows[0].id;
+  const trip = (await query<{ id: string }>("INSERT INTO trips (family_id, name) VALUES ($1, 'Oslo') RETURNING id", [ctx.familyId])).rows[0].id;
+  const both = await ctx.app.inject({ method: "POST", url: "/api/documents", headers: auth(), payload: { title: "B", docType: "other", ownerPersonId: person, ownerTripId: trip } });
+  expect(both.statusCode).toBe(400);
+
+  const doc = (await ctx.app.inject({ method: "POST", url: "/api/documents", headers: auth(), payload: { title: "Visa", docType: "visa", ownerPersonId: person } })).json();
+  // sending only the trip moves the document to the trip (it doesn't keep the person too)
+  const moved = (await ctx.app.inject({ method: "PATCH", url: `/api/documents/${doc.id}`, headers: auth(), payload: { ownerTripId: trip } })).json();
+  expect(moved).toMatchObject({ ownerTripId: trip, ownerPersonId: null });
+  // a bad date is a 400, not a server error
+  const bad = await ctx.app.inject({ method: "PATCH", url: `/api/documents/${doc.id}`, headers: auth(), payload: { expiresOn: "2024-02-30" } });
+  expect(bad.statusCode).toBe(400);
 });

@@ -27,8 +27,9 @@ export class LegacyDatabaseError extends Error {
     super(
       "This database was created by an older version of Werejugo (before the 2026-09 schema baseline) " +
       `and can't be upgraded in place (unknown migrations: ${unknown.join(", ")}). ` +
-      "Download a backup from Admin first if you need the data, then reset the database: stop Werejugo, " +
-      "delete the PostgreSQL data folder (or volume), start again, and restore the backup from Admin → Backup. " +
+      "To keep the data, run the previous version once more and download a backup (Admin → Backup). " +
+      "Then reset the database: stop Werejugo, delete the PostgreSQL data folder (or volume), start this version, " +
+      "complete the setup screen and restore the backup from Admin → Backup. " +
       "See README → \"Resetting the database\".",
     );
     this.name = "LegacyDatabaseError";

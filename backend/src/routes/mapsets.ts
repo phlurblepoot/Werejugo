@@ -3,17 +3,21 @@ import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { loadVisit } from "./visits.js";
+import { assertRefs, loadEditable, scopeOf } from "../lib/access.js";
+import { notFound } from "../lib/errors.js";
+import { lat, lng } from "../lib/geojson.js";
+import { uuid } from "../lib/validate.js";
 
 const upsertSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   baseKind: z.enum(["vector", "custom"]).optional(),
   styleUrl: z.string().url().nullish(),
-  overlayUrl: z.string().nullish(),
-  overlayBounds: z.array(z.number()).length(4).nullish(),
-  defaultLng: z.number().optional(),
-  defaultLat: z.number().optional(),
-  defaultZoom: z.number().optional(),
+  overlayUrl: z.string().max(500).nullish(),
+  overlayBounds: z.array(z.number().finite()).length(4).nullish(),
+  defaultLng: lng.optional(),
+  defaultLat: lat.optional(),
+  defaultZoom: z.number().min(0).max(24).optional(),
 });
 
 interface MapSetRow {
@@ -132,37 +136,34 @@ export async function mapSetRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // --- Map ↔ visit membership ---
-  async function ownsMapSet(familyId: string, id: string): Promise<boolean> {
-    const { rowCount } = await query("SELECT 1 FROM map_sets WHERE id = $1 AND family_id = $2", [id, familyId]);
-    return Boolean(rowCount);
-  }
-
-  app.get("/api/map-sets/:id/visits", async (req, reply) => {
+  app.get("/api/map-sets/:id/visits", async (req) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
+    await loadEditable("map_set", id, scopeOf(req));
     const { rows } = await query<{ visit_id: string }>(
-      "SELECT visit_id FROM map_set_visits WHERE map_set_id = $1 ORDER BY seq ASC", [id]);
-    return Promise.all(rows.map((r) => loadVisit(req.user.familyId, r.visit_id)));
+      `SELECT msv.visit_id FROM map_set_visits msv JOIN visits v ON v.id = msv.visit_id AND v.family_id = $2
+        WHERE msv.map_set_id = $1 ORDER BY msv.seq ASC`, [id, req.user.familyId]);
+    const visits = await Promise.all(rows.map((r) => loadVisit(req.user.familyId, r.visit_id)));
+    return visits.filter(Boolean);
   });
 
   app.post("/api/map-sets/:id/visits", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    const parsed = z.object({ visitId: z.string().uuid(), seq: z.number().int().optional() }).safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const owns = await query("SELECT 1 FROM visits WHERE id = $1 AND family_id = $2", [parsed.data.visitId, req.user.familyId]);
-    if (!owns.rowCount) return reply.code(404).send({ error: "Visit not found" });
+    const scope = scopeOf(req);
+    await loadEditable("map_set", id, scope);
+    const b = z.object({ visitId: uuid, seq: z.number().int().min(0).max(100000).optional() }).parse(req.body);
+    await assertRefs(scope, { visit: b.visitId });
     await query(
       `INSERT INTO map_set_visits (map_set_id, visit_id, seq) VALUES ($1,$2,$3)
        ON CONFLICT (map_set_id, visit_id) DO UPDATE SET seq = EXCLUDED.seq`,
-      [id, parsed.data.visitId, parsed.data.seq ?? 0]);
+      [id, b.visitId, b.seq ?? 0]);
     return reply.code(201).send({ ok: true });
   });
 
   app.delete("/api/map-sets/:id/visits/:visitId", async (req, reply) => {
     const { id, visitId } = req.params as { id: string; visitId: string };
-    if (!(await ownsMapSet(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    await query("DELETE FROM map_set_visits WHERE map_set_id = $1 AND visit_id = $2", [id, visitId]);
+    await loadEditable("map_set", id, scopeOf(req));
+    const res = await query("DELETE FROM map_set_visits WHERE map_set_id = $1 AND visit_id = $2", [id, visitId]);
+    if (!res.rowCount) throw notFound("That place isn't on this map");
     return reply.code(204).send();
   });
 }

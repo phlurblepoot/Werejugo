@@ -51,3 +51,11 @@ test("requires auth", async () => {
   const res = await ctx.app.inject({ method: "GET", url: "/api/search?q=Venice" });
   expect(res.statusCode).toBe(401);
 });
+
+test("% and _ in the search text are matched literally", async () => {
+  await query("INSERT INTO trips (family_id, name) VALUES ($1, '100% Italy'), ($1, 'A_B Trip')", [ctx.familyId]);
+  const pct = (await ctx.app.inject({ method: "GET", url: `/api/search?q=${encodeURIComponent("%")}`, headers: auth() })).json();
+  expect(pct.trips.map((r: any) => r.label)).toEqual(["100% Italy"]);
+  const under = (await ctx.app.inject({ method: "GET", url: "/api/search?q=_", headers: auth() })).json();
+  expect(under.trips.map((r: any) => r.label)).toEqual(["A_B Trip"]);
+});
