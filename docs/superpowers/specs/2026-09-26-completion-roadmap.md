@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
 | **Current phase** | 1.6 |
-| **Next step** | Plan Phase 1.6 (one map): write the plan, then drop map sets and move the map onto `GET /api/visits` with URL filters |
+| **Next step** | Build Phase 1.6: migration + batched visits list + import → map page filters in the URL → remove legacy panels → deep links |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -249,7 +249,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.6 One map — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-1.6](../plans/2026-09-26-phase-1.6-one-map.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
 - [ ] Drop map sets (§3.5); URL-driven filters (trip, person, year/date, kind, family); shared-trip visits badged.
 - [ ] Remove the legacy Trips/Photos/Stats/Export panels and link out; stats move to the Stats page (4.2).
