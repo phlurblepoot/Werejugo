@@ -16,8 +16,6 @@ export const config = {
   fileSigningSecret: secrets.fileSigningSecret,
   /** Problems worth logging at startup (e.g. a weak secret outside production). */
   startupWarnings: secrets.warnings,
-  /** Allow creating new families from the login page after the first one exists. */
-  allowSignup: process.env.ALLOW_SIGNUP === "true",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "30d",
   port: Number(process.env.BACKEND_PORT ?? 4000),
   corsOrigin: (process.env.CORS_ORIGIN ?? "http://localhost:8080")

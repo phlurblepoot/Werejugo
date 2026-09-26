@@ -3,7 +3,7 @@ import FormData from "form-data";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { buildTestApp, closeTestApp, type TestCtx } from "../test/helpers.js";
+import { addUser, buildTestApp, closeTestApp, type TestCtx } from "../test/helpers.js";
 import { query } from "../db/pool.js";
 import { config } from "../config.js";
 import { writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
@@ -91,8 +91,8 @@ test("an archive naming unknown tables is rejected and nothing is touched", asyn
   expect((await query("SELECT 1 FROM trips")).rowCount).toBe(before);
 });
 
-test("a non-owner cannot restore", async () => {
-  const memberToken = ctx.app.jwt.sign({ id: ctx.userId, familyId: ctx.familyId, role: "member" });
+test("a non-admin cannot restore", async () => {
+  const memberToken = (await addUser(ctx, { familyId: ctx.familyId, role: "owner" })).token;
   const form = new FormData();
   form.append("file", Buffer.from("x"), { filename: "b.tar.gz", contentType: "application/gzip" });
   const res = await ctx.app.inject({ method: "POST", url: "/api/restore",

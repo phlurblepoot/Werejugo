@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import * as tar from "tar";
-import { requireAuth } from "../lib/auth.js";
-import { requireInstanceOwner } from "../lib/instance.js";
+import { requireAdmin, requireAuth } from "../lib/auth.js";
+import { audit } from "../lib/audit.js";
 import { config } from "../config.js";
 import { BACKUP_TABLES, dumpDatabase, restoreDatabase } from "../lib/archive.js";
 import { tx } from "../db/pool.js";
@@ -49,9 +49,11 @@ async function archiveProblem(work: string): Promise<{ error: string } | { db: R
 }
 
 export async function backupRoutes(app: FastifyInstance): Promise<void> {
-  const guard = { preHandler: [requireAuth, requireInstanceOwner] };
+  // A backup holds every family on the server, so only server admins may make or restore one.
+  const guard = { preHandler: [requireAuth, requireAdmin] };
 
-  app.get("/api/backup", guard, async (_req, reply) => {
+  app.get("/api/backup", guard, async (req, reply) => {
+    await audit({ actorId: req.user.id, action: "backup.downloaded" });
     const stage = await mkdtemp(join(tmpdir(), "wj-backup-"));
     const db = await dumpDatabase();
     await writeFile(join(stage, "db.json"), JSON.stringify(db));
@@ -101,6 +103,8 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       await replaceContents(join(work, "storage"), config.storageDir);
       // Archives made before uploads were included simply leave UPLOADS_DIR as is.
       if (await isDir(join(work, "uploads"))) await replaceContents(join(work, "uploads"), config.uploadsDir);
+      // The audit log itself was replaced; record the restore in the new one.
+      await audit({ actorId: null, action: "backup.restored", details: { by: req.user.id, counts } });
 
       return { ok: true, counts };
     } finally {

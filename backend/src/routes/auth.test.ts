@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../index.js";
 import { pool, query } from "../db/pool.js";
-import { config } from "../config.js";
 import { resetDb } from "../test/helpers.js";
 
 let app: FastifyInstance;
@@ -16,72 +15,57 @@ afterAll(async () => {
 });
 
 const post = (url: string, payload: object) => app.inject({ method: "POST", url, payload });
-const creator = { mode: "create", email: "first@test.dev", displayName: "First", password: "password123", familyName: "First Family" };
+const admin = { email: "admin@test.dev", displayName: "Admin", password: "password123", familyName: "First Family" };
+const me = async (token: string) =>
+  app.inject({ method: "GET", url: "/api/auth/me", headers: { authorization: `Bearer ${token}` } });
 
-test("an empty server is in first-run mode with signup open", async () => {
+test("an empty server is in first-run mode", async () => {
   const res = await app.inject({ method: "GET", url: "/api/auth/config" });
-  expect(res.statusCode).toBe(200);
-  expect(res.json()).toEqual({ firstRun: true, signupOpen: true });
+  expect(res.json()).toEqual({ firstRun: true });
 });
 
-test("the first person can create a family", async () => {
-  const res = await post("/api/auth/register", creator);
+test("setup creates the first family and makes its owner the server admin", async () => {
+  const res = await post("/api/auth/setup", admin);
   expect(res.statusCode).toBe(200);
-  expect(res.json().user.role).toBe("owner");
+  expect(res.json().user).toMatchObject({ role: "owner", isAdmin: true });
+  const who = (await me(res.json().token)).json();
+  expect(who.user.isAdmin).toBe(true);
+  expect(who.family.name).toBe("First Family");
+  expect((await app.inject({ method: "GET", url: "/api/auth/config" })).json()).toEqual({ firstRun: false });
 });
 
-test("after the first family, signup is closed", async () => {
-  const cfg = await app.inject({ method: "GET", url: "/api/auth/config" });
-  expect(cfg.json()).toEqual({ firstRun: false, signupOpen: false });
-  const res = await post("/api/auth/register", { ...creator, email: "stranger@evil.test", familyName: "Strangers" });
+test("setup can only happen once", async () => {
+  const res = await post("/api/auth/setup", { ...admin, email: "sneaky@evil.test", familyName: "Takeover" });
   expect(res.statusCode).toBe(403);
   expect((await query("SELECT 1 FROM families")).rowCount).toBe(1);
 });
 
-test("people can still join an existing family with its invite code", async () => {
-  const code = (await query<{ invite_code: string }>("SELECT invite_code FROM families")).rows[0].invite_code;
-  const res = await post("/api/auth/register", {
-    mode: "join", email: "kid@test.dev", displayName: "Kid", password: "password123", inviteCode: code,
-  });
-  expect(res.statusCode).toBe(200);
-  expect(res.json().user.role).toBe("member");
-});
-
-test("ALLOW_SIGNUP=true reopens family creation", async () => {
-  config.allowSignup = true;
-  try {
-    const cfg = await app.inject({ method: "GET", url: "/api/auth/config" });
-    expect(cfg.json().signupOpen).toBe(true);
-    const res = await post("/api/auth/register", { ...creator, email: "second@test.dev", familyName: "Second Family" });
-    expect(res.statusCode).toBe(200);
-  } finally {
-    config.allowSignup = false;
-  }
+test("open registration is gone", async () => {
+  const res = await post("/api/auth/register", { mode: "create", email: "x@evil.test", displayName: "X", password: "password123", familyName: "X" });
+  expect(res.statusCode).toBe(410);
 });
 
 test("login succeeds with the right password and fails otherwise", async () => {
-  const ok = await post("/api/auth/login", { email: "first@test.dev", password: "password123" });
-  expect(ok.statusCode).toBe(200);
-  const bad = await post("/api/auth/login", { email: "first@test.dev", password: "nope-nope" });
-  expect(bad.statusCode).toBe(401);
-  const unknown = await post("/api/auth/login", { email: "ghost@test.dev", password: "password123" });
-  expect(unknown.statusCode).toBe(401);
+  expect((await post("/api/auth/login", { email: "admin@test.dev", password: "password123" })).statusCode).toBe(200);
+  expect((await post("/api/auth/login", { email: "admin@test.dev", password: "nope-nope" })).statusCode).toBe(401);
+  expect((await post("/api/auth/login", { email: "ghost@test.dev", password: "password123" })).statusCode).toBe(401);
 });
 
-test("/me reports whether the user owns the server (the first family's owner)", async () => {
-  const login = async (email: string) =>
-    (await post("/api/auth/login", { email, password: "password123" })).json().token as string;
-  const me = async (token: string) =>
-    (await app.inject({ method: "GET", url: "/api/auth/me", headers: { authorization: `Bearer ${token}` } })).json();
+test("login records when the user last signed in", async () => {
+  const at = (await query<{ last_login_at: Date | null }>("SELECT last_login_at FROM users WHERE email = 'admin@test.dev'")).rows[0].last_login_at;
+  expect(at).not.toBeNull();
+});
 
-  expect((await me(await login("first@test.dev"))).user.isInstanceOwner).toBe(true);
-  expect((await me(await login("kid@test.dev"))).user.isInstanceOwner).toBe(false);
-  // owner of a later family is not the server owner
-  expect((await me(await login("second@test.dev"))).user.isInstanceOwner).toBe(false);
+test("a disabled account cannot sign in", async () => {
+  await query("UPDATE users SET disabled_at = now() WHERE email = 'admin@test.dev'");
+  try {
+    expect((await post("/api/auth/login", { email: "admin@test.dev", password: "password123" })).statusCode).toBe(403);
+  } finally {
+    await query("UPDATE users SET disabled_at = NULL WHERE email = 'admin@test.dev'");
+  }
 });
 
 test("/me returns 401 (not 500) when the token's user no longer exists", async () => {
   const token = app.jwt.sign({ id: "00000000-0000-0000-0000-000000000000", familyId: "00000000-0000-0000-0000-000000000000", role: "owner" });
-  const res = await app.inject({ method: "GET", url: "/api/auth/me", headers: { authorization: `Bearer ${token}` } });
-  expect(res.statusCode).toBe(401);
+  expect((await me(token)).statusCode).toBe(401);
 });

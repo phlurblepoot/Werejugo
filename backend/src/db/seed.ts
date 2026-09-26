@@ -107,12 +107,12 @@ export async function seedPacking(): Promise<void> {
 async function seedDevData(): Promise<void> {
   if (process.env.SEED_DEV_DATA !== "true") return;
   const fam = await pool.query<{ id: string }>(
-    "INSERT INTO families (name, invite_code) VALUES ('The Wanderers', 'WANDER01') RETURNING id");
+    "INSERT INTO families (name) VALUES ('The Wanderers') RETURNING id");
   const familyId = fam.rows[0].id;
   const pass = await hashPassword("password123");
   const user = await pool.query<{ id: string }>(
-    `INSERT INTO users (family_id, email, display_name, password_hash, role)
-     VALUES ($1,'demo@werejugo.dev','Demo',$2,'owner') RETURNING id`, [familyId, pass]);
+    `INSERT INTO users (family_id, email, display_name, password_hash, role, is_admin)
+     VALUES ($1,'demo@werejugo.dev','Demo',$2,'owner',true) RETURNING id`, [familyId, pass]);
   const userId = user.rows[0].id;
   const ms = await pool.query<{ id: string }>(
     "INSERT INTO map_sets (family_id, name, created_by) VALUES ($1,'Our Travels',$2) RETURNING id",

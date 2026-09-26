@@ -3,7 +3,7 @@ import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as tar from "tar";
-import { buildTestApp, closeTestApp, type TestCtx } from "../test/helpers.js";
+import { addUser, bearer, buildTestApp, closeTestApp, type TestCtx } from "../test/helpers.js";
 import { query } from "../db/pool.js";
 import { config } from "../config.js";
 
@@ -47,15 +47,16 @@ test("requires auth", async () => {
   expect(res.statusCode).toBe(401);
 });
 
-test("only the server owner (the first family's owner) can download a backup", async () => {
-  // a member of the first family
-  const member = ctx.app.jwt.sign({ id: ctx.userId, familyId: ctx.familyId, role: "member" });
-  expect((await ctx.app.inject({ method: "GET", url: "/api/backup", headers: { authorization: `Bearer ${member}` } })).statusCode).toBe(403);
+test("only a server admin can download a backup", async () => {
+  // a member of the admin's own family
+  const member = await addUser(ctx, { familyId: ctx.familyId, role: "member" });
+  expect((await ctx.app.inject({ method: "GET", url: "/api/backup", headers: bearer(member.token) })).statusCode).toBe(403);
+  // the owner of another family
+  const stranger = await addUser(ctx, { familyName: "Strangers", role: "owner" });
+  expect((await ctx.app.inject({ method: "GET", url: "/api/backup", headers: bearer(stranger.token) })).statusCode).toBe(403);
+});
 
-  // the owner of a family created later — e.g. a stranger who signed up
-  const fam2 = (await query<{ id: string }>("INSERT INTO families (name, invite_code) VALUES ('Strangers','STRANGE1') RETURNING id")).rows[0].id;
-  const u2 = (await query<{ id: string }>(
-    "INSERT INTO users (family_id, email, display_name, password_hash, role) VALUES ($1,'s@evil.test','S','x','owner') RETURNING id", [fam2])).rows[0].id;
-  const stranger = ctx.app.jwt.sign({ id: u2, familyId: fam2, role: "owner" });
-  expect((await ctx.app.inject({ method: "GET", url: "/api/backup", headers: { authorization: `Bearer ${stranger}` } })).statusCode).toBe(403);
+test("downloading a backup is audited", async () => {
+  const actions = (await query<{ action: string }>("SELECT action FROM audit_log")).rows.map((r) => r.action);
+  expect(actions).toContain("backup.downloaded");
 });

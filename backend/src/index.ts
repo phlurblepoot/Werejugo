@@ -33,6 +33,11 @@ import { relationRoutes } from "./routes/relations.js";
 import { searchRoutes } from "./routes/search.js";
 import { documentRoutes } from "./routes/documents.js";
 import { packingRoutes } from "./routes/packing.js";
+import { inviteRoutes } from "./routes/invites.js";
+import { passwordResetRoutes } from "./routes/password-resets.js";
+import { accountRoutes } from "./routes/account.js";
+import { familyRoutes } from "./routes/family.js";
+import { adminRoutes } from "./routes/admin.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   await mkdir(config.uploadsDir, { recursive: true });
@@ -101,6 +106,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(searchRoutes);
   await app.register(documentRoutes);
   await app.register(packingRoutes);
+  await app.register(inviteRoutes);
+  await app.register(passwordResetRoutes);
+  await app.register(accountRoutes);
+  await app.register(familyRoutes);
+  await app.register(adminRoutes);
 
   return app;
 }

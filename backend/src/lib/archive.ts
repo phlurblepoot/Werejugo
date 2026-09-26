@@ -10,7 +10,11 @@ export const BACKUP_TABLES = [
   "families", "users", "themes", "trips", "map_sets", "visits", "media", "people",
   "icons", "documents", "links", "map_set_visits", "visit_waypoints", "comments",
   "itinerary_items", "packing_lists", "packing_items", "blackout_periods", "share_links",
+  "invites", "password_resets", "audit_log",
 ] as const;
+
+/** Tables with a serial id whose sequence must follow the restored rows. */
+const SERIAL_TABLES = ["audit_log"] as const;
 
 /** Dump every table to a `{ [table]: rows[] }` object. Geometry is encoded as
  *  GeoJSON automatically by to_jsonb and round-trips via jsonb_populate_recordset. */
@@ -37,6 +41,10 @@ export async function restoreDatabase(client: pg.PoolClient, db: Record<string, 
         [JSON.stringify(rows)]);
     }
     counts[table] = rows.length;
+  }
+  for (const table of SERIAL_TABLES) {
+    await client.query(
+      `SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM "${table}"`);
   }
   return counts;
 }

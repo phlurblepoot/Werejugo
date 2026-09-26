@@ -20,7 +20,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The app is served on `FRONTEND_PORT` (default 8080). On first boot the database migrates and seeds reference data (airports/ports), built-in map themes and built-in packing templates. The first person to sign up creates the first family and becomes its owner; after that, new people join with the family's invite code (set `ALLOW_SIGNUP=true` to let anyone create another family).
+The app is served on `FRONTEND_PORT` (default 8080). On first boot the database migrates and seeds reference data (airports/ports), built-in map themes and built-in packing templates. Open the app and the setup screen creates the first family; that person becomes the **server admin**. There is no public sign-up: the admin invites new families with one-time links (Admin → Families), and family owners invite their members the same way (Settings → Family). Forgotten passwords are reset with a one-time link from a family owner or the admin.
 
 **Your data lives in three volumes — back them up:** `db-data` (database), `storage` (photos, videos, documents) and `uploads` (custom pin icons, map overlays). On Unraid, map `/app/storage` and `/app/uploads` to folders under `/mnt/user/appdata/werejugo/` (the templates in `unraid/` do this).
 
@@ -53,7 +53,6 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 | `DATABASE_URL` | Postgres connection string | `postgres://werejugo:change-me-in-production@localhost:5432/werejugo` |
 | `JWT_SECRET` | Signs login tokens. **Required in production**, at least 32 characters | — |
 | `FILE_SIGNING_SECRET` | Signs photo/document links | derived from `JWT_SECRET` |
-| `ALLOW_SIGNUP` | Let anyone create a new family after the first one | `false` |
 | `STORAGE_DIR` | Photos, videos, documents (browsable tree) | `/app/storage` |
 | `UPLOADS_DIR` | Custom pin icons, map overlays | `/app/uploads` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `http://localhost:8080` |
@@ -68,7 +67,7 @@ Trips and photo albums can be shared as public, read-only links (`/s/<token>`) �
 
 ## Backup & restore
 
-**Settings → Backup** downloads the whole server — database, photos, videos, documents, custom pin icons and map overlays — as one `.tar.gz`. Only the **server owner** (the owner of the first family created) can back up or restore, because an archive contains every family on the server. Restore **replaces all current data**, is guarded by a typed confirmation, and checks the archive completely before changing anything. The archive is a plain gzipped tar (`db.json` table dump + `storage/` + `uploads/`), so it can also be restored by hand.
+**Admin → Backup** downloads the whole server — database, photos, videos, documents, custom pin icons and map overlays — as one `.tar.gz`. Only a **server admin** can back up or restore (Admin → Backup), because an archive contains every family on the server. Restore **replaces all current data**, is guarded by a typed confirmation, and checks the archive completely before changing anything. The archive is a plain gzipped tar (`db.json` table dump + `storage/` + `uploads/`), so it can also be restored by hand.
 
 Archives larger than ~100 MB can't be uploaded through Cloudflare's free proxy; restore those from your local network address instead.
 

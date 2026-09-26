@@ -9,7 +9,7 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/export", async (req, reply) => {
     const familyId = req.user.familyId;
 
-    const family = await query<any>("SELECT name, invite_code, created_at FROM families WHERE id = $1", [familyId]);
+    const family = await query<any>("SELECT name, created_at FROM families WHERE id = $1", [familyId]);
     if (!family.rows[0]) return reply.code(404).send({ error: "Family not found" });
     const users = await query<any>(
       "SELECT id, email, display_name, role, color FROM users WHERE family_id = $1",
