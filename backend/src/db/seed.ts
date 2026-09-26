@@ -120,12 +120,11 @@ async function seedDevData(): Promise<void> {
   const userId = await one(
     `INSERT INTO users (family_id, email, display_name, password_hash, role, is_admin, color)
      VALUES ($1,'demo@werejugo.dev','Demo',$2,'owner',true,'#0f766e') RETURNING id`, [familyId, pass]);
-  const ms = await one("INSERT INTO map_sets (family_id, name, created_by) VALUES ($1,'Our Travels',$2) RETURNING id", [familyId, userId]);
   const italy = await one("INSERT INTO trips (family_id, name, start_date, status, created_by) VALUES ($1,'Italy 2024','2024-06-01','done',$2) RETURNING id", [familyId, userId]);
-  const v1 = await one(
+  await one(
     `INSERT INTO visits (family_id, trip_id, kind, title, occurred_on, geom, created_by)
      VALUES ($1,$2,'place','Colosseum','2024-06-02', ${point(12.4924, 41.8902)}, $3) RETURNING id`, [familyId, italy, userId]);
-  const v2 = await one(
+  await one(
     `INSERT INTO visits (family_id, kind, title, occurred_on, geom, created_by)
      VALUES ($1,'food','Joe''s Pizza','2024-03-10', ${point(-73.99, 40.73)}, $2) RETURNING id`, [familyId, userId]);
   const grandma = await one("INSERT INTO people (family_id, display_name, relationship) VALUES ($1,'Grandma Rose','Grandmother') RETURNING id", [familyId]);
@@ -135,7 +134,6 @@ async function seedDevData(): Promise<void> {
   const smithId = await one(
     `INSERT INTO users (family_id, email, display_name, password_hash, role, color)
      VALUES ($1,'smith@werejugo.dev','Sam Smith',$2,'owner','#b45309') RETURNING id`, [smithsId, pass]);
-  const smithsMap = await one("INSERT INTO map_sets (family_id, name, created_by) VALUES ($1,'Our Map',$2) RETURNING id", [smithsId, smithId]);
   const rose = await one("INSERT INTO people (family_id, display_name, relationship) VALUES ($1,'Rose','Grandma') RETURNING id", [smithsId]);
 
   // A trip hosted by the Wanderers; the Smiths contribute to it.
@@ -143,7 +141,7 @@ async function seedDevData(): Promise<void> {
     "INSERT INTO trips (family_id, name, start_date, end_date, status, color, created_by) VALUES ($1,'Lake Tahoe 2025','2025-07-10','2025-07-17','booked','#0e7490',$2) RETURNING id",
     [familyId, userId]);
   await pool.query("INSERT INTO trip_members (trip_id, family_id, role, invited_by) VALUES ($1,$2,'contributor',$3)", [tahoe, smithsId, userId]);
-  const cabin = await one(
+  await one(
     `INSERT INTO visits (family_id, trip_id, kind, title, occurred_on, geom, created_by)
      VALUES ($1,$2,'stay','Lakeside cabin','2025-07-10', ${point(-120.0324, 39.0968)}, $3) RETURNING id`, [familyId, tahoe, userId]);
   const beach = await one(
@@ -162,8 +160,6 @@ async function seedDevData(): Promise<void> {
   await pool.query("INSERT INTO links (family_id, from_type, from_id, to_type, to_id) VALUES ($1,'person',$2,'trip',$3), ($4,'person',$5,'trip',$3)",
     [familyId, grandma, tahoe, smithsId, rose]);
 
-  for (const v of [v1, v2, cabin, beach]) await pool.query("INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1,$2)", [ms, v]);
-  for (const v of [cabin, beach]) await pool.query("INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1,$2)", [smithsMap, v]);
   console.log("[seed] dev data created (logins: demo@werejugo.dev and smith@werejugo.dev, password password123)");
 }
 

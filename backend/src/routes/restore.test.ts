@@ -115,6 +115,9 @@ test("a backup from an older version restores: missing columns get defaults, som
     "db.json": JSON.stringify({
       // pre-1.3 rows: families still have invite_code; users lack is_admin, token_version, …
       families: [{ id: famId, name: "Old Timers", invite_code: "OLD1", created_at: "2025-01-01T00:00:00Z", settings: {} }],
+      // tables that no longer exist are skipped
+      map_sets: [{ id: "33333333-3333-4333-8333-333333333333", family_id: famId, name: "Old map" }],
+      map_set_visits: [],
       users: [{
         id: "22222222-2222-4222-8222-222222222222", family_id: famId, email: "old@test.dev", display_name: "Old",
         password_hash: "x", role: "owner", color: "#2563eb", created_at: "2025-01-01T00:00:00Z",
@@ -123,6 +126,7 @@ test("a backup from an older version restores: missing columns get defaults, som
     "storage/.keep": "",
   }));
   expect(res.statusCode).toBe(200);
+  expect(res.json().counts).not.toHaveProperty("map_sets");
   const u = (await query<{ is_admin: boolean; token_version: number }>("SELECT is_admin, token_version FROM users WHERE email = 'old@test.dev'")).rows[0];
   expect(u).toEqual({ is_admin: true, token_version: 0 });
 });

@@ -4,16 +4,11 @@ import { gpx, kml } from "@tmcw/togeojson";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { visitGeometry } from "../lib/geojson.js";
+import { assertRefs, scopeOf } from "../lib/access.js";
+import { recordActivity } from "../lib/activity.js";
+import { badRequest } from "../lib/errors.js";
 
 const MAX_FEATURES = 2000;
-
-async function ownsMapSet(familyId: string, mapSetId: string): Promise<boolean> {
-  const { rowCount } = await query("SELECT 1 FROM map_sets WHERE id = $1 AND family_id = $2", [
-    mapSetId,
-    familyId,
-  ]);
-  return Boolean(rowCount);
-}
 
 interface Feature {
   geometry?: { type: string; coordinates: unknown };
@@ -36,18 +31,22 @@ function parseToFeatures(text: string, filename: string): Feature[] {
 export async function importRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
-  app.post("/api/map-sets/:mapSetId/import", async (req, reply) => {
-    const mapSetId = (req.params as { mapSetId: string }).mapSetId;
-    if (!(await ownsMapSet(req.user.familyId, mapSetId))) {
-      return reply.code(404).send({ error: "Map set not found" });
+  // Places from a GPX/KML/GeoJSON file onto the map — optionally onto a trip (form field `tripId`).
+  app.post("/api/import", async (req, reply) => {
+    const scope = scopeOf(req);
+    let tripId: string | null = null;
+    let file: { filename: string; text: string } | null = null;
+    for await (const part of req.parts()) {
+      if (part.type === "file") file = { filename: part.filename, text: (await part.toBuffer()).toString("utf8") };
+      else if (part.fieldname === "tripId" && typeof part.value === "string" && part.value) tripId = part.value;
     }
-    const part = await req.file();
-    if (!part) return reply.code(400).send({ error: "No file provided" });
-    const text = (await part.toBuffer()).toString("utf8");
+    if (!file) throw badRequest("No file provided");
+    await assertRefs(scope, { trip: tripId });
+    const { text, filename } = file;
 
     let features: Feature[];
     try {
-      features = parseToFeatures(text, part.filename);
+      features = parseToFeatures(text, filename);
     } catch {
       return reply.code(400).send({ error: "Could not parse file (expected GPX, KML or GeoJSON)" });
     }
@@ -86,17 +85,17 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           skipped++;
           continue;
         }
-        const ins = await client.query<{ id: string }>(
-          // GPX/KML usually carry elevation; visits store 2D geometry.
-          `INSERT INTO visits (family_id, kind, title, geom, created_by)
-           VALUES ($1, $2, $3, ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($4), 4326)), $5) RETURNING id`,
-          [req.user.familyId, kind, title, JSON.stringify(geom), req.user.id],
-        );
         await client.query(
-          "INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-          [mapSetId, ins.rows[0].id],
+          // GPX/KML usually carry elevation; visits store 2D geometry.
+          `INSERT INTO visits (family_id, trip_id, kind, title, geom, created_by)
+           VALUES ($1, $2, $3, $4, ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($5), 4326)), $6)`,
+          [scope.familyId, tripId, kind, title, JSON.stringify(geom), scope.userId],
         );
         imported++;
+      }
+      if (imported) {
+        await recordActivity({ tripId, familyId: scope.familyId, userId: scope.userId, kind: "visit.added",
+          summary: `${imported} place${imported === 1 ? "" : "s"} from ${filename}` }, client);
       }
     });
 

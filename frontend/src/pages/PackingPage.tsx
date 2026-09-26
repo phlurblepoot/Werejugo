@@ -11,7 +11,7 @@ type Sel = { kind: "template"; id: string } | { kind: "trip"; trip: Trip } | nul
 
 export function PackingPage() {
   const { data: templates = [], isLoading, isError, refetch } = useQuery({ queryKey: ["packing-templates"], queryFn: api.listPackingTemplates });
-  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
+  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
   const [sel, setSel] = useState<Sel>(null);
 
   return (

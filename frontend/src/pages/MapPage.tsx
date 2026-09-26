@@ -1,87 +1,72 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Item, type ItemKind, type MapSet, type Photo, type Theme } from "../api/client";
+import { BarChart3, FileUp, Map as MapIcon, Palette, SlidersHorizontal } from "lucide-react";
+import { api, type Item, type Photo, type Theme } from "../api/client";
 import { useAuth } from "../lib/auth";
 import { resolveItemStyle } from "../lib/style";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { loadCountries, visitedCountryIds, type CountryCollection } from "../lib/countries";
+import { applyFilters, isMine, readFilters, writeFilters, yearsOf, type MapFilters } from "../lib/mapFilters";
 import { MapView } from "../components/MapView";
 import { Sidebar } from "../components/Sidebar";
 import { VisitEditor } from "../components/visit-editor/VisitEditor";
 import { ItemDetail } from "../components/ItemDetail";
-import { MapSetEditor } from "../components/MapSetEditor";
 import { ManagePanel } from "../components/ManagePanel";
-import { TripsPanel } from "../components/TripsPanel";
 import { StatsPanel } from "../components/StatsPanel";
-import { GalleryPanel } from "../components/GalleryPanel";
 import { Lightbox } from "../components/Lightbox";
 import { TimelineBar } from "../components/TimelineBar";
 import { Legend } from "../components/Legend";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { useToast } from "../components/Toast";
-import { EmptyState, Spinner } from "../components/ui";
-import { PageHeader } from "../components/kit";
-import { Map as MapIcon } from "lucide-react";
+import { Button, Field, Modal, PageHeader } from "../components/kit";
 
+/**
+ * The one map: every place the family may see — its own, and those on trips
+ * shared with it — filtered by what's in the URL (?trip=&person=&year=&kind=
+ * &family=&q=), with ?visit=<id> opening a place.
+ */
 export function MapPage() {
   const { user, family } = useAuth();
   const qc = useQueryClient();
   const { toast, celebrate } = useToast();
+  const [params, setParams] = useSearchParams();
+  const filters = readFilters(params);
+  const setFilters = (change: Partial<MapFilters>) => setParams(writeFilters(params, change), { replace: true });
+  const visitParam = params.get("visit");
 
-  const mapSetsQuery = useQuery({ queryKey: ["mapSets"], queryFn: api.listMapSets });
+  const visitsQuery = useQuery({ queryKey: ["visits"], queryFn: api.listVisits });
+  const tripsQuery = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
+  const peopleQuery = useQuery({ queryKey: ["people"], queryFn: api.listPeople });
   const themesQuery = useQuery({ queryKey: ["themes"], queryFn: api.listThemes });
   const iconsQuery = useQuery({ queryKey: ["icons"], queryFn: api.listIcons });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
-
-  const [currentMapSetId, setCurrentMapSetId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!currentMapSetId && mapSetsQuery.data?.length) {
-      setCurrentMapSetId(mapSetsQuery.data[0].id);
-    }
-  }, [mapSetsQuery.data, currentMapSetId]);
-
-  const itemsQuery = useQuery({
-    queryKey: ["items", currentMapSetId],
-    queryFn: () => api.listItems(currentMapSetId!),
-    enabled: Boolean(currentMapSetId),
-  });
-  const tripsQuery = useQuery({
-    queryKey: ["trips", currentMapSetId],
-    queryFn: () => api.listTrips(currentMapSetId!),
-    enabled: Boolean(currentMapSetId),
-  });
 
   const themes = themesQuery.data ?? [];
   const themesById = useMemo(() => new Map<string, Theme>(themes.map((t) => [t.id, t])), [themes]);
   const customIcons = iconsQuery.data?.custom ?? [];
   const settings = settingsQuery.data;
-  const pinSettings = settings?.pin;
-  const pathSettings = settings?.path;
-  const items = itemsQuery.data ?? [];
+  const items = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
   const trips = tripsQuery.data ?? [];
-  const mapSets = mapSetsQuery.data ?? [];
-  const currentMapSet = mapSets.find((m) => m.id === currentMapSetId) ?? null;
+  const people = peopleQuery.data ?? [];
+  const myFamilyId = user?.familyId;
+  const hasShared = items.some((i) => !isMine(i, myFamilyId));
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [kindFilter, setKindFilter] = useState<ItemKind[]>([]);
-  const [tripFilter, setTripFilter] = useState("");
   const [timelineOn, setTimelineOn] = useState(false);
   const [timelineCursor, setTimelineCursor] = useState<string | null>(null);
-  const toggleKind = (k: ItemKind) =>
-    setKindFilter((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
-
+  const filterKey = params.toString();
   const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((i) => {
-      if (q && !(`${i.title} ${i.notes}`.toLowerCase().includes(q))) return false;
-      if (kindFilter.length && !kindFilter.includes(i.kind)) return false;
-      if (tripFilter === "none" && i.tripId) return false;
-      if (tripFilter && tripFilter !== "none" && i.tripId !== tripFilter) return false;
-      if (timelineOn && timelineCursor && !(i.occurredOn && i.occurredOn <= timelineCursor)) return false;
-      return true;
-    });
-  }, [items, search, kindFilter, tripFilter, timelineOn, timelineCursor]);
+    const matching = applyFilters(items, filters, myFamilyId);
+    if (!timelineOn || !timelineCursor) return matching;
+    return matching.filter((i) => i.occurredOn && i.occurredOn <= timelineCursor);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, filterKey, myFamilyId, timelineOn, timelineCursor]);
+  // The legend counts what every other filter leaves, so a hidden kind can be switched back on.
+  const legendItems = useMemo(
+    () => applyFilters(items, { ...filters, kinds: [] }, myFamilyId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, filterKey, myFamilyId],
+  );
 
   function toggleTimeline() {
     if (!timelineOn) {
@@ -98,7 +83,6 @@ export function MapPage() {
   const [visitedGeo, setVisitedGeo] = useState<{ type: "FeatureCollection"; features: unknown[] } | null>(null);
   const [visitedCount, setVisitedCount] = useState(0);
   const countriesRef = useRef<CountryCollection | null>(null);
-
   async function computeVisited() {
     if (!countriesRef.current) countriesRef.current = await loadCountries();
     const ids = visitedCountryIds(items, countriesRef.current);
@@ -116,22 +100,31 @@ export function MapPage() {
     await computeVisited();
   }
   useEffect(() => {
-    if (passportOn) computeVisited();
+    if (passportOn) void computeVisited();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, passportOn]);
 
-  // Selection / modals
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [detailItemId, setDetailItemId] = useState<string | null>(null);
-  const detailItem = items.find((i) => i.id === detailItemId) ?? null;
+  // Selection: the open place lives in the URL (?visit=), so it can be linked to.
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(visitParam);
+  const detailItem = items.find((i) => i.id === visitParam) ?? null;
+  useEffect(() => {
+    if (visitParam) setSelectedItemId(visitParam);
+  }, [visitParam]);
+  function selectItem(id: string) {
+    setSelectedItemId(id);
+    const next = new URLSearchParams(params);
+    next.set("visit", id);
+    setParams(next, { replace: true });
+  }
+  function closeDetail() {
+    const next = new URLSearchParams(params);
+    next.delete("visit");
+    setParams(next, { replace: true });
+  }
+
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorItem, setEditorItem] = useState<Item | null>(null);
-  const [mapSetEditor, setMapSetEditor] = useState<{ open: boolean; mapSet: MapSet | null }>({ open: false, mapSet: null });
-  const [showManage, setShowManage] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showTrips, setShowTrips] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-  const [showGallery, setShowGallery] = useState(false);
+  const [panel, setPanel] = useState<null | "styles" | "appearance" | "stats" | "import">(null);
   const [lightbox, setLightbox] = useState<{ photos: Photo[]; index: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
 
@@ -152,13 +145,7 @@ export function MapPage() {
     setPickActive(false);
   }
 
-  const refreshItems = () => qc.invalidateQueries({ queryKey: ["items", currentMapSetId] });
-  const refreshTrips = () => qc.invalidateQueries({ queryKey: ["trips", currentMapSetId] });
-
-  function selectItem(id: string) {
-    setSelectedItemId(id);
-    setDetailItemId(id);
-  }
+  const refreshItems = () => qc.invalidateQueries({ queryKey: ["visits"] });
 
   async function moveItemPoint(item: Item, lng: number, lat: number) {
     await api.updateItem(item.id, { geometry: { type: "Point", coordinates: [lng, lat] } });
@@ -175,15 +162,15 @@ export function MapPage() {
   async function deleteItem(id: string) {
     try {
       await api.deleteItem(id);
-      setDetailItemId(null);
+      closeDetail();
       refreshItems();
-      toast("Item deleted", "success");
+      toast("Place deleted", "success");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Could not delete item", "error");
+      toast(e instanceof Error ? e.message : "Could not delete the place", "error");
     }
   }
 
-  // Item saved from the editor: celebrate the very first pin, otherwise confirm the save.
+  // Saved from the editor: celebrate the very first place, otherwise confirm the save.
   function handleItemSaved() {
     const wasFirstPin = editorItem === null && items.length === 0;
     setEditorOpen(false);
@@ -192,9 +179,12 @@ export function MapPage() {
       celebrate();
       toast("🎉 Your first memory is on the map!", "success");
     } else {
-      toast(editorItem === null ? "Pin added" : "Changes saved", "success");
+      toast(editorItem === null ? "Place added" : "Changes saved", "success");
     }
   }
+
+  const toggleKind = (k: MapFilters["kinds"][number]) =>
+    setFilters({ kinds: filters.kinds.includes(k) ? filters.kinds.filter((x) => x !== k) : [...filters.kinds, k] });
 
   return (
     <div className="app">
@@ -202,98 +192,72 @@ export function MapPage() {
         icon={MapIcon}
         title="Map"
         subtitle={family?.name}
+        menu={[
+          { label: "Import places (GPX, KML, GeoJSON)", icon: FileUp, onSelect: () => setPanel("import") },
+          { label: "Pin styles & icons", icon: Palette, onSelect: () => setPanel("styles") },
+          { label: "Map appearance", icon: SlidersHorizontal, onSelect: () => setPanel("appearance") },
+          { label: "Travel stats", icon: BarChart3, onSelect: () => setPanel("stats") },
+        ]}
       />
 
       <Sidebar
-        mapSets={mapSets}
-        currentMapSetId={currentMapSetId}
         items={filteredItems}
+        total={items.length}
         trips={trips}
+        people={people}
+        years={yearsOf(items)}
+        hasShared={hasShared}
+        myFamilyId={myFamilyId}
+        filters={filters}
+        onFilters={setFilters}
         themesById={themesById}
         settings={settings}
         selectedItemId={selectedItemId}
-        search={search}
-        kindFilter={kindFilter}
-        tripFilter={tripFilter}
-        onSearch={setSearch}
-        onToggleKind={toggleKind}
-        onTripFilter={setTripFilter}
-        onSelectMapSet={setCurrentMapSetId}
-        onNewMapSet={() => setMapSetEditor({ open: true, mapSet: null })}
-        onEditMapSet={(m) => setMapSetEditor({ open: true, mapSet: m })}
         onAddItem={() => { setEditorItem(null); setEditorOpen(true); }}
         onSelectItem={selectItem}
         onEditItem={(item) => { setEditorItem(item); setEditorOpen(true); }}
-        onManage={() => setShowManage(true)}
-        onSettings={() => setShowSettings(true)}
-        onTrips={() => setShowTrips(true)}
-        onStats={() => setShowStats(true)}
-        onGallery={() => setShowGallery(true)}
       />
 
       <div className="map-area">
-        {currentMapSet ? (
-          <>
-            <MapView
-              mapSet={currentMapSet}
-              items={filteredItems}
-              selectedItemId={selectedItemId}
-              getStyle={(item) => resolveItemStyle(item, themesById, settings)}
-              pickMode={pickActive}
-              editMode={editMode}
-              visitedGeo={visitedGeo}
-              onPick={handlePick}
-              onSelectItem={selectItem}
-              onMovePoint={moveItemPoint}
-              onMoveWaypoint={moveItemWaypoint}
-            />
-            {!pickActive && (
-              <div className="map-tools">
-                <button className={editMode ? "primary" : ""} onClick={() => setEditMode((v) => !v)}>
-                  {editMode ? "✓ Done moving" : "✋ Move pins"}
-                </button>
-                <button className={timelineOn ? "primary" : ""} onClick={toggleTimeline}>🕐 Timeline</button>
-                <button className={passportOn ? "primary" : ""} onClick={togglePassport}>
-                  🌍 Passport{passportOn ? ` (${visitedCount})` : ""}
-                </button>
-              </div>
-            )}
-            {editMode && <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>}
-            {!itemsQuery.isLoading && items.length === 0 && !pickActive && (
-              <div className="map-empty-hint">
-                <span className="map-empty-hint-emoji" aria-hidden="true">📍</span>
-                <span>No pins yet — hit <strong>+ Add to map</strong> to drop your first memory.</span>
-              </div>
-            )}
-            <Legend items={items} kindFilter={kindFilter} onToggleKind={toggleKind} />
-            {timelineOn && (
-              <TimelineBar
-                items={items}
-                cursor={timelineCursor}
-                onCursor={setTimelineCursor}
-                onClose={() => setTimelineOn(false)}
-              />
-            )}
-          </>
-        ) : mapSetsQuery.isLoading ? (
-          <Spinner label="Loading your maps…" />
-        ) : (
-          <EmptyState
-            emoji="🗺️"
-            title="Welcome to Werejugo!"
-            hint="Create your first map set — like “Summer Trips” or “Places We've Eaten” — and start pinning your family's memories."
-            action={
-              <button className="primary" onClick={() => setMapSetEditor({ open: true, mapSet: null })}>
-                ✨ Create your first map
-              </button>
-            }
-          />
+        <MapView
+          styleUrl={settings?.map?.styleUrl}
+          items={filteredItems}
+          selectedItemId={selectedItemId}
+          getStyle={(item) => resolveItemStyle(item, themesById, settings)}
+          pickMode={pickActive}
+          editMode={editMode}
+          visitedGeo={visitedGeo}
+          onPick={handlePick}
+          onSelectItem={selectItem}
+          onMovePoint={moveItemPoint}
+          onMoveWaypoint={moveItemWaypoint}
+        />
+        {!pickActive && (
+          <div className="map-tools">
+            <button className={editMode ? "primary" : ""} onClick={() => setEditMode((v) => !v)}>
+              {editMode ? "✓ Done moving" : "✋ Move pins"}
+            </button>
+            <button className={timelineOn ? "primary" : ""} onClick={toggleTimeline}>🕐 Timeline</button>
+            <button className={passportOn ? "primary" : ""} onClick={togglePassport}>
+              🌍 Passport{passportOn ? ` (${visitedCount})` : ""}
+            </button>
+          </div>
+        )}
+        {editMode && <div className="map-edit-banner">Drag any pin to reposition — changes save automatically.</div>}
+        {!visitsQuery.isLoading && items.length === 0 && !pickActive && (
+          <div className="map-empty-hint">
+            <span className="map-empty-hint-emoji" aria-hidden="true">📍</span>
+            <span>No places yet — hit <strong>+ Add to map</strong> to drop your first memory.</span>
+          </div>
+        )}
+        <Legend items={legendItems} kindFilter={filters.kinds} onToggleKind={toggleKind} />
+        {timelineOn && (
+          <TimelineBar items={items} cursor={timelineCursor} onCursor={setTimelineCursor} onClose={() => setTimelineOn(false)} />
         )}
       </div>
 
-      {editorOpen && currentMapSet && (
+      {editorOpen && (
         <VisitEditor
-          mapSet={currentMapSet}
           item={editorItem}
           themes={themes}
           trips={trips}
@@ -302,8 +266,8 @@ export function MapPage() {
           onClose={() => setEditorOpen(false)}
           onSaved={handleItemSaved}
           onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
-          pinSettings={pinSettings}
-          pathSettings={pathSettings}
+          pinSettings={settings?.pin}
+          pathSettings={settings?.path}
         />
       )}
 
@@ -314,59 +278,34 @@ export function MapPage() {
           user={user}
           onEdit={() => { setEditorItem(detailItem); setEditorOpen(true); }}
           onDelete={() => deleteItem(detailItem.id)}
-          onClose={() => setDetailItemId(null)}
+          onClose={closeDetail}
           onOpenLightbox={(index) => setLightbox({ photos: detailItem.photos, index })}
         />
       )}
 
-      {mapSetEditor.open && (
-        <MapSetEditor
-          mapSet={mapSetEditor.mapSet}
-          onClose={() => setMapSetEditor({ open: false, mapSet: null })}
-          onSaved={(m) => { setMapSetEditor({ open: false, mapSet: null }); setCurrentMapSetId(m.id); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
-          onDeleted={(id) => { setMapSetEditor({ open: false, mapSet: null }); if (currentMapSetId === id) setCurrentMapSetId(null); qc.invalidateQueries({ queryKey: ["mapSets"] }); }}
-          onImported={() => { if (mapSetEditor.mapSet) qc.invalidateQueries({ queryKey: ["items", mapSetEditor.mapSet.id] }); }}
-        />
-      )}
-
-      {showSettings && (
+      {panel === "appearance" && (
         <SettingsPanel
-          settings={settingsQuery.data ?? {}}
+          settings={settings ?? {}}
           customIcons={customIcons}
-          onClose={() => setShowSettings(false)}
-          onSaved={() => { setShowSettings(false); qc.invalidateQueries({ queryKey: ["settings"] }); }}
+          onClose={() => setPanel(null)}
+          onSaved={() => { setPanel(null); qc.invalidateQueries({ queryKey: ["settings"] }); }}
         />
       )}
-
-      {showManage && (
+      {panel === "styles" && (
         <ManagePanel
           themes={themes}
           customIcons={customIcons}
-          onClose={() => setShowManage(false)}
+          onClose={() => setPanel(null)}
           onChanged={() => { qc.invalidateQueries({ queryKey: ["themes"] }); qc.invalidateQueries({ queryKey: ["icons"] }); }}
         />
       )}
-
-      {showTrips && currentMapSetId && (
-        <TripsPanel
-          mapSetId={currentMapSetId}
-          trips={trips}
-          onClose={() => setShowTrips(false)}
-          onChanged={refreshTrips}
-        />
-      )}
-
-      {showStats && currentMapSetId && (
-        <StatsPanel mapSetId={currentMapSetId} onClose={() => setShowStats(false)} />
-      )}
-
-      {showGallery && (
-        <GalleryPanel
-          items={filteredItems}
-          onClose={() => setShowGallery(false)}
-          onOpen={(photos, index) => setLightbox({ photos, index })}
-        />
-      )}
+      {panel === "stats" && <StatsPanel onClose={() => setPanel(null)} />}
+      <ImportPlaces
+        open={panel === "import"}
+        trips={trips.map((t) => ({ id: t.id, name: t.name }))}
+        onClose={() => setPanel(null)}
+        onImported={(n) => { setPanel(null); refreshItems(); toast(`Imported ${n} place${n === 1 ? "" : "s"}`, "success"); }}
+      />
 
       {lightbox && (
         <Lightbox
@@ -377,5 +316,53 @@ export function MapPage() {
         />
       )}
     </div>
+  );
+}
+
+/** GPX tracks, KML placemarks or GeoJSON features onto the map (optionally onto a trip). */
+function ImportPlaces({ open, trips, onClose, onImported }: {
+  open: boolean; trips: Array<{ id: string; name: string }>; onClose: () => void; onImported: (count: number) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [tripId, setTripId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.importFile(file, tripId || null);
+      setFile(null);
+      onImported(r.imported);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) onClose(); }} title="Import places"
+      description="Tracks become drives; points become places. Anything that can't be read is skipped.">
+      <form onSubmit={submit}>
+        <Field label="File (.gpx, .kml or .geojson)" htmlFor="import-file">
+          <input id="import-file" type="file" accept=".gpx,.kml,.geojson,.json" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </Field>
+        <Field label="Put them on a trip (optional)" htmlFor="import-trip">
+          <select id="import-trip" value={tripId} onChange={(e) => setTripId(e.target.value)}>
+            <option value="">No trip</option>
+            {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
+        {error && <div className="error-text" role="alert">{error}</div>}
+        <div className="kit-modal-actions">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="primary" icon={FileUp} loading={busy} disabled={!file}>Import</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

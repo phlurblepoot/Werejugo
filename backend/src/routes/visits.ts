@@ -34,45 +34,64 @@ const visitSchema = z.object({
 
 const DATE_ORDER = "The end date can't be before the start date";
 
-export async function loadVisit(familyId: string, id: string) {
+/**
+ * Places with everything the map needs, in four queries however many there
+ * are: the places ($1 = my family), their waypoints, their photos and the
+ * people tagged on them — only what my family may see.
+ */
+export async function loadVisits(familyId: string, filter: { ids?: string[] } = {}) {
   const { rows } = await query<any>(
     `SELECT v.id, v.trip_id, v.kind, v.title, v.notes, v.theme_id, v.color, v.icon,
             v.occurred_on, v.occurred_end, v.properties, v.created_by, v.created_at,
             u.display_name AS created_by_name, ST_AsGeoJSON(v.geom) AS geom,
-            v.family_id, f.name AS family_name
+            v.family_id, f.name AS family_name, ${editableWhere("visit", "v", "$1")} AS can_edit
      FROM visits v LEFT JOIN users u ON u.id = v.created_by JOIN families f ON f.id = v.family_id
-     WHERE v.id = $1 AND ${readableWhere("visit", "v", "$2")}`,
-    [id, familyId],
+     WHERE ${readableWhere("visit", "v", "$1")} ${filter.ids ? "AND v.id = ANY($2::uuid[])" : ""}
+     ORDER BY v.occurred_on NULLS LAST, v.created_at ASC`,
+    filter.ids ? [familyId, filter.ids] : [familyId],
   );
-  if (!rows[0]) return null;
-  const r = rows[0];
-  const wps = await query<any>(
-    `SELECT id, label, kind, seq, arrive_at, depart_at, ST_X(geom) AS lng, ST_Y(geom) AS lat
-     FROM visit_waypoints WHERE visit_id = $1 ORDER BY seq ASC`, [id],
-  );
-  const photoRows = await query<any>(
-    `SELECT m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
-     FROM links l JOIN media m ON m.id = CASE
-        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
-     WHERE ${readableWhere("media", "m", "$2")}
-       AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=$1)
-         OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=$1))
-     ORDER BY m.created_at ASC`,
-    [id, familyId],
-  );
-  return {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const group = <T,>(list: T[], key: (x: T) => string) => {
+    const m = new Map<string, T[]>();
+    for (const x of list) {
+      const k = key(x);
+      const bucket = m.get(k);
+      if (bucket) bucket.push(x); else m.set(k, [x]);
+    }
+    return m;
+  };
+  const wps = group((await query<any>(
+    `SELECT visit_id, id, label, kind, seq, arrive_at, depart_at, ST_X(geom) AS lng, ST_Y(geom) AS lat
+     FROM visit_waypoints WHERE visit_id = ANY($1::uuid[]) ORDER BY seq ASC`, [ids])).rows, (w) => w.visit_id);
+  const photos = group((await query<any>(
+    `SELECT CASE WHEN l.from_type = 'visit' THEN l.from_id ELSE l.to_id END AS visit_id,
+            m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
+     FROM links l JOIN media m ON m.id = CASE WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
+     WHERE ((l.from_type = 'media' AND l.to_type = 'visit' AND l.to_id = ANY($2::uuid[]))
+         OR (l.to_type = 'media' AND l.from_type = 'visit' AND l.from_id = ANY($2::uuid[])))
+       AND ${readableWhere("media", "m", "$1")}
+     ORDER BY m.created_at ASC`, [familyId, ids])).rows, (p) => p.visit_id);
+  const people = group((await query<any>(
+    `SELECT DISTINCT CASE WHEN l.from_type = 'visit' THEN l.from_id ELSE l.to_id END AS visit_id, p.id
+     FROM links l JOIN people p ON p.id = CASE WHEN l.from_type = 'person' THEN l.from_id ELSE l.to_id END
+     WHERE ((l.from_type = 'person' AND l.to_type = 'visit' AND l.to_id = ANY($2::uuid[]))
+         OR (l.to_type = 'person' AND l.from_type = 'visit' AND l.from_id = ANY($2::uuid[])))
+       AND ${readableWhere("person", "p", "$1")}`, [familyId, ids])).rows, (p) => p.visit_id);
+
+  return rows.map((r) => ({
     id: r.id, tripId: r.trip_id, kind: r.kind, title: r.title, notes: r.notes,
     themeId: r.theme_id, color: r.color, icon: r.icon,
     occurredOn: r.occurred_on, occurredEnd: r.occurred_end, properties: r.properties,
     createdBy: r.created_by, createdByName: r.created_by_name, createdAt: r.created_at,
-    // Who added it (another family's, on a shared trip, when familyId isn't mine).
-    familyId: r.family_id, familyName: r.family_name,
+    // Who added it (another family's, on a shared trip, when familyId isn't mine), and whether I may change it.
+    familyId: r.family_id, familyName: r.family_name, canEdit: r.can_edit,
     geometry: r.geom ? JSON.parse(r.geom) : null,
-    waypoints: wps.rows.map((w) => ({
+    waypoints: (wps.get(r.id) ?? []).map((w) => ({
       id: w.id, label: w.label, kind: w.kind, seq: w.seq, lng: w.lng, lat: w.lat,
       arriveAt: w.arrive_at, departAt: w.depart_at,
     })),
-    photos: photoRows.rows.map((p, i) => ({
+    photos: (photos.get(r.id) ?? []).map((p, i) => ({
       id: p.id,
       url: signFileUrl(p.rel_path),
       thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
@@ -80,7 +99,12 @@ export async function loadVisit(familyId: string, id: string) {
       caption: p.caption,
       seq: i,
     })),
-  };
+    personIds: (people.get(r.id) ?? []).map((p) => p.id),
+  }));
+}
+
+export async function loadVisit(familyId: string, id: string) {
+  return (await loadVisits(familyId, { ids: [id] }))[0] ?? null;
 }
 
 async function insertWaypoints(client: PoolClient, visitId: string, waypoints: z.infer<typeof waypointSchema>[]): Promise<void> {
@@ -97,13 +121,8 @@ async function insertWaypoints(client: PoolClient, visitId: string, waypoints: z
 export async function visitRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
-  app.get("/api/visits", async (req) => {
-    const { rows } = await query<{ id: string }>(
-      `SELECT t.id FROM visits t WHERE ${readableWhere("visit", "t", "$1")} ORDER BY t.occurred_on NULLS LAST, t.created_at ASC`,
-      [req.user.familyId],
-    );
-    return Promise.all(rows.map((r) => loadVisit(req.user.familyId, r.id)));
-  });
+  // Everything on my family's map: its own places and those on trips shared with it.
+  app.get("/api/visits", async (req) => loadVisits(req.user.familyId));
 
   app.post("/api/visits", async (req, reply) => {
     const b = visitSchema.parse(req.body);

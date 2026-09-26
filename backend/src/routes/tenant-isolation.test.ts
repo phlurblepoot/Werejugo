@@ -31,8 +31,6 @@ beforeAll(async () => {
   A.document = await one(`INSERT INTO documents (family_id, title, owner_person_id, expires_on) VALUES ($1, '${CANARY} passport', $2, CURRENT_DATE + 5) RETURNING id`, [fa, A.person]);
   A.theme = await one(`INSERT INTO themes (family_id, name) VALUES ($1, '${CANARY} theme') RETURNING id`, [fa]);
   A.icon = await one(`INSERT INTO icons (family_id, name, url) VALUES ($1, '${CANARY} icon', '/uploads/a.png') RETURNING id`, [fa]);
-  A.mapSet = await one(`INSERT INTO map_sets (family_id, name) VALUES ($1, '${CANARY} map') RETURNING id`, [fa]);
-  await query("INSERT INTO map_set_visits (map_set_id, visit_id) VALUES ($1, $2)", [A.mapSet, A.visit]);
   A.itinerary = await one(`INSERT INTO itinerary_items (family_id, trip_id, title) VALUES ($1, $2, '${CANARY} plan') RETURNING id`, [fa, A.trip]);
   A.blackout = await one(`INSERT INTO blackout_periods (family_id, label, start_date, end_date) VALUES ($1, '${CANARY} school', '2024-01-01', '2024-01-10') RETURNING id`, [fa]);
   A.list = await one(`INSERT INTO packing_lists (family_id, trip_id, name) VALUES ($1, $2, '${CANARY} list') RETURNING id`, [fa, A.trip]);
@@ -48,7 +46,6 @@ beforeAll(async () => {
 
   const fb = b.familyId;
   B.trip = await one("INSERT INTO trips (family_id, name) VALUES ($1, 'B trip') RETURNING id", [fb]);
-  B.mapSet = await one("INSERT INTO map_sets (family_id, name) VALUES ($1, 'B map') RETURNING id", [fb]);
   B.media = await one(`INSERT INTO media (family_id, rel_path) VALUES ($1, 'families/${fb}/loose/2024/b.jpg') RETURNING id`, [fb]);
   B.person = await one("INSERT INTO people (family_id, display_name) VALUES ($1, 'B person') RETURNING id", [fb]);
   B.visit = await one("INSERT INTO visits (family_id, title) VALUES ($1, 'B visit') RETURNING id", [fb]);
@@ -72,8 +69,6 @@ async function snapshotA(): Promise<string> {
     documents: "SELECT * FROM documents WHERE family_id = $1",
     themes: "SELECT * FROM themes WHERE family_id = $1",
     icons: "SELECT * FROM icons WHERE family_id = $1",
-    map_sets: "SELECT * FROM map_sets WHERE family_id = $1",
-    map_set_visits: "SELECT msv.* FROM map_set_visits msv JOIN map_sets m ON m.id = msv.map_set_id WHERE m.family_id = $1",
     itinerary: "SELECT * FROM itinerary_items WHERE family_id = $1",
     blackouts: "SELECT * FROM blackout_periods WHERE family_id = $1",
     packing_lists: "SELECT * FROM packing_lists WHERE family_id = $1",
@@ -189,15 +184,6 @@ const CASES: Case[] = [
   c("GET /api/files/*", () => `/api/files/families/${ctx.familyId}/loose/2024/a-1234abcd.jpg`, 403, undefined, "no signature"),
 
   // Map sets and map styling
-  c("GET /api/map-sets", () => "/api/map-sets", "clean"),
-  c("POST /api/map-sets", () => "/api/map-sets", "clean", () => ({ name: "B's map" })),
-  c("PATCH /api/map-sets/:id", () => `/api/map-sets/${A.mapSet}`, 404, () => ({ name: "x" })),
-  c("DELETE /api/map-sets/:id", () => `/api/map-sets/${A.mapSet}`, 404),
-  c("GET /api/map-sets/:id/visits", () => `/api/map-sets/${A.mapSet}/visits`, 404),
-  c("POST /api/map-sets/:id/visits", () => `/api/map-sets/${A.mapSet}/visits`, 404, () => ({ visitId: B.visit })),
-  c("POST /api/map-sets/:id/visits", () => `/api/map-sets/${B.mapSet}/visits`, 400, () => ({ visitId: A.visit }), "their place on my map"),
-  c("DELETE /api/map-sets/:id/visits/:visitId", () => `/api/map-sets/${A.mapSet}/visits/${A.visit}`, 404),
-  c("POST /api/map-sets/:mapSetId/import", () => `/api/map-sets/${A.mapSet}/import`, 404),
   c("GET /api/themes", () => "/api/themes", "clean"),
   c("POST /api/themes", () => "/api/themes", "clean", () => ({ name: "B theme" })),
   c("PATCH /api/themes/:id", () => `/api/themes/${A.theme}`, 404, () => ({ name: "x" })),
@@ -272,6 +258,7 @@ const EXEMPT: Record<string, string> = {
   "POST /api/admin/return": "server admin only (admin.test.ts)",
   "GET /api/admin/audit": "server admin only (admin.test.ts)",
   "POST /api/media": "creates in the caller's family; the file goes in its own folder (media.test.ts)",
+  "POST /api/import": "creates in the caller's family; onto another family's trip is 400 (import.test.ts)",
   "POST /api/icons": "creates in the caller's family",
   "POST /api/uploads": "no family data: a public map image",
   "POST /api/uploads/from-url": "no family data: a public map image",

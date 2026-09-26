@@ -163,8 +163,10 @@ textarea { resize: vertical; min-height: 72px; }
   color: var(--color-text-muted);
 }
 
-.map-set-select { display: flex; gap: 8px; }
-.map-set-select select { flex: 1; }
+/* Map filters: two selects per row, one on narrow sidebars. */
+.map-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin-top: 8px; }
+.map-filter-grid select { width: 100%; min-width: 0; }
+.sidebar-links { margin-top: 18px; font-size: var(--text-xs); }
 
 .item-row {
   display: flex;

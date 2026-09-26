@@ -7,12 +7,15 @@ import type pg from "pg";
  * intentionally excluded — they are recreated by migrations/seed, not restored.
  */
 export const BACKUP_TABLES = [
-  "families", "users", "themes", "trips", "map_sets", "visits", "media", "people",
-  "icons", "documents", "links", "map_set_visits", "visit_waypoints", "comments",
+  "families", "users", "themes", "trips", "visits", "media", "people",
+  "icons", "documents", "links", "visit_waypoints", "comments",
   "itinerary_items", "packing_lists", "packing_items", "blackout_periods", "share_links",
   "invites", "password_resets", "audit_log",
   "trip_members", "trip_invites", "person_links", "activity",
 ] as const;
+
+/** Tables older backups may contain that no longer exist; restore skips them. */
+export const RETIRED_TABLES = ["map_sets", "map_set_visits"] as const;
 
 /** Tables with a serial id whose sequence must follow the restored rows. */
 const SERIAL_TABLES = ["audit_log", "activity"] as const;

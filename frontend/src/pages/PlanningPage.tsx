@@ -21,7 +21,7 @@ export function PlanningPage() {
   const [editing, setEditing] = useState<Trip | null>(null);
   const [blackouts, setBlackouts] = useState(false);
 
-  const { data: trips, isLoading, isError, refetch } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
+  const { data: trips, isLoading, isError, refetch } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
   const { data: blackoutList = [] } = useQuery({ queryKey: ["blackouts"], queryFn: api.listBlackouts });
   const refresh = () => qc.invalidateQueries({ queryKey: ["trips"] });
 

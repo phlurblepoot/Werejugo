@@ -14,7 +14,7 @@ test("a 401 on a signed-in request ends the session", async () => {
   vi.stubGlobal("fetch", reply(401));
   const heard = vi.fn();
   window.addEventListener(UNAUTHORIZED_EVENT, heard);
-  await expect(api.listTrips("")).rejects.toThrow("nope");
+  await expect(api.listTrips()).rejects.toThrow("nope");
   window.removeEventListener(UNAUTHORIZED_EVENT, heard);
   expect(heard).toHaveBeenCalledTimes(1);
   expect(tokenStore.get()).toBeNull();

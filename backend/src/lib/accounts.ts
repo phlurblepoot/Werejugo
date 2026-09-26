@@ -45,7 +45,7 @@ export async function createUser(
   return rows[0];
 }
 
-/** Create a family with its first owner (and the starter map set it expects). */
+/** Create a family with its first owner. */
 export async function createFamilyWithOwner(
   client: pg.PoolClient,
   f: { familyName: string; displayName: string; email: string; password: string; isAdmin?: boolean; signedIn?: boolean },
@@ -55,10 +55,6 @@ export async function createFamilyWithOwner(
     familyId: fam.rows[0].id, email: f.email, displayName: f.displayName, password: f.password, role: "owner", isAdmin: f.isAdmin,
     signedIn: f.signedIn,
   });
-  await client.query(
-    "INSERT INTO map_sets (family_id, name, description, created_by) VALUES ($1, 'Our Map', 'Where we have been', $2)",
-    [fam.rows[0].id, user.id],
-  );
   return user;
 }
 

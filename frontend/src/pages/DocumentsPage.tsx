@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type DocumentItem, type DocumentFilters, type DocType } from "../api/client";
 import { DocumentList } from "../components/documents/DocumentList";
@@ -13,6 +14,14 @@ export function DocumentsPage() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [editing, setEditing] = useState<DocumentItem | null>(null);
+  // /documents?doc=<id> (e.g. from search) opens that document.
+  const [params, setParams] = useSearchParams();
+  const wantedDoc = params.get("doc");
+  useEffect(() => {
+    if (!wantedDoc) return;
+    api.getDocument(wantedDoc).then(setEditing).catch(() => {});
+    setParams({}, { replace: true });
+  }, [wantedDoc, setParams]);
   const [adding, setAdding] = useState(false);
 
   const { data: documents, isLoading, isError, refetch } = useQuery({

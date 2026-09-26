@@ -9,12 +9,16 @@ interface KindDefault {
   lineWidth: number;
 }
 
+/** Every kind of place, in the order pickers and filters show them. */
+export const ITEM_KINDS: ItemKind[] = ["place", "food", "stay", "flight", "cruise", "drive", "custom"];
+
 export const KIND_DEFAULTS: Record<ItemKind, KindDefault> = {
   place: { color: "#2563eb", icon: "pin", lineColor: "#2563eb", lineWidth: 3 },
   food: { color: "#ea580c", icon: "utensils", lineColor: "#ea580c", lineWidth: 3 },
   flight: { color: "#0ea5e9", icon: "plane", lineColor: "#0ea5e9", lineWidth: 3 },
   cruise: { color: "#0d9488", icon: "ship", lineColor: "#0d9488", lineWidth: 3 },
   drive: { color: "#7c3aed", icon: "car", lineColor: "#7c3aed", lineWidth: 3 },
+  stay: { color: "#db2777", icon: "hotel", lineColor: "#db2777", lineWidth: 3 },
   custom: { color: "#64748b", icon: "star", lineColor: "#64748b", lineWidth: 3 },
 };
 
@@ -101,5 +105,6 @@ export const KIND_LABELS: Record<ItemKind, string> = {
   flight: "Flight",
   cruise: "Cruise",
   drive: "Drive",
+  stay: "Stay",
   custom: "Custom",
 };

@@ -4,20 +4,15 @@ import { buildTestApp, closeTestApp, type TestCtx } from "../test/helpers.js";
 import { query } from "../db/pool.js";
 
 let ctx: TestCtx;
-let mapSetId: string;
-beforeAll(async () => {
-  ctx = await buildTestApp();
-  mapSetId = (await query<{ id: string }>(
-    "INSERT INTO map_sets (family_id, name, created_by) VALUES ($1,'Imports',$2) RETURNING id",
-    [ctx.familyId, ctx.userId])).rows[0].id;
-});
+beforeAll(async () => { ctx = await buildTestApp(); });
 afterAll(async () => { await closeTestApp(ctx); });
 
-async function importFile(name: string, body: string) {
+async function importFile(name: string, body: string, tripId?: string) {
   const form = new FormData();
+  if (tripId) form.append("tripId", tripId);
   form.append("file", Buffer.from(body), { filename: name });
   return ctx.app.inject({
-    method: "POST", url: `/api/map-sets/${mapSetId}/import`,
+    method: "POST", url: "/api/import",
     headers: { authorization: `Bearer ${ctx.token}`, ...form.getHeaders() }, payload: form.getBuffer(),
   });
 }
@@ -70,4 +65,15 @@ test("features with broken coordinates are skipped instead of failing the whole 
   const res = await importFile("broken.geojson", geojson);
   expect(res.statusCode).toBe(200);
   expect(res.json()).toMatchObject({ imported: 1, skipped: 2 });
+});
+
+test("an import can go straight onto a trip — but only one the family may use", async () => {
+  const trip = (await query<{ id: string }>("INSERT INTO trips (family_id, name) VALUES ($1, 'Road trip') RETURNING id", [ctx.familyId])).rows[0].id;
+  const geojson = JSON.stringify({ type: "FeatureCollection", features: [{ type: "Feature", properties: { name: "Motel" }, geometry: { type: "Point", coordinates: [-110, 36] } }] });
+  expect((await importFile("stops.geojson", geojson, trip)).json()).toMatchObject({ imported: 1 });
+  const row = (await query<{ trip_id: string }>("SELECT trip_id FROM visits WHERE title = 'Motel'")).rows[0];
+  expect(row.trip_id).toBe(trip);
+  const other = (await query<{ id: string }>("INSERT INTO families (name) VALUES ('Others') RETURNING id")).rows[0].id;
+  const theirs = (await query<{ id: string }>("INSERT INTO trips (family_id, name) VALUES ($1, 'Theirs') RETURNING id", [other])).rows[0].id;
+  expect((await importFile("stops.geojson", geojson, theirs)).statusCode).toBe(400);
 });

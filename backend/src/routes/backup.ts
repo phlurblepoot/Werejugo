@@ -8,7 +8,7 @@ import * as tar from "tar";
 import { requireAdmin, requireAuth, requireAuthOrTicket } from "../lib/auth.js";
 import { audit } from "../lib/audit.js";
 import { config } from "../config.js";
-import { BACKUP_TABLES, dumpDatabase, restoreDatabase } from "../lib/archive.js";
+import { BACKUP_TABLES, RETIRED_TABLES, dumpDatabase, restoreDatabase } from "../lib/archive.js";
 import { tx } from "../db/pool.js";
 
 async function isDir(path: string): Promise<boolean> {
@@ -40,6 +40,8 @@ async function archiveProblem(work: string): Promise<{ error: string } | { db: R
   if (manifest?.app !== "werejugo" || !Array.isArray(manifest.tables)) return { error: "Unrecognized backup archive" };
   if (!db || typeof db !== "object" || Array.isArray(db)) return { error: "db.json is not a table dump" };
   const known = new Set<string>(BACKUP_TABLES);
+  const retired = new Set<string>(RETIRED_TABLES);
+  for (const table of Object.keys(db)) if (retired.has(table)) delete (db as Record<string, unknown>)[table];
   for (const [table, rows] of Object.entries(db)) {
     if (!known.has(table)) return { error: `Archive contains an unknown table: ${table}` };
     if (!Array.isArray(rows)) return { error: `Table ${table} is not a list of rows` };

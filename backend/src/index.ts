@@ -10,7 +10,6 @@ import { config } from "./config.js";
 import { ephemeralDataDirs } from "./lib/storage-check.js";
 import { installErrorHandling } from "./lib/errors.js";
 import { authRoutes } from "./routes/auth.js";
-import { mapSetRoutes } from "./routes/mapsets.js";
 import { fileRoutes } from "./routes/files.js";
 import { linkRoutes } from "./routes/links.js";
 import { mediaRoutes } from "./routes/media.js";
@@ -107,7 +106,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/api/health", async () => ({ ok: true }));
 
   await app.register(authRoutes);
-  await app.register(mapSetRoutes);
   await app.register(fileRoutes);
   await app.register(linkRoutes);
   await app.register(mediaRoutes);

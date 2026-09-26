@@ -21,8 +21,6 @@ const FAMILY_QUERIES: Record<string, string> = {
   media: "SELECT * FROM media WHERE family_id = $1",
   documents: "SELECT * FROM documents WHERE family_id = $1",
   links: "SELECT * FROM links WHERE family_id = $1",
-  map_sets: "SELECT * FROM map_sets WHERE family_id = $1",
-  map_set_visits: "SELECT msv.* FROM map_set_visits msv JOIN map_sets m ON m.id = msv.map_set_id WHERE m.family_id = $1",
   themes: "SELECT * FROM themes WHERE family_id = $1",
   icons: "SELECT * FROM icons WHERE family_id = $1",
   itinerary_items: "SELECT * FROM itinerary_items WHERE family_id = $1",
@@ -55,8 +53,7 @@ async function familyFiles(familyId: string): Promise<Array<{ root: "storage" | 
     `SELECT 'storage' AS root, rel_path AS rel FROM media WHERE family_id = $1
      UNION SELECT 'storage', thumb_rel_path FROM media WHERE family_id = $1 AND thumb_rel_path IS NOT NULL
      UNION SELECT 'storage', rel_path FROM documents WHERE family_id = $1 AND rel_path IS NOT NULL
-     UNION SELECT 'uploads', substring(url FROM '^/uploads/(.+)$') FROM icons WHERE family_id = $1 AND url LIKE '/uploads/%'
-     UNION SELECT 'uploads', substring(overlay_url FROM '^/uploads/(.+)$') FROM map_sets WHERE family_id = $1 AND overlay_url LIKE '/uploads/%'`,
+     UNION SELECT 'uploads', substring(url FROM '^/uploads/(.+)$') FROM icons WHERE family_id = $1 AND url LIKE '/uploads/%'`,
     [familyId]);
   return rows.filter((r) => r.rel);
 }

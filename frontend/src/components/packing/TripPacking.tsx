@@ -17,7 +17,7 @@ export function TripPacking({ trip }: { trip: Trip }) {
   const saveTpl = useMutation({ mutationFn: (v: { name: string; fromListId: string }) => api.savePackingTemplate(v) });
 
   const templates = useQuery({ queryKey: ["packing-templates"], queryFn: api.listPackingTemplates, enabled: seedMode === "template" });
-  const trips = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips(""), enabled: seedMode === "trip" });
+  const trips = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips(), enabled: seedMode === "trip" });
 
   if (isLoading) return <div className="er-sub">Loading…</div>;
 

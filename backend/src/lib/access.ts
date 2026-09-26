@@ -87,7 +87,6 @@ const ENTITIES = {
   document: { table: "documents", label: "document", read: own, edit: own },
   theme: { table: "themes", label: "theme", read: (a, p) => `(${a}.family_id = ${p} OR ${a}.family_id IS NULL)`, edit: own },
   icon: { table: "icons", label: "icon", read: own, edit: own },
-  map_set: { table: "map_sets", label: "map", read: own, edit: own },
   blackout: { table: "blackout_periods", label: "blackout", read: own, edit: own },
   packing_list: { table: "packing_lists", label: "packing list", read: (a, p) => `(${a}.family_id = ${p} OR ${a}.is_builtin)`, edit: own },
   packing_item: {

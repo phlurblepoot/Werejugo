@@ -25,10 +25,10 @@ export function Legend({ items, kindFilter, onToggleKind }: Props) {
           onClick={() => onToggleKind(k)}
           title="Click to toggle this layer"
         >
-          <span className="legend-swatch" style={{ background: KIND_DEFAULTS[k].color }}>
-            {glyphFor(KIND_DEFAULTS[k].icon)}
+          <span className="legend-swatch" style={{ background: (KIND_DEFAULTS[k] ?? KIND_DEFAULTS.place).color }}>
+            {glyphFor((KIND_DEFAULTS[k] ?? KIND_DEFAULTS.place).icon)}
           </span>
-          <span className="legend-label">{KIND_LABELS[k]}</span>
+          <span className="legend-label">{KIND_LABELS[k] ?? k}</span>
           <span className="legend-count">{counts.get(k)}</span>
         </div>
       ))}

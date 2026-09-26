@@ -32,7 +32,7 @@ export function FirstRunWelcome() {
   const [dismissed, setDismissed] = useState(() => readFlag(key));
   const { data, refetch } = useQuery({
     queryKey: ["first-run-stats"],
-    queryFn: () => api.getStats(""),
+    queryFn: () => api.getStats(),
     enabled: !dismissed,
   });
 

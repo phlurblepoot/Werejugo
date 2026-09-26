@@ -12,9 +12,9 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.6 |
-| **Next step** | Build Phase 1.6: migration + batched visits list + import → map page filters in the URL → remove legacy panels → deep links |
-| **Blocked on** | Nothing |
+| **Current phase** | 1.1 |
+| **Next step** | Milestone 1 review: the owner tests the preview image `claude-cool-hopper-pku4ne` (reset the database first — README), merges PR #1 and approves deleting the old branch (the last 1.1 item). Then plan Phase 2.1. |
+| **Blocked on** | The owner's Milestone 1 review |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
 
@@ -249,11 +249,11 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.6 One map — M
 
-**Status:** In progress · **Plan:** [phase-1.6](../plans/2026-09-26-phase-1.6-one-map.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
+**Status:** Done · **Plan:** [phase-1.6](../plans/2026-09-26-phase-1.6-one-map.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] Drop map sets (§3.5); URL-driven filters (trip, person, year/date, kind, family); shared-trip visits badged.
-- [ ] Remove the legacy Trips/Photos/Stats/Export panels and link out; stats move to the Stats page (4.2).
-- [ ] Search deep links (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`) open the item — on every page.
+- [x] Drop map sets (§3.5); URL-driven filters (trip, person, year/date, kind, family); shared-trip visits badged.
+- [x] Remove the legacy Trips/Photos/Stats/Export panels and link out; stats move to the Stats page (4.2). *(Travel stats stays in the Map's ⋯ menu until 4.2.)*
+- [x] Search deep links (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`) open the item — on every page.
 
 **Milestone 1 exit:** the admin can invite families; two families can share a trip with the right roles and privacy; nothing leaks across families (test suite green); the app is safe on the public internet; the shell and account screens use the new design on phone and desktop.
 
@@ -368,9 +368,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 **Status:** Not started · **Plan:** — · **PR:** —
 
 - [ ] Error handling and confirmations for every mutation listed in Appendix A.3; consistent cache invalidation (one query-key scheme for trips etc.).
-- [ ] Performance: remove N+1 queries in visit loading; add the missing indexes (media geom/timeline, documents owners, itinerary, people refs).
+- [ ] Performance: ~~remove N+1 queries in visit loading~~ (done in 1.6 — the map list is four queries); add the missing indexes (media geom/timeline, documents owners, itinerary, people refs).
 - [ ] Trip rename re-homes documents (the `trips.ts:50` TODO).
 - [ ] Remove dead code and dependencies found in the audit.
+- [ ] Every legacy `.modal-backdrop` dialog (14 of them: item detail, visit editor, map settings, stats, document/person/trip forms…) moves to the kit `Modal`, so Esc closes it, focus stays inside and screen readers announce a dialog. (added 2026-09-26)
 
 **Milestone 3 exit:** every module is complete, consistent and comfortable on phone and desktop; cruise, flight and road routes draw correctly.
 
@@ -489,6 +490,9 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-26
 
+- **Done** — Phase 1.6 One map (PR #1). Map sets are gone: the Map shows every place the family may see — its own and every place on a trip it shares — with filters for search, kind, trip, year, person and (when anything is shared) who added it, all kept in the URL so a view can be bookmarked or sent. Places from other families carry a "by <family>" chip and open read-only unless the viewer's family may edit them (host or co-owner). The map list loads in four queries instead of several per place. Migration `0003_one_map.sql` keeps a family's custom base-map style (now under Map appearance) and drops the map-set tables; restoring an older backup skips them. The Trips, Gallery, Stats and Export side panels are gone: the sidebar links to Planning and Photos; import (GPX/KML/GeoJSON, optionally onto a trip), pin styles, map appearance and Travel stats live in the Map's ⋯ menu. Search results open their item on every page (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`, `/photos?photo=`). Verified: backend 288/288 (with a data test for the 0003 migration), frontend 180/180, build; Playwright on the two-family seed database upgraded in place from 0002, as host, contributor and co-owner, at desktop and phone sizes: 36 checks, no console errors or overflow.
+- **Note** — Found by the 1.6 QA and fixed: a place of kind "stay" (valid on the server, used by the seed's "Lakeside cabin") blanked the whole Map page because the web app didn't know the kind — map sets had hidden it until now. The app now has one list of kinds (`ITEM_KINDS`) with "Stay" in the editor, filters and pin styles, and the legend falls back safely for any kind it doesn't know. Also seen, left for 3.6 (added there): the 14 older dialogs don't close on Esc.
+
 - **Done** — Phase 1.5 Shared trips & cross-family people (PR #1). A trip's host family invites another family with a one-time link and picks co-owner or contributor. Only family owners accept. Places, itinerary, photos and comments on the trip are visible to every family on it and say who added them. Contributors change only their own; co-owners change everything; the trip itself (details, status, sharing, members) stays the host's. Packing, bookings and documents stay private per family, including a guest family's own list and bookings for the shared trip. A family that leaves takes its contributions with it, and they return on re-invite. Other families' photos show only in the trip's album, never in your library. "Same person in another family" links people across families that share a trip; the person page merges what the viewer may see; tagging works across families. There's an activity feed and a two-family dev seed. Verified: backend 296/296 (a trip-sharing suite; the isolation suite now 102 cases), frontend 168/168; Playwright on a seeded database as host, contributor and a newly invited co-owner (phone), with no console errors or overflow.
 - **Note** — 1.5 decisions: public share links of a shared trip show only the host family's content, so nobody's photos are published without their consent. Global search, stats and the photo library stay per family. Shared-trip places show on the map once 1.6 replaces map sets. The dev seed is now safe to run on every start (it crash-looped before).
 
@@ -545,7 +549,7 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 ### A.3 Frontend flows
 - ✅ First-run overlay locks out new families (`shell/FirstRunWelcome.tsx`, `global.css:572`).
 - Command palette: no debounce, no ↑/↓/Enter, Esc only from the input; ✅ deep links (`/map?visit=` etc., `routes/search.ts:22-47`) ignored by every page.
-- Map: photo upload in the editor closes it and discards edits (`VisitPhotos.tsx:61` → `onSaved`); duplicate visit on retry after a failed photo upload; pick-on-map has no cancel; popup + modal open together; style loads twice on mount; family/kind/cruise-line defaults never affect saved pins; legend uses kind defaults only; map sets' default view isn't editable; no UI to add an existing visit to another set; stats titled "Map stats" but family-wide.
+- Map: photo upload in the editor closes it and discards edits (`VisitPhotos.tsx:61` → `onSaved`); duplicate visit on retry after a failed photo upload; pick-on-map has no cancel; popup + modal open together; ✅ style loads twice on mount (1.6); family/kind/cruise-line defaults never affect saved pins; legend uses kind defaults only; ✅ map sets' default view isn't editable and no UI to add an existing visit to another set (map sets removed, 1.6); ✅ stats titled "Map stats" but family-wide (now "Travel stats", 1.6).
 - Planning: trips can't be edited/deleted from Planning; status select shows stale value; "schedule" sets today's date; itinerary items not editable; "→ visit" creates a location-less visit on no map; bookings not clickable; timeline axis hard-coded to 2025.
 - Packing: custom template edits never refresh (`PackingPage.tsx:44`); save-as-template doesn't refresh or confirm; no rename/delete/qty/label edit.
 - Documents: search input unmounts each keystroke; empty filter shows "No documents yet" with no way back; banner computed from the filtered list; no delete confirm.
@@ -555,7 +559,7 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 - Share view: itinerary never rendered, pins do nothing, fixed world view, waypoints dropped, image URLs skip `API_URL`.
 - Auth: logout doesn't clear cached data (another user on the same tab can briefly see the previous family's data); a 401 clears the token but leaves the UI signed in.
 - Missing try/catch or confirmations in: ManagePanel, SettingsPanel save, StylePicker upload, FlightForm, useCruiseLookup, PhotoDetail, UploadReview, ShareButton, PeoplePage, DocumentForm, TripForm, PlanningPage status change, VisitPhotos delete, itinerary delete, BlackoutManager.
-- Inconsistent trip query keys (`["trips", mapSetId]` vs `["trips"]`); the due-count badge refreshes only from the Documents page.
+- ✅ Inconsistent trip query keys (`["trips", mapSetId]` vs `["trips"]`) — one `["trips"]` key since 1.6; the due-count badge refreshes only from the Documents page.
 
 ### A.4 Mobile & PWA
 - ✅ Rail always visible on phones; ✅ header actions overflow off-screen (Planning, Photos); board and packing columns fixed-width; one breakpoint in the whole stylesheet; 14px inputs (iOS zoom); no safe-area insets with `black-translucent`; invite code hidden ≤720px.

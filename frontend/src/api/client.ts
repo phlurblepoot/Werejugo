@@ -122,7 +122,7 @@ export interface AuditEntry {
 
 export type DownloadPurpose = "backup" | "family-export";
 
-export type ItemKind = "place" | "food" | "flight" | "cruise" | "drive" | "custom";
+export type ItemKind = "place" | "food" | "flight" | "cruise" | "drive" | "stay" | "custom";
 
 export interface Waypoint {
   id?: string;
@@ -193,6 +193,8 @@ export interface PathSettings {
 export interface FamilySettings {
   pin?: PinSettings;
   path?: PathSettings;
+  /** The map's base style (a MapLibre style URL); empty for the default. */
+  map?: { styleUrl?: string | null };
 }
 
 export type MediaType = "image" | "video" | "audio";
@@ -208,7 +210,6 @@ export interface Photo {
 
 export interface Item {
   id: string;
-  mapSetId?: string;
   kind: ItemKind;
   title: string;
   notes: string;
@@ -226,12 +227,15 @@ export interface Item {
   /** The family that added it (another family's when it's on a shared trip). */
   familyId?: string;
   familyName?: string;
+  /** Whether my family may change it (trip roles on shared trips). */
+  canEdit?: boolean;
+  /** People tagged on it (for the map's person filter). */
+  personIds?: string[];
   createdAt: string;
 }
 
 export interface Trip {
   id: string;
-  mapSetId?: string;
   name: string;
   description: string;
   status: "idea" | "planning" | "booked" | "done";
@@ -334,20 +338,6 @@ export interface Stats {
   countByKind: Record<string, number>;
   distanceMetersByKind: Record<string, number>;
   totalDistanceMeters: number;
-}
-
-export interface MapSet {
-  id: string;
-  name: string;
-  description: string;
-  baseKind: "vector" | "custom";
-  styleUrl: string | null;
-  overlayUrl: string | null;
-  overlayBounds: number[] | null;
-  defaultLng: number;
-  defaultLat: number;
-  defaultZoom: number;
-  createdAt: string;
 }
 
 export interface Theme {
@@ -653,24 +643,10 @@ export const api = {
   auditLog: (before?: string) =>
     request<AuditEntry[]>(`/api/admin/audit${before ? `?before=${encodeURIComponent(before)}` : ""}`),
 
-  // map sets
-  listMapSets: () => request<MapSet[]>("/api/map-sets"),
-  createMapSet: (data: Partial<MapSet>) =>
-    request<MapSet>("/api/map-sets", { method: "POST", body: body(data) }),
-  updateMapSet: (id: string, data: Partial<MapSet>) =>
-    request<MapSet>(`/api/map-sets/${id}`, { method: "PATCH", body: body(data) }),
-  deleteMapSet: (id: string) => request<void>(`/api/map-sets/${id}`, { method: "DELETE" }),
-
-  // visits (formerly items) — kept as `Item` shape; mapSetId is stamped client-side
-  listItems: async (mapSetId: string) => {
-    const visits = await request<Item[]>(`/api/map-sets/${mapSetId}/visits`);
-    return visits.map((v) => ({ ...v, mapSetId }));
-  },
-  createItem: async (mapSetId: string, data: Partial<Item>) => {
-    const visit = await request<Item>("/api/visits", { method: "POST", body: body(data) });
-    await request(`/api/map-sets/${mapSetId}/visits`, { method: "POST", body: body({ visitId: visit.id }) });
-    return { ...visit, mapSetId };
-  },
+  // visits ("places"; the client calls them items)
+  // The one map: every place my family may see (its own and on trips shared with it).
+  listVisits: () => request<Item[]>("/api/visits"),
+  createItem: (data: Partial<Item>) => request<Item>("/api/visits", { method: "POST", body: body(data) }),
   updateItem: (id: string, data: Partial<Item>) =>
     request<Item>(`/api/visits/${id}`, { method: "PATCH", body: body(data) }),
   deleteItem: (id: string) => request<void>(`/api/visits/${id}`, { method: "DELETE" }),
@@ -708,9 +684,9 @@ export const api = {
   applyMediaSuggestion: (data: { mediaIds: string[]; tripId?: string | null; visitId?: string }) =>
     request<{ applied: number }>("/api/media/apply-suggestion", { method: "POST", body: body(data) }),
 
-  // trips (family-scoped; mapSetId arg is ignored, kept for call-site compatibility)
-  listTrips: (_mapSetId: string) => request<Trip[]>("/api/trips"),
-  createTrip: (_mapSetId: string, data: Partial<Trip>) =>
+  // trips: my family's and those shared with it
+  listTrips: () => request<Trip[]>("/api/trips"),
+  createTrip: (data: Partial<Trip>) =>
     request<Trip>("/api/trips", { method: "POST", body: body(data) }),
   updateTrip: (id: string, data: Partial<Trip>) =>
     request<Trip>(`/api/trips/${id}`, { method: "PATCH", body: body(data) }),
@@ -739,11 +715,13 @@ export const api = {
   deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: "DELETE" }),
 
   // stats (family-scoped)
-  getStats: (_mapSetId: string) => request<Stats>("/api/stats"),
+  getStats: () => request<Stats>("/api/stats"),
 
   // people
   listPeople: () => request<Person[]>("/api/people"),
   getPerson: (id: string) => request<Person>(`/api/people/${id}`),
+  getDocument: (id: string) => request<DocumentItem>(`/api/documents/${id}`),
+  getMedia: (id: string) => request<MediaItem>(`/api/media/${id}`),
   createPerson: (data: PersonInput) => request<Person>("/api/people", { method: "POST", body: body(data) }),
   updatePerson: (id: string, data: PersonInput) =>
     request<Person>(`/api/people/${id}`, { method: "PATCH", body: body(data) }),
@@ -776,13 +754,12 @@ export const api = {
       body: fd,
     });
   },
-  importFile: (mapSetId: string, file: File) => {
+  /** GPX / KML / GeoJSON onto the map, optionally onto a trip. */
+  importFile: (file: File, tripId?: string | null) => {
     const fd = new FormData();
+    if (tripId) fd.append("tripId", tripId);
     fd.append("file", file);
-    return request<{ imported: number; skipped: number; truncated: number }>(`/api/map-sets/${mapSetId}/import`, {
-      method: "POST",
-      body: fd,
-    });
+    return request<{ imported: number; skipped: number; truncated: number }>("/api/import", { method: "POST", body: fd });
   },
 
   // family settings

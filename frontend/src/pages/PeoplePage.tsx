@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Person } from "../api/client";
 import { EntityList } from "../components/shared/EntityList";
@@ -14,7 +15,15 @@ import { Plus, Users } from "lucide-react";
 export function PeoplePage() {
   const qc = useQueryClient();
   const { data: people, isLoading, isError, refetch } = useQuery({ queryKey: ["people"], queryFn: api.listPeople });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(params.get("person"));
+  // /people?person=<id> (e.g. from search) opens that person.
+  useEffect(() => {
+    const wanted = params.get("person");
+    if (!wanted) return;
+    setSelectedId(wanted);
+    setParams({}, { replace: true });
+  }, [params, setParams]);
   const [editing, setEditing] = useState<Person | null>(null);
   const [adding, setAdding] = useState(false);
 

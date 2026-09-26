@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type MediaFilters, type MediaItem } from "../api/client";
 import { MediaUploader } from "../components/shared/MediaUploader";
@@ -19,9 +20,17 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   const [filters, setFilters] = useState<MediaFilters>(initialTrip ? { trip: initialTrip } : {});
   const [view, setView] = useState<"grid" | "map">("grid");
   const [selected, setSelected] = useState<MediaItem | null>(null);
+  // /photos?photo=<id> (e.g. from search) opens that photo.
+  const [params, setParams] = useSearchParams();
+  const wantedPhoto = params.get("photo");
+  useEffect(() => {
+    if (!wantedPhoto) return;
+    api.getMedia(wantedPhoto).then(setSelected).catch(() => {});
+    setParams({}, { replace: true });
+  }, [wantedPhoto, setParams]);
   const [uploadedIds, setUploadedIds] = useState<string[] | null>(null);
 
-  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
+  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
 
   const mediaQuery = useInfiniteQuery({
     queryKey: ["media", filters],
