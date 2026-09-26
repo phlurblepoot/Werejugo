@@ -5,13 +5,22 @@ import { RelatedPanel } from "../shared/RelatedPanel";
 import { DocumentList } from "../documents/DocumentList";
 import { TripPacking } from "../packing/TripPacking";
 import { ShareButton } from "../shared/ShareButton";
+import { ByFamily, otherFamily } from "../shared/ByFamily";
 import { formatDate, formatDateRange } from "../../lib/dates";
+import { useAuth } from "../../lib/auth";
+import { TripFamilies, ROLE_LABEL } from "./TripFamilies";
+import { TripActivity } from "./TripActivity";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const STATUSES: Status[] = ["idea", "planning", "booked", "done"];
 
 export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: () => void; onChanged: () => void }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  // Only the host family changes the trip itself (status, sharing); guests add to it.
+  const role = trip.role ?? "host";
+  const isHost = role === "host";
+  const shared = trip.shared ?? false;
   const [newTitle, setNewTitle] = useState("");
   const itinKey = ["itinerary", trip.id];
   const { data: items = [] } = useQuery({ queryKey: itinKey, queryFn: () => api.listItinerary(trip.id) });
@@ -28,29 +37,41 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
   const scheduled = items.filter((i) => i.scheduledOn);
   const wishlist = items.filter((i) => !i.scheduledOn);
 
-  const itinRow = (i: ItineraryItem, scheduledView: boolean) => (
-    <div key={i.id} className="itin-item">
-      {scheduledView && <span className="day">{formatDate(i.scheduledOn)}</span>}
-      <span className="t">{i.title}</span>
-      {i.convertedVisitId ? <span className="chip">✓ visit</span>
-        : scheduledView ? <button aria-label={`Convert ${i.title} to a visit`} onClick={() => convert.mutate(i.id)}>→ visit</button>
-        : <button onClick={() => schedule.mutate(i.id)}>schedule</button>}
-      <button className="ghost" aria-label={`Delete ${i.title}`} onClick={() => del.mutate(i.id)}>✕</button>
-    </div>
-  );
+  const itinRow = (i: ItineraryItem, scheduledView: boolean) => {
+    const canEdit = i.canEdit !== false;
+    return (
+      <div key={i.id} className="itin-item">
+        {scheduledView && <span className="day">{formatDate(i.scheduledOn)}</span>}
+        <span className="t">{i.title} <ByFamily name={otherFamily(i, user?.familyId)} /></span>
+        {i.convertedVisitId ? <span className="chip">✓ visit</span>
+          : !canEdit ? null
+          : scheduledView ? <button aria-label={`Convert ${i.title} to a visit`} onClick={() => convert.mutate(i.id)}>→ visit</button>
+          : <button onClick={() => schedule.mutate(i.id)}>schedule</button>}
+        {canEdit && <button className="ghost" aria-label={`Delete ${i.title}`} onClick={() => del.mutate(i.id)}>✕</button>}
+      </div>
+    );
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h2 style={{ flex: 1 }}>{trip.name}</h2>
-          <ShareButton targetType="trip" targetId={trip.id} label="Share" />
-          <select value={trip.status} onChange={(e) => setStatus(e.target.value as Status)}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+        <div className="trip-head">
+          <h2>{trip.name}</h2>
           <button className="ghost" aria-label="Close" onClick={onClose}>✕</button>
         </div>
-        <div className="er-sub" style={{ marginBottom: 8 }}>{trip.startDate ? formatDateRange(trip.startDate, trip.endDate) : "no dates"}</div>
+        <div className="trip-meta">
+          <span className="er-sub">{trip.startDate ? formatDateRange(trip.startDate, trip.endDate) : "no dates"}</span>
+          {isHost ? (
+            <>
+              <ShareButton targetType="trip" targetId={trip.id} label="Share" />
+              <select aria-label="Status" className="trip-status" value={trip.status} onChange={(e) => setStatus(e.target.value as Status)}>
+                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </>
+          ) : (
+            <ByFamily prefix={`${ROLE_LABEL[role]} · hosted by `} name={trip.hostFamilyName} title={`Hosted by ${trip.hostFamilyName}`} />
+          )}
+        </div>
 
         <div className="section-title"><span>🗺️ Itinerary</span></div>
         {scheduled.map((i) => itinRow(i, true))}
@@ -64,10 +85,20 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
           <button style={{ flex: "0 0 auto" }} disabled={!newTitle.trim()} onClick={() => newTitle.trim() && add.mutate(newTitle.trim())}>Add</button>
         </div>
 
-        <div className="section-title"><span>🛂 Bookings</span></div>
+        <div className="section-title"><span>👨‍👩‍👧 Families</span></div>
+        <TripFamilies tripId={trip.id} tripName={trip.name} onLeft={() => { onChanged(); onClose(); }} />
+
+        {shared && (
+          <>
+            <div className="section-title"><span>🕑 Activity</span></div>
+            <TripActivity tripId={trip.id} />
+          </>
+        )}
+
+        <div className="section-title"><span>🛂 Bookings{shared && <span className="private-note">only your family sees these</span>}</span></div>
         {docs.length > 0 ? <DocumentList documents={docs} onOpen={() => {}} /> : <div className="er-sub">No documents attached to this trip.</div>}
 
-        <div className="section-title"><span>🎒 Packing</span></div>
+        <div className="section-title"><span>🎒 Packing{shared && <span className="private-note">only your family sees this</span>}</span></div>
         <TripPacking trip={trip} />
 
         <div className="section-title"><span>👥 Travelers</span></div>

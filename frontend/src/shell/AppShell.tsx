@@ -11,6 +11,7 @@ import { PlanningPage } from "../pages/PlanningPage";
 import { PackingPage } from "../pages/PackingPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { AdminPage } from "../pages/AdminPage";
+import { TripInvitePage } from "../pages/TripInvitePage";
 import { Rail } from "./Rail";
 import { BottomNav } from "./BottomNav";
 import { CommandPalette } from "./CommandPalette";
@@ -52,6 +53,7 @@ export function AppShell() {
               <Route path="/planning" element={<PlanningPage />} />
               <Route path="/packing" element={<PackingPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/trip-invite/:token" element={<TripInvitePage />} />
               <Route path="/admin" element={user?.isAdmin ? <AdminPage /> : <Navigate to="/map" replace />} />
               <Route path="*" element={<Navigate to="/map" replace />} />
             </Routes>

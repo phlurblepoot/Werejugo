@@ -40,7 +40,9 @@ export function RelatedPanel({ entity, addTypes = [] }: Props) {
             <span key={r.linkId} className="related-chip">
               <EntityThumb thumbUrl={r.entity.thumbUrl} label={r.entity.label} size={22} />
               {r.entity.label}
-              <button aria-label={`Remove ${r.entity.label}`} onClick={() => remove.mutate(r.linkId)}>✕</button>
+              {r.entity.familyName && <span className="er-sub"> · {r.entity.familyName}</span>}
+              {/* Another family's tag (on a shared trip) is theirs to remove. */}
+              {r.canRemove !== false && <button aria-label={`Remove ${r.entity.label}`} onClick={() => remove.mutate(r.linkId)}>✕</button>}
             </span>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import type { Trip } from "../../api/client";
 import { formatDateRange } from "../../lib/dates";
+import { ByFamily } from "../shared/ByFamily";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const COLUMNS: { key: Status; label: string }[] = [
@@ -23,7 +24,13 @@ export function TripBoard({ trips, onOpen, onStatusChange }: Props) {
             <div key={t.id} className="trip-card" style={{ borderLeft: `3px solid ${t.color}` }}>
               <div className="tc-title" onClick={() => onOpen(t)}>{t.name}</div>
               <div className="tc-dates">{t.startDate ? formatDateRange(t.startDate, t.endDate) : "no dates"}</div>
-              <select aria-label={`Status for ${t.name}`} value={t.status} onChange={(e) => onStatusChange(t, e.target.value as Status)}>
+              {t.role && t.role !== "host" && <ByFamily prefix="Shared by " name={t.hostFamilyName} title={`Hosted by ${t.hostFamilyName}`} />}
+              {(!t.role || t.role === "host") && (t.guestFamilies ?? 0) > 0 && (
+                <ByFamily name={`Shared with ${t.guestFamilies} ${t.guestFamilies === 1 ? "family" : "families"}`} title="Other families are on this trip" />
+              )}
+              {/* Only the host family moves a trip between columns. */}
+              <select aria-label={`Status for ${t.name}`} value={t.status} disabled={!!t.role && t.role !== "host"}
+                onChange={(e) => onStatusChange(t, e.target.value as Status)}>
                 {COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.key}</option>)}
               </select>
             </div>

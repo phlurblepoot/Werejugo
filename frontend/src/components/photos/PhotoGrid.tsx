@@ -1,14 +1,17 @@
 import { API_URL, type MediaItem } from "../../api/client";
 import { groupByMonth } from "./groupByMonth";
+import { ByFamily, otherFamily } from "../shared/ByFamily";
 
 interface Props {
   items: MediaItem[];
   onOpen: (item: MediaItem) => void;
   hasMore: boolean;
   onLoadMore: () => void;
+  /** To mark another family's photos (a shared trip's album). */
+  myFamilyId?: string;
 }
 
-export function PhotoGrid({ items, onOpen, hasMore, onLoadMore }: Props) {
+export function PhotoGrid({ items, onOpen, hasMore, onLoadMore, myFamilyId }: Props) {
   const groups = groupByMonth(items, (i) => i.takenAt ?? i.createdAt);
   return (
     <div>
@@ -23,6 +26,7 @@ export function PhotoGrid({ items, onOpen, hasMore, onLoadMore }: Props) {
                 ) : (
                   <span className="media-placeholder">{m.kind === "video" ? "▶" : "🎵"}</span>
                 )}
+                <ByFamily name={otherFamily(m, myFamilyId)} />
               </button>
             ))}
           </div>

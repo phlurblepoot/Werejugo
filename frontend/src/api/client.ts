@@ -223,6 +223,9 @@ export interface Item {
   properties?: Record<string, unknown> | null;
   createdBy: string | null;
   createdByName: string | null;
+  /** The family that added it (another family's when it's on a shared trip). */
+  familyId?: string;
+  familyName?: string;
   createdAt: string;
 }
 
@@ -237,13 +240,51 @@ export interface Trip {
   coverPhotoUrl: string | null;
   color: string;
   createdAt: string;
+  /** My family's role: the host, or a guest family invited as co-owner or contributor. */
+  role?: TripRole;
+  hostFamilyId?: string;
+  hostFamilyName?: string;
+  /** How many other families are on the trip. */
+  guestFamilies?: number;
+  shared?: boolean;
 }
+
+export type TripRole = "host" | "coowner" | "contributor";
+
+export interface TripMembers {
+  myRole: TripRole | null;
+  host: { familyId: string; familyName: string };
+  members: Array<{ familyId: string; familyName: string; role: "coowner" | "contributor"; joinedAt: string; isYou: boolean }>;
+  invites: Array<{ id: string; role: "coowner" | "contributor"; note: string; createdAt: string; expiresAt: string }>;
+}
+
+export interface TripInvitePreview {
+  tripId: string; tripName: string; startDate: string | null; endDate: string | null;
+  hostFamilyName: string; invitedBy: string | null; role: "coowner" | "contributor";
+  expiresAt: string; alreadyOnTrip: boolean; canAccept: boolean;
+}
+
+export interface ActivityEntry {
+  id: string; kind: string; targetType: string; targetId: string | null; summary: string; at: string;
+  familyId: string | null; familyName: string | null; userName: string | null;
+}
+
+export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
+
+export interface PersonLinkEntry {
+  id: string; status: "pending" | "accepted"; createdAt: string; incoming: boolean;
+  person: { id: string; displayName: string };
+  other: { id: string; displayName: string; familyName: string };
+}
+export interface PersonLinks { incoming: PersonLinkEntry[]; outgoing: PersonLinkEntry[]; linked: PersonLinkEntry[] }
 
 export interface ItineraryItem {
   id: string; tripId: string; title: string; notes: string;
   scheduledOn: string | null; seq: number;
   lat: number | null; lng: number | null; placeLabel: string;
   convertedVisitId: string | null; createdAt: string;
+  /** Who added it, and whether my family may change it (trip roles). */
+  familyId?: string; familyName?: string; createdByName?: string | null; canEdit?: boolean;
 }
 export interface ItineraryInput {
   title?: string; notes?: string; scheduledOn?: string | null; seq?: number;
@@ -258,6 +299,7 @@ export interface Comment {
   createdAt: string;
   userId: string | null;
   author?: string | null;
+  familyName?: string | null;
 }
 
 export interface SearchHit { type: string; id: string; label: string; thumbUrl: string | null; to: string; }
@@ -385,6 +427,11 @@ export interface Person {
   avatarMediaId: string | null;
   avatarUrl: string | null;
   createdAt: string;
+  /** Set on a single person: another family's person is read-only (name + picture). */
+  familyId?: string;
+  familyName?: string;
+  readOnly?: boolean;
+  links?: Array<{ linkId: string; status: "pending" | "accepted"; personId: string; displayName: string; familyName: string; incoming: boolean }>;
 }
 
 export interface PersonInput {
@@ -399,9 +446,11 @@ export interface FamilyMember { id: string; displayName: string; email: string; 
 
 export interface EntitySummary {
   type: CoreType; id: string; label: string; subtitle?: string | null; thumbUrl: string | null;
+  /** Another family's (seen through a shared trip). */
+  familyName?: string | null;
 }
 
-export interface Relation { linkId: string; role: string; entity: EntitySummary; }
+export interface Relation { linkId: string; role: string; entity: EntitySummary; canRemove?: boolean; }
 
 export interface MediaDto { id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string; }
 
@@ -419,6 +468,9 @@ export interface MediaItem {
   lng: number | null;
   lat: number | null;
   cursor: string;
+  /** Another family's photo on a shared trip is shown with who added it, view-only. */
+  familyId?: string;
+  familyName?: string | null;
 }
 
 export interface MediaFilters {
@@ -559,6 +611,27 @@ export const api = {
     request<{ ok: true }>(`/api/family/members/${id}`, { method: "PATCH", body: body({ role }) }),
   removeMember: (id: string) => request<void>(`/api/family/members/${id}`, { method: "DELETE" }),
   memberResetLink: (id: string) => request<IssuedLink>(`/api/family/members/${id}/reset-link`, { method: "POST" }),
+
+  // trips shared between families
+  tripMembers: (tripId: string) => request<TripMembers>(`/api/trips/${tripId}/members`),
+  createTripInvite: (tripId: string, data: { role: "coowner" | "contributor"; note?: string; expiresInDays?: number }) =>
+    request<IssuedLink>(`/api/trips/${tripId}/invites`, { method: "POST", body: body(data) }),
+  revokeTripInvite: (tripId: string, inviteId: string) => request<void>(`/api/trips/${tripId}/invites/${inviteId}`, { method: "DELETE" }),
+  tripInvitePreview: (token: string) => request<TripInvitePreview>(`/api/trip-invites/${encodeURIComponent(token)}`),
+  acceptTripInvite: (token: string) =>
+    request<{ tripId: string; role: string }>(`/api/trip-invites/${encodeURIComponent(token)}/accept`, { method: "POST" }),
+  setTripMemberRole: (tripId: string, familyId: string, role: "coowner" | "contributor") =>
+    request<{ ok: true }>(`/api/trips/${tripId}/members/${familyId}`, { method: "PATCH", body: body({ role }) }),
+  removeTripMember: (tripId: string, familyId: string) => request<void>(`/api/trips/${tripId}/members/${familyId}`, { method: "DELETE" }),
+  tripActivity: (tripId: string) => request<ActivityEntry[]>(`/api/trips/${tripId}/activity`),
+  tripPeople: (tripId: string) => request<TripPerson[]>(`/api/trips/${tripId}/people`),
+
+  // the same person in two families
+  personLinks: () => request<PersonLinks>("/api/person-links"),
+  proposePersonLink: (personId: string, otherPersonId: string) =>
+    request<{ id: string; status: string }>("/api/person-links", { method: "POST", body: body({ personId, otherPersonId }) }),
+  acceptPersonLink: (id: string) => request<{ ok: true }>(`/api/person-links/${id}/accept`, { method: "POST" }),
+  removePersonLink: (id: string) => request<void>(`/api/person-links/${id}`, { method: "DELETE" }),
 
   // server admin
   adminOverview: () => request<AdminOverview>("/api/admin/overview"),

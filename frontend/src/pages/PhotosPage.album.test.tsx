@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   listMedia: vi.fn(async () => ({ items: [], nextCursor: null })),
   listShares: vi.fn(async () => []), createShare: vi.fn(), deleteShare: vi.fn(),
 }));
+vi.mock("../lib/auth", () => ({ useAuth: () => ({ user: { familyId: "f1" } }) }));
 vi.mock("../api/client", () => ({ API_URL: "", api: h }));
 import { PhotosPage } from "./PhotosPage";
 

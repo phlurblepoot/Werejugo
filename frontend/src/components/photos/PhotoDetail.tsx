@@ -6,9 +6,12 @@ interface Props {
   trips: { id: string; name: string }[];
   onChanged: () => void;
   onClose: () => void;
+  myFamilyId?: string;
 }
 
-export function PhotoDetail({ item, trips, onChanged, onClose }: Props) {
+export function PhotoDetail({ item, trips, onChanged, onClose, myFamilyId }: Props) {
+  // Another family's photo on a shared trip: shown, never changed.
+  const theirs = item.familyId && myFamilyId && item.familyId !== myFamilyId ? item.familyName ?? "another family" : null;
   async function saveCaption(caption: string) {
     if (caption === item.caption) return;
     await api.updatePhoto(item.id, caption);
@@ -32,18 +35,26 @@ export function PhotoDetail({ item, trips, onChanged, onClose }: Props) {
         </div>
         <img className="photo-detail-img" src={`${API_URL}${item.url}`} alt={item.caption || "Photo"} />
 
-        <div className="field">
-          <label>Caption</label>
-          <input defaultValue={item.caption} placeholder="Caption…" onBlur={(e) => saveCaption(e.target.value)} />
-        </div>
+        {theirs ? (
+          <p className="photo-theirs">
+            {item.caption && <strong>{item.caption} · </strong>}Added by {theirs}. Only they can change or delete it.
+          </p>
+        ) : (
+          <>
+            <div className="field">
+              <label>Caption</label>
+              <input defaultValue={item.caption} placeholder="Caption…" onBlur={(e) => saveCaption(e.target.value)} />
+            </div>
 
-        <div className="field">
-          <label>Trip</label>
-          <select defaultValue={item.tripId ?? ""} onChange={(e) => setTrip(e.target.value || null)}>
-            <option value="">— No trip —</option>
-            {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </div>
+            <div className="field">
+              <label>Trip</label>
+              <select defaultValue={item.tripId ?? ""} onChange={(e) => setTrip(e.target.value || null)}>
+                <option value="">— No trip —</option>
+                {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          </>
+        )}
 
         <div className="er-sub" style={{ marginBottom: 8 }}>
           {item.takenAt ? `🕒 ${item.takenAt.slice(0, 10)}` : "🕒 No date"}
@@ -53,7 +64,7 @@ export function PhotoDetail({ item, trips, onChanged, onClose }: Props) {
         <RelatedPanel entity={`media:${item.id}`} addTypes={["person", "visit"]} />
 
         <div className="modal-actions">
-          <button className="danger" style={{ marginRight: "auto" }} onClick={remove}>Delete</button>
+          {!theirs && <button className="danger" style={{ marginRight: "auto" }} onClick={remove}>Delete</button>}
           <button onClick={onClose}>Close</button>
         </div>
       </div>

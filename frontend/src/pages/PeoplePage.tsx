@@ -6,6 +6,7 @@ import { EntityDetail } from "../components/shared/EntityDetail";
 import { EntityThumb } from "../components/shared/EntityThumb";
 import { RelatedPanel } from "../components/shared/RelatedPanel";
 import { PersonForm } from "../components/people/PersonForm";
+import { PersonLinkRequests, PersonLinks } from "../components/people/PersonLinks";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { Button, PageHeader } from "../components/kit";
 import { Plus, Users } from "lucide-react";
@@ -35,6 +36,7 @@ export function PeoplePage() {
       />
 
       <div className="page-body">
+        <PersonLinkRequests />
         {isError ? (
           <ErrorState hint="Couldn't load people." onRetry={() => refetch()} />
         ) : isLoading ? (
@@ -80,6 +82,7 @@ export function PeoplePage() {
           </div>
           {selected.notes && <p>{selected.notes}</p>}
           <RelatedPanel entity={`person:${selected.id}`} addTypes={["visit", "trip", "media"]} />
+          <PersonLinks personId={selected.id} personName={selected.displayName} />
         </EntityDetail>
       )}
 

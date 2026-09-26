@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.5 |
-| **Next step** | Build Phase 1.5: migration → access rules → sharing/invite/member API → content attribution → activity → person links → seed → frontend |
+| **Current phase** | 1.6 |
+| **Next step** | Plan Phase 1.6 (one map): write the plan, then drop map sets and move the map onto `GET /api/visits` with URL filters |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
@@ -239,13 +239,13 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 1.5 Shared trips & cross-family people — L
 
-**Status:** In progress · **Plan:** [phase-1.5](../plans/2026-09-26-phase-1.5-shared-trips.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
+**Status:** Done · **Plan:** [phase-1.5](../plans/2026-09-26-phase-1.5-shared-trips.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] `trip_members` + `trip_invites` (§3.3); invite dialog on a trip (role picker, link with expiry); accept page for the invited family's owner; member management; leave/remove.
-- [ ] Visibility and edit rules per role; per-family-private kinds; attribution chips in every trip view.
-- [ ] `person_links` (§3.4): propose/accept, merged person pages, cross-family tagging inside shared trips.
-- [ ] An `activity` events table (who added what to which shared trip) for the feed and later push notifications.
-- [ ] Dev seed: two families and a shared trip.
+- [x] `trip_members` + `trip_invites` (§3.3); invite dialog on a trip (role picker, link with expiry); accept page for the invited family's owner; member management; leave/remove.
+- [x] Visibility and edit rules per role; per-family-private kinds; attribution chips in every trip view.
+- [x] `person_links` (§3.4): propose/accept, merged person pages, cross-family tagging inside shared trips.
+- [x] An `activity` events table (who added what to which shared trip) for the feed and later push notifications.
+- [x] Dev seed: two families and a shared trip.
 
 #### 1.6 One map — M
 
@@ -488,6 +488,9 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-26
+
+- **Done** — Phase 1.5 Shared trips & cross-family people (PR #1). A trip's host family invites another family with a one-time link and picks co-owner or contributor. Only family owners accept. Places, itinerary, photos and comments on the trip are visible to every family on it and say who added them. Contributors change only their own; co-owners change everything; the trip itself (details, status, sharing, members) stays the host's. Packing, bookings and documents stay private per family, including a guest family's own list and bookings for the shared trip. A family that leaves takes its contributions with it, and they return on re-invite. Other families' photos show only in the trip's album, never in your library. "Same person in another family" links people across families that share a trip; the person page merges what the viewer may see; tagging works across families. There's an activity feed and a two-family dev seed. Verified: backend 296/296 (a trip-sharing suite; the isolation suite now 102 cases), frontend 168/168; Playwright on a seeded database as host, contributor and a newly invited co-owner (phone), with no console errors or overflow.
+- **Note** — 1.5 decisions: public share links of a shared trip show only the host family's content, so nobody's photos are published without their consent. Global search, stats and the photo library stay per family. Shared-trip places show on the map once 1.6 replaces map sets. The dev seed is now safe to run on every start (it crash-looped before).
 
 - **Done** — Phase 1.4 Tenancy & access layer (PR #1): `lib/access.ts` decides who can see and change what (`loadReadable`/`loadEditable` → 404, `assertRefs` → 400), and every route uses it or a family-filtered statement. A global error handler turns bad input (zod, non-UUID ids, bad dates, out-of-range coordinates, Postgres input errors) into 400/404/409 instead of 500. The tenant-isolation suite runs 90 cross-family attempts over every registered route, fails on any new route it doesn't cover, and was shown to fail when a check is removed. Migrations 0001–0012 are squashed into `0001_baseline.sql` (pg_dump diff checked); a pre-baseline database is refused at start-up with reset steps. Owners can "Download our data" (the family's rows and files); big downloads stream through a two-minute ticket link. Verified: backend 275/275, frontend 156/156; Playwright on a fresh baseline database: the full 1.3 walkthrough, a family export containing only that family's rows and photo, the admin backup download, and a ticket refused as a login.
 - **Note** — Found by the 1.4 audit and fixed (added to 1.4): photos and documents from different families shared storage folders (`loose/<year>`, `people/<name>`…) and reused file names, so two families' uploads could collide and an old photo link could show another family's file. Files now live under `families/<familyId>/`, names carry a random suffix and are created exclusively, and moves never overwrite.

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Trip } from "../api/client";
 import { TripBoard } from "../components/planning/TripBoard";
@@ -23,6 +24,16 @@ export function PlanningPage() {
   const { data: trips, isLoading, isError, refetch } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
   const { data: blackoutList = [] } = useQuery({ queryKey: ["blackouts"], queryFn: api.listBlackouts });
   const refresh = () => qc.invalidateQueries({ queryKey: ["trips"] });
+
+  // /planning?trip=<id> opens that trip (e.g. after joining one).
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get("trip");
+  useEffect(() => {
+    if (!wanted || !trips) return;
+    const t = trips.find((x) => x.id === wanted);
+    if (t) setSelected(t);
+    setParams({}, { replace: true });
+  }, [wanted, trips, setParams]);
 
   async function changeStatus(trip: Trip, status: Status) {
     await api.updateTrip(trip.id, { status });

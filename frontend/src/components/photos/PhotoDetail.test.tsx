@@ -20,3 +20,10 @@ test("edits caption and deletes", async () => {
   fireEvent.click(screen.getByText("Delete"));
   await waitFor(() => expect(deletePhoto).toHaveBeenCalledWith("m1"));
 });
+
+test("another family's photo is view-only", () => {
+  render(withQC(<PhotoDetail item={{ ...item, familyId: "f2", familyName: "The Smiths" } as never} trips={[]} onChanged={() => {}} onClose={() => {}} myFamilyId="f1" />));
+  expect(screen.getByText(/Added by The Smiths/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  expect(screen.queryByPlaceholderText("Caption…")).toBeNull();
+});

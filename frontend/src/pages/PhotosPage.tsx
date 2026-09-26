@@ -11,8 +11,10 @@ import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { ShareButton } from "../components/shared/ShareButton";
 import { PageHeader, SegmentedControl } from "../components/kit";
 import { Images, LayoutGrid, Map as MapIcon } from "lucide-react";
+import { useAuth } from "../lib/auth";
 
 export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<MediaFilters>(initialTrip ? { trip: initialTrip } : {});
   const [view, setView] = useState<"grid" | "map">("grid");
@@ -63,7 +65,7 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
           <EmptyState emoji="🖼️" title="No photos yet" hint="Upload photos to start your family library." />
         ) : view === "grid" ? (
           <div style={{ padding: 16 }}>
-            <PhotoGrid items={items} onOpen={setSelected} hasMore={mediaQuery.hasNextPage} onLoadMore={() => mediaQuery.fetchNextPage()} />
+            <PhotoGrid items={items} onOpen={setSelected} hasMore={mediaQuery.hasNextPage} onLoadMore={() => mediaQuery.fetchNextPage()} myFamilyId={user?.familyId} />
           </div>
         ) : (
           <PhotoMap items={items} onOpen={setSelected} />
@@ -71,7 +73,7 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
       </div>
 
       {selected && (
-        <PhotoDetail item={selected} trips={trips} onClose={() => setSelected(null)} onChanged={() => { refresh(); setSelected(null); }} />
+        <PhotoDetail item={selected} trips={trips} myFamilyId={user?.familyId} onClose={() => setSelected(null)} onChanged={() => { refresh(); setSelected(null); }} />
       )}
 
       {uploadedIds && (
