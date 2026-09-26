@@ -9,6 +9,8 @@ import { PhotoDetail } from "../components/photos/PhotoDetail";
 import { UploadReview } from "../components/photos/UploadReview";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { ShareButton } from "../components/shared/ShareButton";
+import { PageHeader, SegmentedControl } from "../components/kit";
+import { Images, LayoutGrid, Map as MapIcon } from "lucide-react";
 
 export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   const qc = useQueryClient();
@@ -31,20 +33,26 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">🖼️ Photos</span>
-        <span className="spacer" />
-        <div className="tabs">
-          <button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>▦ Grid</button>
-          <button className={view === "map" ? "active" : ""} onClick={() => setView("map")}>🗺️ Map</button>
-        </div>
-        <MediaUploader multiple label="⬆ Upload" onUploaded={() => {}} onAllUploaded={(media) => setUploadedIds(media.map((m) => m.id))} />
-        {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
-      </header>
+      <PageHeader
+        icon={Images}
+        title="Photos"
+        views={
+          <SegmentedControl
+            label="View"
+            value={view}
+            onChange={setView}
+            options={[{ value: "grid", label: "Grid", icon: LayoutGrid }, { value: "map", label: "Map", icon: MapIcon }]}
+          />
+        }
+        actions={
+          <>
+            {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
+            <MediaUploader multiple label="Upload" onUploaded={() => {}} onAllUploaded={(media) => setUploadedIds(media.map((m) => m.id))} />
+          </>
+        }
+      />
 
-      <div style={{ padding: "0 16px" }}>
-        <PhotoFilters value={filters} onChange={setFilters} trips={trips} />
-      </div>
+      <PhotoFilters value={filters} onChange={setFilters} trips={trips} />
 
       <div className="page-fill" style={{ overflow: view === "grid" ? "auto" : "hidden" }}>
         {mediaQuery.isError ? (

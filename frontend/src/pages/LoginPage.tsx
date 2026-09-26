@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Compass } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../lib/auth";
+import { Button, Field, SegmentedControl } from "../components/kit";
 
 type Mode = "login" | "create" | "join";
 
@@ -44,83 +46,75 @@ export function LoginPage() {
     }
   }
 
+  const modes = [
+    { value: "login" as const, label: "Sign in" },
+    ...(signupOpen ? [{ value: "create" as const, label: "New family" }] : []),
+    { value: "join" as const, label: "Join" },
+  ];
+  const submitLabel =
+    mode === "login" ? "Sign in" : mode === "create" ? (firstRun ? "Create family & finish setup" : "Create family") : "Join family";
+
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <h1>{firstRun ? "Set up Werejugo" : "Werejugo"}</h1>
+        <div className="auth-brand">
+          <span className="auth-mark"><Compass size={24} aria-hidden="true" /></span>
+          <h1>{firstRun ? "Set up Werejugo" : "Werejugo"}</h1>
+        </div>
         <p className="tagline">
           {firstRun
             ? "Create the first family on this server. You'll be its owner and can invite everyone else."
             : "Your family's scrapbook of places & journeys."}
         </p>
 
-        {!firstRun && (
-          <div className="tabs">
-            <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-              Sign in
-            </button>
-            {signupOpen && (
-              <button type="button" className={mode === "create" ? "active" : ""} onClick={() => setMode("create")}>
-                New family
-              </button>
-            )}
-            <button type="button" className={mode === "join" ? "active" : ""} onClick={() => setMode("join")}>
-              Join
-            </button>
-          </div>
-        )}
+        {!firstRun && <SegmentedControl label="What would you like to do?" value={mode} onChange={setMode} options={modes} />}
 
-        <form onSubmit={submit}>
+        <form onSubmit={submit} noValidate={false}>
           {mode !== "login" && (
-            <div className="field">
-              <label htmlFor="login-name">Your name</label>
-              <input id="login-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-            </div>
+            <Field label="Your name" htmlFor="login-name">
+              <input id="login-name" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+            </Field>
           )}
           {mode === "create" && (
-            <div className="field">
-              <label htmlFor="login-family">Family name</label>
+            <Field label="Family name" htmlFor="login-family" hint={firstRun ? "e.g. “The Wanderers”" : undefined}>
               <input id="login-family" value={familyName} onChange={(e) => setFamilyName(e.target.value)} required />
-            </div>
+            </Field>
           )}
           {mode === "join" && (
-            <div className="field">
-              <label>Invite code</label>
+            <Field label="Invite code" htmlFor="login-invite" hint="Ask a family owner — it's on their Settings page.">
               <input
+                id="login-invite"
+                autoCapitalize="characters"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                 required
               />
-            </div>
+            </Field>
           )}
-          <div className="field">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="field">
-            <label>Password {mode !== "login" && <span>(min 8 chars)</span>}</label>
+          <Field label="Email" htmlFor="login-email">
+            <input id="login-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </Field>
+          <Field label="Password" htmlFor="login-password" hint={mode !== "login" ? "At least 8 characters." : undefined}>
             <input
+              id="login-password"
               type="password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={mode === "login" ? undefined : 8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-          </div>
+          </Field>
 
-          {error && <div className="error-text">{error}</div>}
+          {error && <div className="error-text" role="alert">{error}</div>}
 
-          <button type="submit" className="primary" style={{ width: "100%", marginTop: 8 }} disabled={busy}>
-            {busy ? "Please wait…" : mode === "login" ? "Sign in" : mode === "create" ? (firstRun ? "Create family & finish setup" : "Create family") : "Join family"}
-          </button>
+          <Button type="submit" variant="primary" loading={busy} className="auth-submit">
+            {submitLabel}
+          </Button>
         </form>
 
         {mode === "create" && !firstRun && (
-          <p className="hint">
-            You'll become the family owner and can invite others with a code afterwards.
-          </p>
-        )}
-        {mode === "join" && (
-          <p className="hint">Ask a family owner for their invite code (shown on the Map page).</p>
+          <p className="hint">You'll become the family owner and can invite others with a code afterwards.</p>
         )}
       </div>
     </div>

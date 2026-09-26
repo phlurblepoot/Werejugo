@@ -1,0 +1,88 @@
+/* App shell: desktop rail, phone tab bar, main area. */
+
+.shell { position: fixed; inset: 0; display: flex; background: var(--color-bg); }
+.shell-main { position: relative; flex: 1; min-width: 0; }
+.shell-main > .app, .shell-main > .page { position: absolute; inset: 0; }
+
+/* ---- Desktop rail ---- */
+.rail {
+  flex: 0 0 var(--rail-w); display: flex; flex-direction: column; align-items: stretch; gap: 2px;
+  padding: 10px 8px; background: var(--color-nav-bg); border-right: 1px solid var(--color-border);
+  overflow-y: auto; z-index: 20;
+}
+.rail-brand {
+  display: flex; align-items: center; justify-content: center; height: 44px; margin-bottom: 8px;
+  color: var(--color-accent); border-radius: var(--radius-md);
+}
+.rail-brand:hover { background: var(--color-accent-soft); }
+.rail-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 9px 4px 8px; min-height: 0; width: 100%;
+  font: inherit; font-size: 11px; font-weight: 500; line-height: 1.1; text-align: center;
+  color: var(--color-nav-text); text-decoration: none;
+  background: none; border: none; border-radius: var(--radius-md); cursor: pointer;
+}
+.rail-item:hover:not(:disabled) { background: var(--color-surface-2); color: var(--color-text); border-color: transparent; }
+.rail-item.active, .rail-item.active:hover:not(:disabled) { background: var(--color-nav-active-bg); color: var(--color-nav-active); }
+.rail-badge { position: absolute; top: 3px; right: 10px; }
+.rail-spacer { flex: 1; min-height: 12px; }
+.rail-account { padding: 8px 4px; }
+
+.account-head, .more-account { min-width: 0; }
+.account-name { font-weight: 650; }
+.account-email { color: var(--color-text-muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Phone tab bar ---- */
+.tabbar { display: none; }
+.more-account { display: flex; align-items: center; gap: 12px; padding: 4px 4px 14px; margin-bottom: 8px; border-bottom: 1px solid var(--color-border); }
+.more-list { display: flex; flex-direction: column; gap: 2px; }
+.more-row {
+  display: flex; align-items: center; gap: 14px; width: 100%; min-height: 48px; padding: 10px 12px;
+  font: inherit; font-size: var(--text-lg); font-weight: 500; text-align: left;
+  color: var(--color-text); text-decoration: none; background: none; border: none; border-radius: var(--radius-md); cursor: pointer;
+}
+.more-row svg { color: var(--color-text-muted); }
+.more-row:hover:not(:disabled), .more-row.active { background: var(--color-surface-2); border-color: transparent; }
+.more-row.is-danger, .more-row.is-danger svg { color: var(--color-danger); }
+
+@media (max-width: 767px) {
+  .rail { display: none; }
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    height: calc(var(--tabbar-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
+    background: var(--color-nav-bg); border-top: 1px solid var(--color-border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+  }
+  .tab-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-height: 0; padding: 6px 0 4px; font: inherit; font-size: 11px; font-weight: 500;
+    color: var(--color-nav-text); text-decoration: none; background: none; border: none; border-radius: 0; cursor: pointer;
+  }
+  .tab-item:hover:not(:disabled) { background: none; color: var(--color-text); }
+  .tab-item.active, .tab-item.active:hover:not(:disabled) { color: var(--color-nav-active); }
+  .tab-icon { position: relative; display: flex; align-items: center; justify-content: center; width: 52px; height: 28px; border-radius: var(--radius-full); }
+  .tab-item.active .tab-icon { background: var(--color-nav-active-bg); }
+  .tab-badge { position: absolute; top: -4px; right: 4px; }
+  .shell-main > .app, .shell-main > .page { bottom: calc(var(--tabbar-h) + var(--safe-bottom)); }
+}
+
+/* ---- Login extras ---- */
+.auth-mark {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 12px; background: var(--color-accent-soft); color: var(--color-accent-text);
+}
+.auth-submit { width: 100%; margin-top: var(--space-2); min-height: 42px; }
+
+/* ---- Settings ---- */
+.settings-stack { max-width: 720px; margin: 0 auto; }
+.settings-account { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.settings-account > div { flex: 1; min-width: 160px; }
+.settings-name { font-weight: 650; font-size: var(--text-lg); }
+.settings-row { display: flex; align-items: center; gap: var(--space-3); padding: 10px 0; border-top: 1px solid var(--color-border); flex-wrap: wrap; }
+.settings-row:first-child { border-top: none; padding-top: 0; }
+.settings-label { width: 110px; color: var(--color-text-muted); font-size: var(--text-sm); flex-shrink: 0; }
+.invite-code { font-family: var(--font-mono); font-size: var(--text-lg); letter-spacing: 0.12em; padding: 4px 10px; background: var(--color-surface-2); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-sm); }
+.settings-divider { height: 1px; background: var(--color-border); margin: var(--space-5) 0; }
+.settings-subtitle { margin: 0 0 4px; font-size: var(--text-md); font-weight: 650; }
+.restore-confirm { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
+.restore-confirm .kit-field { margin-bottom: 0; flex: 1 1 200px; }

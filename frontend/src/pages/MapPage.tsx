@@ -20,9 +20,11 @@ import { Legend } from "../components/Legend";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { useToast } from "../components/Toast";
 import { EmptyState, Spinner } from "../components/ui";
+import { PageHeader } from "../components/kit";
+import { Download, Map as MapIcon } from "lucide-react";
 
 export function MapPage() {
-  const { user, family, logout } = useAuth();
+  const { user, family } = useAuth();
   const qc = useQueryClient();
   const { toast, celebrate } = useToast();
 
@@ -204,7 +206,7 @@ export function MapPage() {
       a.download = `werejugo-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast("Backup downloaded", "success");
+      toast("Map data exported", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Export failed", "error");
     }
@@ -212,19 +214,12 @@ export function MapPage() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <span className="brand">🗺️ Werejugo</span>
-        <span className="who">{family?.name}</span>
-        <span className="spacer" />
-        {family && (
-          <span className="who" title="Share this code so family members can join">
-            Invite: <strong>{family.inviteCode}</strong>
-          </span>
-        )}
-        <span className="who">{user?.displayName}</span>
-        <button onClick={exportData} title="Download a JSON backup of your family's data">⬇ Export</button>
-        <button onClick={logout}>Sign out</button>
-      </header>
+      <PageHeader
+        icon={MapIcon}
+        title="Map"
+        subtitle={family?.name}
+        menu={[{ label: "Export map data (JSON)", icon: Download, onSelect: () => void exportData() }]}
+      />
 
       <Sidebar
         mapSets={mapSets}

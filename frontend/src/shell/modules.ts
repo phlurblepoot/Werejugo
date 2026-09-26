@@ -1,17 +1,27 @@
+import { Backpack, CalendarDays, IdCard, Images, Map as MapIcon, Users, type LucideIcon } from "lucide-react";
+
 export interface ModuleDef {
   key: string;
   label: string;
-  icon: string; // emoji
+  /** Short label for the phone tab bar. */
+  short: string;
+  icon: LucideIcon;
   path: string;
-  enabled: boolean;
+  /** Shown in the phone tab bar (the rest live under "More"). */
+  tab: boolean;
 }
 
-// The left-rail modules, in build order. Only Map is live in Phase 1.
 export const MODULES: ModuleDef[] = [
-  { key: "map", label: "Map", icon: "🗺️", path: "/map", enabled: true },
-  { key: "people", label: "People", icon: "👤", path: "/people", enabled: true },
-  { key: "photos", label: "Photos", icon: "🖼️", path: "/photos", enabled: true },
-  { key: "documents", label: "Documents", icon: "🛂", path: "/documents", enabled: true },
-  { key: "planning", label: "Planning", icon: "📅", path: "/planning", enabled: true },
-  { key: "packing", label: "Packing", icon: "🎒", path: "/packing", enabled: true },
+  { key: "map", label: "Map", short: "Map", icon: MapIcon, path: "/map", tab: true },
+  { key: "people", label: "People", short: "People", icon: Users, path: "/people", tab: false },
+  { key: "photos", label: "Photos", short: "Photos", icon: Images, path: "/photos", tab: true },
+  { key: "documents", label: "Documents", short: "Docs", icon: IdCard, path: "/documents", tab: true },
+  { key: "planning", label: "Planning", short: "Trips", icon: CalendarDays, path: "/planning", tab: true },
+  { key: "packing", label: "Packing", short: "Packing", icon: Backpack, path: "/packing", tab: false },
 ];
+
+export const moduleByKey = (key: string): ModuleDef => {
+  const m = MODULES.find((x) => x.key === key);
+  if (!m) throw new Error(`Unknown module: ${key}`);
+  return m;
+};

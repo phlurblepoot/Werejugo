@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth";
@@ -11,15 +11,17 @@ import { PlanningPage } from "../pages/PlanningPage";
 import { PackingPage } from "../pages/PackingPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { Rail } from "./Rail";
-import { ComingSoon } from "./ComingSoon";
+import { BottomNav } from "./BottomNav";
 import { CommandPalette } from "./CommandPalette";
 import { FirstRunWelcome } from "./FirstRunWelcome";
-import { MODULES } from "./modules";
+import { ShellContext } from "./ShellContext";
 
 export function AppShell() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const { data: dueCount } = useQuery({ queryKey: ["documents-due-count"], queryFn: api.documentsDueCount });
+  const badges = { documents: dueCount?.count ?? 0 };
+  const shell = useMemo(() => ({ openSearch: () => setSearchOpen(true) }), []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -33,26 +35,26 @@ export function AppShell() {
   }, []);
 
   return (
-    <div className="shell">
-      <Rail onSignOut={logout} onSearch={() => setSearchOpen(true)} badges={{ documents: dueCount?.count ?? 0 }} />
-      <div className="shell-main">
+    <ShellContext.Provider value={shell}>
+      <div className="shell">
+        <Rail onSignOut={logout} onSearch={shell.openSearch} badges={badges} account={user} />
+        <main className="shell-main">
+          <Routes>
+            <Route path="/" element={<Navigate to="/map" replace />} />
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/people" element={<PeoplePage />} />
+            <Route path="/photos" element={<PhotosPage />} />
+            <Route path="/documents" element={<DocumentsPage />} />
+            <Route path="/planning" element={<PlanningPage />} />
+            <Route path="/packing" element={<PackingPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/map" replace />} />
+          </Routes>
+        </main>
+        <BottomNav onSignOut={logout} onSearch={shell.openSearch} badges={badges} account={user} />
         <FirstRunWelcome />
-        <Routes>
-          <Route path="/" element={<Navigate to="/map" replace />} />
-          <Route path="/map" element={<MapPage />} />
-          <Route path="/people" element={<PeoplePage />} />
-          <Route path="/photos" element={<PhotosPage />} />
-          <Route path="/documents" element={<DocumentsPage />} />
-          <Route path="/planning" element={<PlanningPage />} />
-          <Route path="/packing" element={<PackingPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          {MODULES.filter((m) => !m.enabled).map((m) => (
-            <Route key={m.key} path={m.path} element={<ComingSoon label={m.label} />} />
-          ))}
-          <Route path="*" element={<Navigate to="/map" replace />} />
-        </Routes>
+        <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
       </div>
-      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
-    </div>
+    </ShellContext.Provider>
   );
 }

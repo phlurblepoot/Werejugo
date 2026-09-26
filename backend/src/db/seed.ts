@@ -107,7 +107,7 @@ export async function seedPacking(): Promise<void> {
 async function seedDevData(): Promise<void> {
   if (process.env.SEED_DEV_DATA !== "true") return;
   const fam = await pool.query<{ id: string }>(
-    "INSERT INTO families (name, invite_code) VALUES ('The Wanderers', 'wander-1') RETURNING id");
+    "INSERT INTO families (name, invite_code) VALUES ('The Wanderers', 'WANDER01') RETURNING id");
   const familyId = fam.rows[0].id;
   const pass = await hashPassword("password123");
   const user = await pool.query<{ id: string }>(

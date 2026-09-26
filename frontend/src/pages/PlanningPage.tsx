@@ -7,6 +7,8 @@ import { TripDetail } from "../components/planning/TripDetail";
 import { TripForm } from "../components/planning/TripForm";
 import { BlackoutManager } from "../components/planning/BlackoutManager";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { Button, IconButton, PageHeader, SegmentedControl } from "../components/kit";
+import { Ban, CalendarDays, ChartGantt, LayoutGrid, Plus } from "lucide-react";
 
 type Status = "idea" | "planning" | "booked" | "done";
 
@@ -29,16 +31,24 @@ export function PlanningPage() {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">📅 Planning</span>
-        <span className="spacer" />
-        <div className="tabs">
-          <button className={view === "board" ? "active" : ""} onClick={() => setView("board")}>▦ Board</button>
-          <button className={view === "timeline" ? "active" : ""} onClick={() => setView("timeline")}>📈 Timeline</button>
-        </div>
-        <button onClick={() => setBlackouts(true)}>⛔ Blackouts</button>
-        <button className="primary" onClick={() => setAdding(true)}>+ Trip</button>
-      </header>
+      <PageHeader
+        icon={CalendarDays}
+        title="Planning"
+        views={
+          <SegmentedControl
+            label="View"
+            value={view}
+            onChange={setView}
+            options={[{ value: "board", label: "Board", icon: LayoutGrid }, { value: "timeline", label: "Timeline", icon: ChartGantt }]}
+          />
+        }
+        actions={
+          <>
+            <IconButton label="Blackout dates" icon={Ban} variant="secondary" onClick={() => setBlackouts(true)} />
+            <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Trip</Button>
+          </>
+        }
+      />
 
       <div className="page-body">
         {isError ? (

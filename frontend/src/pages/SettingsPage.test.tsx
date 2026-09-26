@@ -5,10 +5,15 @@ const h = vi.hoisted(() => ({
   restoreBackup: vi.fn(async () => ({ ok: true, counts: { trips: 2 } })),
 }));
 vi.mock("../api/client", () => ({ API_URL: "", api: h }));
-const auth = vi.hoisted(() => ({ user: { role: "owner", isInstanceOwner: true } as Record<string, unknown>, logout: vi.fn() }));
+const auth = vi.hoisted(() => ({
+  user: { role: "owner", isInstanceOwner: true, displayName: "Pat", email: "pat@test.dev" } as Record<string, unknown>,
+  family: { id: "f1", name: "The Wanderers", inviteCode: "WANDER42" },
+  logout: vi.fn(),
+}));
 vi.mock("../lib/auth", () => ({ useAuth: () => auth }));
 vi.mock("../components/Toast", () => ({ useToast: () => ({ toast: () => {} }) }));
 import { SettingsPage } from "./SettingsPage";
+import { ThemeProvider } from "../lib/theme";
 
 beforeAll(() => {
   // jsdom lacks object URLs
@@ -33,13 +38,28 @@ test("restore stays disabled until 'restore' is typed", async () => {
 });
 
 test("only the server owner sees backup and restore", () => {
-  auth.user = { role: "owner", isInstanceOwner: false };
+  auth.user = { role: "owner", isInstanceOwner: false, displayName: "Pat", email: "pat@test.dev" };
   try {
     render(<SettingsPage />);
     expect(screen.queryByText(/Download backup/)).toBeNull();
     expect(screen.queryByLabelText(/restore archive/i)).toBeNull();
     expect(screen.getByText(/managed by the server owner/i)).toBeInTheDocument();
   } finally {
-    auth.user = { role: "owner", isInstanceOwner: true };
+    auth.user = { role: "owner", isInstanceOwner: true, displayName: "Pat", email: "pat@test.dev" };
   }
+});
+
+test("shows the family's invite code", () => {
+  render(<SettingsPage />);
+  expect(screen.getByText("WANDER42")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Copy/ })).toBeInTheDocument();
+});
+
+test("the theme can be switched here", () => {
+  render(<ThemeProvider><SettingsPage /></ThemeProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Dark" }));
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "System" }));
+  expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
 });

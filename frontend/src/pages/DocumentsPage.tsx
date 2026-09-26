@@ -4,6 +4,8 @@ import { api, type DocumentItem, type DocumentFilters, type DocType } from "../a
 import { DocumentList } from "../components/documents/DocumentList";
 import { DocumentForm } from "../components/documents/DocumentForm";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { Button, PageHeader } from "../components/kit";
+import { IdCard, Plus } from "lucide-react";
 
 const DOC_TYPES: DocType[] = ["passport", "visa", "booking", "insurance", "other"];
 
@@ -28,11 +30,11 @@ export function DocumentsPage() {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">🛂 Documents</span>
-        <span className="spacer" />
-        <button className="primary" onClick={() => setAdding(true)}>+ Add</button>
-      </header>
+      <PageHeader
+        icon={IdCard}
+        title="Documents"
+        actions={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add</Button>}
+      />
 
       <div className="page-body">
         {isError ? (

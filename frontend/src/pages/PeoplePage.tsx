@@ -7,6 +7,8 @@ import { EntityThumb } from "../components/shared/EntityThumb";
 import { RelatedPanel } from "../components/shared/RelatedPanel";
 import { PersonForm } from "../components/people/PersonForm";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { Button, PageHeader } from "../components/kit";
+import { Plus, Users } from "lucide-react";
 
 export function PeoplePage() {
   const qc = useQueryClient();
@@ -26,11 +28,11 @@ export function PeoplePage() {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">👤 People</span>
-        <span className="spacer" />
-        <button className="primary" onClick={() => setAdding(true)}>+ Add person</button>
-      </header>
+      <PageHeader
+        icon={Users}
+        title="People"
+        actions={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add person</Button>}
+      />
 
       <div className="page-body">
         {isError ? (
