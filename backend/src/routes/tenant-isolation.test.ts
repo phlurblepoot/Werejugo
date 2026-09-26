@@ -260,7 +260,6 @@ const EXEMPT: Record<string, string> = {
   "POST /api/media": "creates in the caller's family; the file goes in its own folder (media.test.ts)",
   "POST /api/import": "creates in the caller's family; onto another family's trip is 400 (import.test.ts)",
   "POST /api/icons": "creates in the caller's family",
-  "POST /api/uploads": "no family data: a public map image",
   "POST /api/uploads/from-url": "no family data: a public map image",
   "POST /api/exif": "reads the uploaded file only",
   "GET /api/geo/airports": "reference data",

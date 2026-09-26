@@ -31,10 +31,11 @@ test("SVG uploads are refused (they can carry script)", async () => {
   const form = new FormData();
   form.append("file", Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), { filename: "evil.svg" });
   const res = await ctx.app.inject({
-    method: "POST", url: "/api/uploads",
+    method: "POST", url: "/api/icons",
     headers: { authorization: `Bearer ${ctx.token}`, ...form.getHeaders() }, payload: form.getBuffer(),
   });
   expect(res.statusCode).toBe(400);
+  expect(res.json().error).toBe("Unsupported file type");
 });
 
 test("previously uploaded files are served inert: no sniffing, no script", async () => {

@@ -35,7 +35,7 @@ async function writePart(
   return { name, url: `/uploads/${name}`, path, ext };
 }
 
-/** Stream an image upload (icons, overlays). Returns its public `/uploads/...` URL. */
+/** Stream an image upload (custom pin icons). Returns its public `/uploads/...` URL. */
 export async function saveUpload(part: {
   filename: string;
   file: NodeJS.ReadableStream;

@@ -804,11 +804,6 @@ export const api = {
     fd.append("name", name);
     return request<CustomIcon>("/api/icons", { method: "POST", body: fd });
   },
-  uploadImage: (file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    return request<{ url: string }>("/api/uploads", { method: "POST", body: fd });
-  },
   uploadFromUrl: (url: string) =>
     request<{ url: string; thumbUrl: string | null }>("/api/uploads/from-url", {
       method: "POST",

@@ -12,18 +12,6 @@ export const BUILTIN_ICONS = [
 export async function uploadRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
-  // Generic image upload (used for custom map overlays). Returns a URL.
-  app.post("/api/uploads", async (req, reply) => {
-    const part = await req.file();
-    if (!part) return reply.code(400).send({ error: "No file provided" });
-    try {
-      const url = await saveUpload(part);
-      return reply.code(201).send({ url });
-    } catch {
-      return reply.code(400).send({ error: "Unsupported file type" });
-    }
-  });
-
   // Import an image from CruiseMapper (e.g. a ship photo) into uploads. Restricted
   // to cruisemapper.com to avoid SSRF; returns a self-hosted URL + thumbnail.
   app.post("/api/uploads/from-url", async (req, reply) => {

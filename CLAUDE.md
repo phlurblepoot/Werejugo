@@ -43,7 +43,14 @@ Log entry format (newest date first, under a `### YYYY-MM-DD` heading):
 - **Every new route needs a case in `routes/tenant-isolation.test.ts`** (or an `EXEMPT` entry with a reason) — the suite fails on any registered route it doesn't know.
 - Throw `HttpError`s (`lib/errors.ts`) and parse bodies with zod `.parse()`; the global error handler turns them (and Postgres input errors) into 400/404/409. Dates use `ymd`/`optionalYmd` from `lib/validate.ts`; coordinates use `lib/geojson.ts`.
 - Files live under `families/<familyId>/…` in `STORAGE_DIR`, with never-reused names (`lib/storage.ts`).
-- Schema changes are new migrations after `0001_baseline.sql`; never edit an applied migration.
+- Schema changes are new migrations after `0001_baseline.sql` (now up to `0003_one_map.sql`); never edit an applied migration. Data migrations get a test in `src/db/migrations.test.ts` (run the SQL on old-shape data in a rolled-back transaction).
+
+## Frontend conventions
+
+- New screens use the kit in `frontend/src/components/kit` (Modal, Button, Field, PageHeader…); the older `.modal-backdrop` dialogs are being moved over (roadmap 3.6).
+- Place kinds: `ITEM_KINDS` in `lib/style.ts` is the one list, and must match the backend's `visitSchema.kind` enum (`routes/visits.ts`).
+- Anything search can find opens from a URL: `/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`, `/photos?photo=`. The map's filters live in the URL too (`lib/mapFilters.ts`).
+- Other families' content (shared trips) carries a `ByFamily` chip and honours `canEdit` from the API; never infer edit rights on the client.
 
 ## Running things
 
@@ -68,12 +75,13 @@ To run the app locally with demo data:
 ```bash
 cd backend
 export STORAGE_DIR=/tmp/wj-storage UPLOADS_DIR=/tmp/wj-uploads SEED_DEV_DATA=true
-npx tsx src/db/migrate.ts && npx tsx src/db/seed.ts   # seed dev data once; the seed isn't idempotent yet
+npx tsx src/db/migrate.ts && npx tsx src/db/seed.ts   # safe to re-run; demo data is added once
 npx tsx src/index.ts                                  # API on :4000
 cd ../frontend && npx vite --port 5173                # UI on :5173, proxies /api
 ```
 
-- Log in as `demo@werejugo.dev` / `password123`.
+- Log in as `demo@werejugo.dev` (server admin, owner of The Wanderers) or `smith@werejugo.dev` (owner of The Smiths, a contributor on the Wanderers' "Lake Tahoe 2025"); password `password123` for both.
+- `npm start` / the server itself does not migrate: run `migrate.ts` (and `seed.ts`) first, as the Docker image does.
 - Chromium for Playwright is at `/opt/pw-browsers`. External map tiles may not load in the sandbox.
 
-Known baseline (2026-09-26): backend 102/102 tests pass; frontend 100/101, where `src/api/share-backup-client.test.ts` fails on a jsdom `Blob` quirk (fix scheduled in Phase 1.1).
+Known baseline (2026-09-26, end of Milestone 1): backend 288/288 tests pass, frontend 180/180; typecheck and build clean.

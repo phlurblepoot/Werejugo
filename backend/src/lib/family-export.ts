@@ -67,7 +67,7 @@ function inside(root: string, rel: string): string | null {
 
 /**
  * A streaming .tar.gz of one family's data: `family.json` plus `files/storage/…`
- * (photos, videos, documents) and `files/uploads/…` (icons, overlays). Files
+ * (photos, videos, documents) and `files/uploads/…` (pin icons). Files
  * are symlinked into a staging folder, not copied, so this needs no extra disk.
  */
 export async function familyArchive(familyId: string, familyName: string): Promise<{ stream: Readable; cleanup: () => Promise<void> }> {

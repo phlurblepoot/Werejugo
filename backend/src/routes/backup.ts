@@ -67,7 +67,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       counts: Object.fromEntries(BACKUP_TABLES.map((t) => [t, db[t].length])),
       files: ["storage", "uploads"],
     }));
-    // storage/: photos, videos, documents. uploads/: custom pin icons, map overlays.
+    // storage/: photos, videos, documents. uploads/: custom pin icons (and overlays from before 1.6).
     await mkdir(join(stage, "storage"), { recursive: true });
     await cp(config.storageDir, join(stage, "storage"), { recursive: true });
     await mkdir(join(stage, "uploads"), { recursive: true });
