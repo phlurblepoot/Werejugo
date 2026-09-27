@@ -7,7 +7,7 @@ import { DocumentList } from "../documents/DocumentList";
 import { TripPacking } from "../packing/TripPacking";
 import { ShareButton } from "../shared/ShareButton";
 import { ByFamily, otherFamily } from "../shared/ByFamily";
-import { formatDate, formatDateRange } from "../../lib/dates";
+import { formatDate, formatDateRange, formatRelative } from "../../lib/dates";
 import { useAuth } from "../../lib/auth";
 import { TripFamilies, ROLE_LABEL } from "./TripFamilies";
 import { TripActivity } from "./TripActivity";
@@ -26,6 +26,8 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
   const [newTitle, setNewTitle] = useState("");
   const [picking, setPicking] = useState<{ entity: string; uploadLinkTo: string } | null>(null);
   const photos = useQuery({ queryKey: ["media", "timeline", { trip: trip.id }], queryFn: () => api.mediaTimeline({ trip: trip.id }) });
+  // The trip is also an album in the family's Immich (kept the same both ways).
+  const album = useQuery({ queryKey: ["trip-album", trip.id], queryFn: () => api.tripAlbum(trip.id) });
   const itinKey = ["itinerary", trip.id];
   const { data: items = [] } = useQuery({ queryKey: itinKey, queryFn: () => api.listItinerary(trip.id) });
   const { data: docs = [] } = useQuery({ queryKey: ["documents", { owner: `trip:${trip.id}` }], queryFn: () => api.listDocuments({ owner: `trip:${trip.id}` }) });
@@ -89,6 +91,13 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
           {!!photos.data?.total && <Link className="btn-link" to={`/photos?trip=${trip.id}`}>Open album</Link>}
           <button type="button" onClick={() => setPicking({ entity: `trip:${trip.id}`, uploadLinkTo: `trip:${trip.id}` })}>Add photos</button>
         </div>
+        {album.data && (
+          <div className="er-sub trip-album">
+            {album.data.error
+              ? <>Its album in Immich, “{album.data.name}”, couldn't be updated: {album.data.error}. It's tried again every few minutes.</>
+              : <>Also an album in Immich: <strong>{album.data.name}</strong>{album.data.syncedAt && <> · up to date {formatRelative(album.data.syncedAt)}</>}</>}
+          </div>
+        )}
 
         <div className="section-title"><span>🗺️ Itinerary</span></div>
         {scheduled.map((i) => itinRow(i, true))}

@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.6 |
-| **Next step** | Build Phase 2.6 ([plan](../plans/2026-09-27-phase-2.6-trip-albums.md)): an Immich album for each trip in each family's account, kept the same both ways (a three-way merge against the last pass; database triggers mark changes) |
+| **Current phase** | 2.7 |
+| **Next step** | Plan Phase 2.7 (suggestions from photos): photos for a trip from its dates and places; trips and places that don't exist yet, from photo clusters; people whose faces are in a trip's photos |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -300,9 +300,9 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.6 Trip ↔ Immich album sync — S
 
-**Status:** In progress · **Plan:** [phase-2.6](../plans/2026-09-27-phase-2.6-trip-albums.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.6](../plans/2026-09-27-phase-2.6-trip-albums.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] One Immich album per trip per member family; two-way sync (Werejugo writes immediately; Immich-side changes picked up by polling plus an on-demand "refresh").
+- [x] One Immich album per trip per member family; two-way sync (Werejugo writes immediately; Immich-side changes picked up by polling plus an on-demand "refresh").
 
 #### 2.7 Suggestions from photos — M
 
@@ -496,6 +496,20 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Done** — Phase 2.6 Trip ↔ Immich album sync (PR #2).
+  - **Every trip a family is on is also an album in its Immich account,** empty ones too, holding that family's photos of the trip.
+  - **Werejugo → Immich:** putting photos in a trip, moving or taking them out, renaming a trip and deleting it all reach the album within seconds. A deleted trip's album is deleted; its photos stay.
+  - **Immich → Werejugo:** adding photos to the album in Immich's app puts them in the trip, and removing them takes them out. This happens at the next sync (5 minutes) or at once with **Refresh from Immich**.
+  - **Conflicts:** a photo changed on both sides between two passes follows Werejugo. An album deleted in Immich is made again. The album's name follows the trip's.
+  - **A trip's Photos section** says "Also an album in Immich: *name*", or why the album couldn't be updated.
+  - **Verified:**
+    - Backend 436/436 (10 album-sync tests against the stand-in, including a conflict in either processing order; the isolation case) and frontend 246/246.
+    - The album contract passes against the real Immich: adding and removing change `updatedAt` and `assetCount`, which the sync watches.
+    - Playwright through nginx with the stand-in: 17 checks. Albums made for every trip, the Smiths' own album for the shared trip, photos added from the Photos page reaching the album, a photo added in "Immich" joining the trip after Refresh, a rename, a removal, phone layout.
+- **Note** — Found in 2.6:
+  - **Backups were missing `immich_people`** (2.5), so a restore would have lost every face match. At the next full sync that would have removed every face tag. Backups now include it and `trip_albums`, and a test fails if any table is neither backed up nor listed with a reason for leaving it out.
+  - **Conflicts need a time, not just the last pass's contents:** whether a photo was put in another trip in Werejugo can't be told from that album's base when both albums are handled in the same pass. The trigger records `media.trip_changed_at`, compared with the album's last pass.
+  - Removed a stale `TODO(phase-1b): re-home media on trip rename` in `routes/trips.ts`; the album now follows a rename.
 - **Note** — Planning 2.6: an album deleted in Immich is made again rather than taking its photos out of the trip, and album names follow the trip's. Each family's album holds its own photos of a shared trip. Other families' photos stay visible only in Werejugo, as §3.3 decided.
 
 - **Done** — Phase 2.5 Faces → people (PR #2).

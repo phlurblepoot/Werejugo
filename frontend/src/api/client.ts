@@ -316,6 +316,7 @@ export interface ActivityEntry {
   familyId: string | null; familyName: string | null; userName: string | null;
 }
 
+export interface TripAlbum { name: string; assetCount: number; syncedAt: string | null; error: string | null }
 export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
 
 export interface PersonLinkEntry {
@@ -720,6 +721,8 @@ export const api = {
   removeTripMember: (tripId: string, familyId: string) => request<void>(`/api/trips/${tripId}/members/${familyId}`, { method: "DELETE" }),
   tripActivity: (tripId: string) => request<ActivityEntry[]>(`/api/trips/${tripId}/activity`),
   tripPeople: (tripId: string) => request<TripPerson[]>(`/api/trips/${tripId}/people`),
+  /** My family's album for the trip in its Immich account; null without Immich. */
+  tripAlbum: (tripId: string) => request<TripAlbum | null>(`/api/trips/${tripId}/album`),
 
   // the same person in two families
   personLinks: () => request<PersonLinks>("/api/person-links"),
