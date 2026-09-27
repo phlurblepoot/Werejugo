@@ -4,7 +4,7 @@ import type { Item } from "../api/client";
 import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
-import { buildRoutePath, type LngLat } from "../lib/geo";
+import { boundsOf, buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
 import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
 import { setMapCentre } from "../lib/mapCentre";
@@ -42,6 +42,8 @@ interface Props {
   onSelectItem: (id: string) => void;
   onMovePoint: (item: Item, lng: number, lat: number) => void;
   onMoveWaypoint: (item: Item, index: number, lng: number, lat: number) => void;
+  /** When this changes (the filters), the map frames what it shows. */
+  frameKey?: string;
 }
 
 function absoluteUrl(url: string): string {
@@ -49,18 +51,6 @@ function absoluteUrl(url: string): string {
 }
 
 const styleFor = (styleUrl?: string | null) => styleUrl || MAP_STYLE_URL;
-
-/** Every coordinate of the given places (points, route vertices and stops). */
-function coordsOf(items: Item[]): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  for (const i of items) {
-    const g = i.geometry;
-    if (g?.type === "Point") out.push(g.coordinates as [number, number]);
-    else if (g?.type === "LineString") out.push(...(g.coordinates as Array<[number, number]>));
-    for (const w of i.waypoints) out.push([w.lng, w.lat]);
-  }
-  return out;
-}
 
 export function MapView(props: Props) {
   const { styleUrl, items, selectedItemId, pickMode, editMode, visitedGeo } = props;
@@ -120,19 +110,21 @@ export function MapView(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleUrl]);
 
-  // Frame the places once, when they first arrive (unless one is being opened).
-  const framed = useRef(false);
+  // Frame the places when they first arrive, and again whenever the filters change
+  // (`frameKey`), unless a place is being opened.
+  const framed = useRef<string | null>(null);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || framed.current || items.length === 0) return;
-    framed.current = true;
+    const key = props.frameKey ?? "";
+    if (!map || items.length === 0 || framed.current === key) return;
+    const first = framed.current === null;
+    framed.current = key;
     if (selectedItemId) return;
-    const cs = coordsOf(items);
-    if (!cs.length) return;
-    const b = cs.reduce((bb, c) => bb.extend(c), new maplibregl.LngLatBounds(cs[0], cs[0]));
-    map.fitBounds(b, { padding: 60, maxZoom: 9, duration: 0 });
+    const b = boundsOf(items);
+    if (!b) return;
+    map.fitBounds(b, { padding: 60, maxZoom: 9, duration: first ? 0 : 600 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [items, props.frameKey]);
 
   useEffect(() => {
     const map = mapRef.current;

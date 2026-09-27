@@ -13,3 +13,14 @@ test("drives join their stops directly (until roads are known); flights curve", 
   expect(buildRoutePath("drive", [[0, 0], [1, 1]])).toEqual([[0, 0], [1, 1]]);
   expect(buildRoutePath("flight", [[0, 0], [10, 10]]).length).toBe(49);
 });
+
+test("the bounds of what's on the map: points, lines and stops", async () => {
+  const { boundsOf } = await import("./geo");
+  const items = [
+    { geometry: { type: "Point", coordinates: [12.5, 41.9] }, waypoints: [] },
+    { geometry: { type: "LineString", coordinates: [[-80, 25], [-86, 20]] }, waypoints: [{ lng: -87.7, lat: 18.7 }] },
+    { geometry: null, waypoints: [] },
+  ] as never;
+  expect(boundsOf(items)).toEqual([[-87.7, 18.7], [12.5, 41.9]]);
+  expect(boundsOf([] as never)).toBeNull();
+});

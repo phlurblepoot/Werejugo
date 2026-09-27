@@ -55,13 +55,21 @@ export function MapPage() {
 
   const [timelineOn, setTimelineOn] = useState(false);
   const [timelineCursor, setTimelineCursor] = useState<string | null>(null);
+  // While the timeline plays, places without a date stay on the map unless hidden.
+  const [showUndated, setShowUndated] = useState(true);
   const filterKey = params.toString();
   const filteredItems = useMemo(() => {
     const matching = applyFilters(items, filters, myFamilyId);
     if (!timelineOn || !timelineCursor) return matching;
-    return matching.filter((i) => i.occurredOn && i.occurredOn <= timelineCursor);
+    return matching.filter((i) => (i.occurredOn ? i.occurredOn <= timelineCursor : showUndated));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, filterKey, myFamilyId, timelineOn, timelineCursor]);
+  }, [items, filterKey, myFamilyId, timelineOn, timelineCursor, showUndated]);
+  // The filters (not the open place): when they change, the map frames what's left.
+  const frameKey = useMemo(() => {
+    const p = new URLSearchParams(params);
+    p.delete("visit");
+    return p.toString();
+  }, [params]);
   // The legend counts what every other filter leaves, so a hidden kind can be switched back on.
   const legendItems = useMemo(
     () => applyFilters(items, { ...filters, kinds: [] }, myFamilyId),
@@ -233,6 +241,7 @@ export function MapPage() {
         <MapView
           styleUrl={settings?.map?.styleUrl}
           items={filteredItems}
+          frameKey={frameKey}
           selectedItemId={selectedItemId}
           getStyle={(item) => resolveItemStyle(item, themesById, settings)}
           pickMode={pickActive}
@@ -263,7 +272,14 @@ export function MapPage() {
         )}
         <Legend items={legendItems} kindFilter={filters.kinds} onToggleKind={toggleKind} settings={settings} />
         {timelineOn && (
-          <TimelineBar items={items} cursor={timelineCursor} onCursor={setTimelineCursor} onClose={() => setTimelineOn(false)} />
+          <TimelineBar
+            items={items}
+            cursor={timelineCursor}
+            onCursor={setTimelineCursor}
+            onClose={() => setTimelineOn(false)}
+            showUndated={showUndated}
+            onShowUndated={setShowUndated}
+          />
         )}
       </div>
 

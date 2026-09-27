@@ -67,3 +67,18 @@ export function buildRoutePath(kind: ItemKind, coords: LngLat[]): LngLat[] {
   if (kind === "flight" || kind === "cruise") return greatCirclePath(coords);
   return coords;
 }
+
+/** The south-west and north-east corners around places' points, lines and stops, or null for none. */
+export function boundsOf(items: Array<{ geometry: { type: string; coordinates: unknown } | null; waypoints: Array<{ lng: number; lat: number }> }>): [LngLat, LngLat] | null {
+  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  const add = ([lng, lat]: number[]) => {
+    w = Math.min(w, lng); e = Math.max(e, lng); s = Math.min(s, lat); n = Math.max(n, lat);
+  };
+  for (const i of items) {
+    const g = i.geometry;
+    if (g?.type === "Point") add(g.coordinates as number[]);
+    else if (g?.type === "LineString") (g.coordinates as number[][]).forEach(add);
+    i.waypoints.forEach((p) => add([p.lng, p.lat]));
+  }
+  return w === Infinity ? null : [[w, s], [e, n]];
+}
