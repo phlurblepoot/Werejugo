@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
 | **Current phase** | 2.8 |
-| **Next step** | Plan Phase 2.8 (smart search & smart albums): Immich's smart search (CLIP) and structured search in the command palette and the Photos page; smart albums as saved filters, shareable by link |
+| **Next step** | Build Phase 2.8 ([plan](../plans/2026-09-27-phase-2.8-smart-search.md)): Immich smart search in the palette and on the Photos page (with Werejugo's filters); smart albums as saved filters, shareable by link; then the Milestone 2 wrap-up |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -314,7 +314,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.8 Smart search & smart albums — S
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.8](../plans/2026-09-27-phase-2.8-smart-search.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] Immich smart search inside the command palette ("beach sunset").
 - [ ] Smart albums = saved filters (person, place, date range, trip, search text) that update automatically; shareable by link.
@@ -496,6 +496,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-27
+
+- **Note** — Planning 2.8:
+  - Smart search needs Immich's machine learning, which CI's Immich doesn't run. The contract checks the refusal instead, and the stand-in imitates both states.
+  - Found: a public album link shows photos hidden from the library. They're left out of public links from 2.8.
 
 - **Done** — Phase 2.7 Suggestions from photos (PR #2).
   - **Planning, "Trips in your photos":** runs of photos away from home that are in no trip become "Looks like you were in Lisbon and Porto · 3–7 Mar 2019 · 12 photos", with a name to edit and **Create trip**, which makes the trip with its photos and opens it. The Photos page points there.
