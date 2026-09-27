@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 3 — Finish every module (on the new design) |
 | **Current phase** | 3.1 |
-| **Next step** | Write the Phase 3.1 plan (Map & routes, including past cruises), then build it. The owner still deletes `claude/confident-ramanujan-xDIFr` on GitHub (the last 1.1 item). |
+| **Next step** | Build Phase 3.1 in the plan's order: migration and reference data first. The owner still deletes `claude/confident-ramanujan-xDIFr` on GitHub (the last 1.1 item). |
 | **Blocked on** | Nothing |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -326,7 +326,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 3.1 Map & routes — L
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-3.1](../plans/2026-09-27-phase-3.1-map-routes.md) · **PR:** —
 
 - [ ] Editor fixes: photo upload no longer closes the editor; no duplicate visit on retry; pick-on-map can be cancelled; one click opens one detail view (not popup + modal).
 - [ ] **Cruises (essential):** cache CruiseMapper responses and **store the fetched route/ports/ship details on the visit** so they're never re-fetched; clear messages when blocked, with retry; honor `CRUISE_LOOKUP_ENABLED` everywhere; remove or admin-gate the diagnose endpoint; a full world ports list (NGA World Port Index) for manual entry; **sea-routing fallback** (e.g. `searoute-js`) so port-to-port legs follow water instead of crossing land when no sailed track exists; keep "reuse itinerary" for past cruises.
@@ -500,6 +500,18 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Note** — Planning 3.1 ([plan](../plans/2026-09-27-phase-3.1-map-routes.md)):
+  - **Reference data is thin.** There are 46 ports and 69 airports, so most searches fall through to Nominatim, which also serves as-you-type search against its usage policy.
+    - The new lists merge the World Port Index (via an MIT mirror), UN/LOCODE and `searoute-ts`'s ports. Airports come from OurAirports (9,054 with IATA codes).
+    - Private cruise stops come from CruiseMapper sailings, which are remembered.
+  - **Sea routing:** `searoute-ts` (MIT, Eurostat network), tried on a Caribbean itinerary.
+  - **Photos at sea:** Immich leaves city and country empty for a photo at sea (a city only within 25 km, a country only on land). That's the signal for cruises found in photos.
+  - **Bugs found, all fixed in 3.1:**
+    - The editor creates a visit twice on retry; the first photo upload closes the editor; pick-on-map has no way out; a pin click opens a popup and the detail.
+    - `CRUISE_LOOKUP_ENABLED` is ignored by 4 of 6 cruise routes; the diagnose endpoint is open to any member and follows redirects off its hosts.
+    - Sailing dates get the wrong year across New Year, and port times shift by the server's time zone.
+    - Great-circle lines jump at the antimeridian; dragging a cruise waypoint replaces its sea track; re-looking-up a flight keeps the old line; only a flight's first leg is used.
+    - `PUT /api/settings` has no owner check or validation; port search doesn't escape `%` and `_`.
 - **Decided** — Past cruises (§2): matched by itinerary on CruiseMapper, else ports with sea-routed legs, plus cruises proposed from photos. The owner found that a cruise more than a few weeks in the past can't be looked up: CruiseMapper lists only upcoming sailings, and "reuse this itinerary" only helps when a similar sailing is listed. Of the options offered, the owner chose these three; importing a GPS track as a cruise's path and paid ship-track history were not chosen.
 - **Changed** — Phase 3.1 gains two items: past cruises (itinerary matching, sea-routed ports) and cruises from photos. Owner's decision above.
 - **Note** — Milestone 3 started with the owner's go-ahead. The owner installed Immich with StaXX (a compose-file plugin for Unraid) using the guide's stack with the values written in, connected it, and tested some of Milestone 2 ("they worked good"); the rest they'll test as they go. The session branch restarts from `main`.
