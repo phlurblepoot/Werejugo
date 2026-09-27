@@ -13,6 +13,7 @@ import { AppearanceTab } from "./AppearanceTab";
 import { VisitPhotos, type StagedPhoto } from "./VisitPhotos";
 import { useUploads } from "../../lib/uploads/UploadsProvider";
 import { useAutoRoute } from "./useAutoRoute";
+import { newId } from "../../lib/newId";
 import { formatDistance } from "../../lib/routing";
 
 interface Props {
@@ -20,7 +21,11 @@ interface Props {
   themes: Theme[];
   trips: { id: string; name: string }[];
   customIcons: CustomIcon[];
-  onRequestPick: () => Promise<[number, number]>;
+  /** Pick a spot on the map; null when picking was cancelled. */
+  onRequestPick: () => Promise<[number, number] | null>;
+  onCancelPick?: () => void;
+  /** A saved place's photos changed (refresh the map; the editor stays open). */
+  onPhotosChanged?: () => void;
   onClose: () => void;
   onSaved: () => void;
   onIconsChanged?: () => void;
@@ -34,7 +39,10 @@ export function VisitEditor(props: Props) {
   const { draft, set, setKind, applyTheme, validate, buildPayload } = useVisitDraft(item, props.pinSettings, props.pathSettings);
   const [tab, setTab] = useState<"details" | "appearance">("details");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
-  const savedId = item?.id ?? null; // non-null only when editing an existing visit
+  // Set once the place exists (editing, or after the first save): later saves update it.
+  const [savedId, setSavedId] = useState<string | null>(item?.id ?? null);
+  // This new place's key: a create that's sent again (a retry) returns it instead of making another.
+  const [clientKey] = useState(newId);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,8 +55,12 @@ export function VisitEditor(props: Props) {
 
   async function pickOnMap() {
     setPicking(true);
-    try { const [lng, lat] = await onRequestPick(); set({ point: [lng, lat] }); }
-    finally { setPicking(false); }
+    try {
+      const at = await onRequestPick();
+      if (at) set({ point: at });
+    } finally {
+      setPicking(false);
+    }
   }
 
   async function save() {
@@ -58,7 +70,8 @@ export function VisitEditor(props: Props) {
     setBusy(true);
     try {
       const payload = buildPayload();
-      const saved = editing && item ? await api.updateItem(item.id, payload) : await api.createItem(payload);
+      const saved = savedId ? await api.updateItem(savedId, payload) : await api.createItem({ ...payload, clientKey });
+      setSavedId(saved.id);
       // Staged photos upload in the background (the upload tray shows them);
       // the server links each one to the place when it arrives.
       if (staged.length) {
@@ -75,7 +88,10 @@ export function VisitEditor(props: Props) {
   if (picking) {
     return (
       <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 1100 }}>
-        <div className="warnings">Click on the map to set the location…</div>
+        <div className="warnings pick-banner" role="status">
+          Click on the map to set the location…
+          <button type="button" onClick={() => props.onCancelPick?.()}>Cancel</button>
+        </div>
       </div>
     );
   }
@@ -156,7 +172,7 @@ export function VisitEditor(props: Props) {
               existing={item?.photos ?? []}
               staged={staged}
               onStaged={setStaged}
-              onExistingChanged={onSaved}
+              onPhotosChanged={props.onPhotosChanged}
             />
           </>
         ) : (

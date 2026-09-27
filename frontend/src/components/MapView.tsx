@@ -7,7 +7,6 @@ import { glyphFor, isImageIcon } from "../lib/icons";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
 import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
-import { formatDate } from "../lib/dates";
 import { setMapCentre } from "../lib/mapCentre";
 
 export interface ItemStyle {
@@ -379,9 +378,12 @@ export function MapView(props: Props) {
     const el = buildBadge(style);
     const wp = waypointIndex !== null ? item.waypoints[waypointIndex] : null;
     const wpDate = wp ? formatWaypointTime(wp) || undefined : undefined;
+    // One click opens the place's details (no popup as well); hovering names it.
+    el.title = [item.title, wp?.label, wpDate].filter(Boolean).join(" · ");
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", el.title);
     const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode && item.canEdit !== false })
       .setLngLat(lngLat)
-      .setPopup(buildPopup(item, wp?.label, wpDate))
       .addTo(map);
 
     let dragged = false;
@@ -408,19 +410,6 @@ export function MapView(props: Props) {
       if (!dragged) handlers.onSelectItem(item.id);
     });
     return marker;
-  }
-
-  function buildPopup(item: Item, label?: string, date?: string): maplibregl.Popup {
-    const photo = item.photos[0];
-    const html =
-      (photo
-        ? `<img src="${absoluteUrl(photo.url)}" style="width:100%;max-height:140px;object-fit:cover;border-radius:4px;margin-bottom:6px;" />`
-        : "") +
-      `<div class="title">${escapeHtml(item.title)}</div>` +
-      (label ? `<div class="sub">${escapeHtml(label)}</div>` : "") +
-      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(formatDate(item.occurredOn))}</div>` : "") +
-      (item.photos.length > 1 ? `<div class="sub">${item.photos.length} photos</div>` : "");
-    return new maplibregl.Popup({ offset: 18, maxWidth: "260px" }).setHTML(html);
   }
 
   function buildBadge(style: ItemStyle): HTMLDivElement {
@@ -464,8 +453,3 @@ function firstCoord(item: Item): LngLat | null {
   return null;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
-}

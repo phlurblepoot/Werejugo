@@ -830,7 +830,8 @@ export const api = {
   // visits ("places"; the client calls them items)
   // The one map: every place my family may see (its own and on trips shared with it).
   listVisits: () => request<Item[]>("/api/visits"),
-  createItem: (data: Partial<Item>) => request<Item>("/api/visits", { method: "POST", body: body(data) }),
+  /** `clientKey`: the editor's key for this new place, so a retry returns it instead of making another. */
+  createItem: (data: Partial<Item> & { clientKey?: string }) => request<Item>("/api/visits", { method: "POST", body: body(data) }),
   updateItem: (id: string, data: Partial<Item>) =>
     request<Item>(`/api/visits/${id}`, { method: "PATCH", body: body(data) }),
   deleteItem: (id: string) => request<void>(`/api/visits/${id}`, { method: "DELETE" }),

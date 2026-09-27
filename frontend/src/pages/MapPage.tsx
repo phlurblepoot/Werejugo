@@ -131,20 +131,26 @@ export function MapPage() {
 
   // Pick-on-map coordination
   const [pickActive, setPickActive] = useState(false);
-  const pickResolver = useRef<((c: [number, number]) => void) | null>(null);
-  function requestPick(): Promise<[number, number]> {
+  const pickResolver = useRef<((c: [number, number] | null) => void) | null>(null);
+  function requestPick(): Promise<[number, number] | null> {
     setPickActive(true);
     return new Promise((resolve) => {
       pickResolver.current = resolve;
     });
   }
-  function handlePick(lng: number, lat: number) {
-    if (pickResolver.current) {
-      pickResolver.current([lng, lat]);
-      pickResolver.current = null;
-    }
+  function endPick(at: [number, number] | null) {
+    pickResolver.current?.(at);
+    pickResolver.current = null;
     setPickActive(false);
   }
+  const handlePick = (lng: number, lat: number) => endPick([lng, lat]);
+  // Escape (or the banner's Cancel) ends picking without a spot.
+  useEffect(() => {
+    if (!pickActive) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") endPick(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pickActive]);
 
   const refreshItems = () => qc.invalidateQueries({ queryKey: ["visits"] });
 
@@ -268,6 +274,8 @@ export function MapPage() {
           trips={trips}
           customIcons={customIcons}
           onRequestPick={requestPick}
+          onCancelPick={() => endPick(null)}
+          onPhotosChanged={refreshItems}
           onClose={() => setEditorOpen(false)}
           onSaved={handleItemSaved}
           onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
