@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.2 |
-| **Next step** | Build Phase 2.2: adapter asset calls + contract tests → migration 0005 (media = Immich references) → signed media proxy with Range → upload hands off to Immich → pg-boss sync (incremental + nightly reconcile) → frontend (no-Immich state, video, original download) |
+| **Current phase** | 2.3 |
+| **Next step** | Build Phase 2.3 ([plan](../plans/2026-09-27-phase-2.3-uploads-at-scale.md)): chunked resumable uploads with an upload tray, background hand-off to Immich, duplicates (including ones in Immich's trash) and Live Photo clips handled |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -272,16 +272,16 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.2 Media references & seamless serving — M
 
-**Status:** In progress · **Plan:** [phase-2.2](../plans/2026-09-27-phase-2.2-media-on-immich.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.2](../plans/2026-09-27-phase-2.2-media-on-immich.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
-- [ ] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
-- [ ] pg-boss job queue (§3.7).
-- [ ] Library sync: everything in a family's Immich account, including photos added in Immich directly, shows up in Werejugo within minutes; edits and deletions follow. (added 2026-09-27)
+- [x] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
+- [x] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
+- [x] pg-boss job queue (§3.7).
+- [x] Library sync: everything in a family's Immich account, including photos added in Immich directly, shows up in Werejugo within minutes; edits and deletions follow. (added 2026-09-27)
 
 #### 2.3 Uploads at scale — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.3](../plans/2026-09-27-phase-2.3-uploads-at-scale.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] Resumable chunked uploads (Cloudflare-safe) with per-file progress, retry and background hand-off to Immich; iPhone HEIC/Live Photos, RAW and video via Immich; duplicate detection surfaced ("already in your library").
 
@@ -496,6 +496,23 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Done** — Phase 2.2 Media references & seamless serving (PR #2). Photos and videos now live in each family's Immich account; a `media` row is a reference (`immich_asset_id`) plus a cache of date, place, size, caption and length.
+  - **Uploads:** they go to Immich (EXIF date and place are read at once for suggestions). Duplicates come back as "Already in your library"; no Immich connection is a clear message; Immich being down is a clear error.
+  - **Captions and deletes:** captions are Immich descriptions. Delete moves the photo to Immich's trash.
+  - **Serving:** everything is served at Werejugo's own signed links (`/api/m/:id/:size`), cacheable for hours, with Range for video seeking and ETag passed through; originals download as files.
+  - **Library sync:** pg-boss runs it every 5 minutes and a full reconcile nightly (and on a family's first connection). Photos added, edited, trashed or deleted in Immich follow; hidden Live Photo halves and the locked folder are skipped; one sync per family at a time. Admins see each family's photo count, last sync and errors, with "Sync now"; families get "Refresh from Immich".
+  - **Removed:** the on-disk photo pipeline (folders, file moves on trip changes, sharp thumbnails for photos).
+  - **Verified:**
+    - Backend 344/344 and frontend 198/198.
+    - The asset contract test against real Immich 3.2.2 in CI.
+    - Playwright against the stand-in, with the real pg-boss queue: 18 checks, including an Immich-side upload appearing after Refresh, a public album link showing a photo, a 206 video range, and "Download original" returning the exact file.
+- **Note** — Found in 2.2:
+  - The contract test against the real Immich found three differences from the stand-in, now fixed in the code and copied into the stand-in:
+    - Immich judges an upload by the file part's own name. The SDK sent a nameless blob, which Immich rejected as "Unsupported file type blob"; uploads now send a named File.
+    - Immich 3.2's structured search includes trashed photos unless the filter excludes them, so the sync kept photos trashed in Immich. It now asks for `trashedAt = null`.
+    - Immich sends an ETag for originals but answers a conditional request with the whole file (200, not 304). Werejugo passes either through; browsers cache by `Cache-Control`.
+  - Playwright found that picking the same file twice did nothing (the file input kept its value); fixed in both upload pickers.
+  - Thumbnails can be missing for a few seconds while Immich makes them, so images show a placeholder and retry instead of a broken icon.
 - **Done** — Phase 2.1 Immich connector & provisioning (PR #2).
   - **Admin → Immich:** the admin enters Immich's address and an admin API key. Werejugo checks them live (Immich answers, the key belongs to an admin and has the needed permissions) and stores the key encrypted with the new `ENCRYPTION_KEY`. The page shows the version against the supported range (3.2 up to 4.0) and each family's state.
   - **Family accounts:**
@@ -599,10 +616,10 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 - Planning: trips can't be edited/deleted from Planning; status select shows stale value; "schedule" sets today's date; itinerary items not editable; "→ visit" creates a location-less visit on no map; bookings not clickable; timeline axis hard-coded to 2025.
 - Packing: custom template edits never refresh (`PackingPage.tsx:44`); save-as-template doesn't refresh or confirm; no rename/delete/qty/label edit.
 - Documents: search input unmounts each keystroke; empty filter shows "No documents yet" with no way back; banner computed from the filtered list; no delete confirm.
-- Photos: map view limited to the first 60 photos; stale click handler; video/audio render as `<img>`; editing caption/trip closes the modal; album share ignores non-trip filters.
+- Photos: map view limited to the first 60 photos; stale click handler; ✅ video/audio render as `<img>` (videos play, 2.2); editing caption/trip closes the modal; album share ignores non-trip filters.
 - People: delete without confirm; cancelled avatar upload leaves an orphan photo.
 - Settings: backup/restore only; no cache reset after restore; JSON "Export" and backup both toast "Backup downloaded".
-- Share view: itinerary never rendered, pins do nothing, fixed world view, waypoints dropped, image URLs skip `API_URL`.
+- Share view: itinerary never rendered, pins do nothing, fixed world view, waypoints dropped, ✅ image URLs skip `API_URL` (2.2).
 - Auth: logout doesn't clear cached data (another user on the same tab can briefly see the previous family's data); a 401 clears the token but leaves the UI signed in.
 - Missing try/catch or confirmations in: ManagePanel, SettingsPanel save, StylePicker upload, FlightForm, useCruiseLookup, PhotoDetail, UploadReview, ShareButton, PeoplePage, DocumentForm, TripForm, PlanningPage status change, VisitPhotos delete, itinerary delete, BlackoutManager.
 - ✅ Inconsistent trip query keys (`["trips", mapSetId]` vs `["trips"]`) — one `["trips"]` key since 1.6; the due-count badge refreshes only from the Documents page.

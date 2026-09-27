@@ -64,7 +64,9 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 
 ## Photos (Immich)
 
-Each family's photos and videos live in its own account on an [Immich](https://immich.app) server next to Werejugo; Werejugo shows them in its own pages and Immich stays off the internet. Install Immich with [docs/immich-on-unraid.md](docs/immich-on-unraid.md), set `ENCRYPTION_KEY` on the backend, then connect it in **Admin → Immich** (address + an Immich admin API key) and **Connect all families**. Werejugo supports Immich 3.2 up to (not including) 4.0.
+Each family's photos and videos live in its own account on an [Immich](https://immich.app) server next to Werejugo; Werejugo shows them in its own pages (thumbnails, previews, originals and seekable video at its own signed links) and Immich stays off the internet. Uploading in Werejugo puts the file in the family's Immich account; photos added in Immich directly show up in Werejugo within about five minutes (or at once with **Refresh from Immich** on the Photos page), and edits and deletions follow. Deleting a photo in Werejugo moves it to Immich's trash, where it can be restored for 30 days. Install Immich with [docs/immich-on-unraid.md](docs/immich-on-unraid.md), set `ENCRYPTION_KEY` on the backend, then connect it in **Admin → Immich** (address + an Immich admin API key) and **Connect all families**. Werejugo supports Immich 3.2 up to (not including) 4.0.
+
+> **Upgrading from Milestone 1:** photos uploaded before Immich was added aren't carried over (the milestone ran on test data). Their files stay in the `storage` folder under `families/<id>/…/photos` and `families/<id>/loose/`; delete those folders once you no longer need them.
 
 ## Modules
 
