@@ -112,12 +112,15 @@ export const immich = {
 
   /**
    * Hand a file to Immich. `duplicate` means the same file is already in the
-   * account (its id is returned). Immich decides whether it can take the file
-   * from the upload's own file name, so the bytes go as a named File.
+   * account (its id is returned), even when that one is in Immich's trash.
+   * Immich decides whether it can take the file from the upload's own file
+   * name, so the bytes go as a named File. A file-backed Blob
+   * (`fs.openAsBlob`) is streamed, never read into memory.
    */
-  uploadAsset: (c: ImmichConn, file: Blob, meta: { filename: string; fileCreatedAt: string; fileModifiedAt: string }) => {
+  uploadAsset: (c: ImmichConn, file: Blob, meta: { filename: string; fileCreatedAt: string; fileModifiedAt: string }, opts: { timeoutMs?: number } = {}) => {
     const named = file instanceof File && file.name ? file : new File([file], meta.filename, { type: file.type });
-    return call("uploadAsset", c, (o) => sdk.uploadAsset({ assetMediaCreateDto: { assetData: named, ...meta } }, { ...o, signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS) }));
+    const timeout = opts.timeoutMs ?? uploadTimeoutMs(file.size);
+    return call("uploadAsset", c, (o) => sdk.uploadAsset({ assetMediaCreateDto: { assetData: named, ...meta } }, { ...o, signal: AbortSignal.timeout(timeout) }));
   },
   getAsset: (c: ImmichConn, id: string) => call("getAsset", c, (o) => sdk.getAssetInfo({ id }, o)),
   /** Immich 3.2's structured search: `filter`, cursor paging, optional EXIF in the results. */
@@ -126,12 +129,16 @@ export const immich = {
   /** Move to Immich's trash (restorable there); never a permanent delete. */
   trashAssets: (c: ImmichConn, ids: string[]) =>
     call("trashAssets", c, (o) => sdk.deleteAssets({ assetBulkDeleteDto: { ids, force: false } }, o)),
+  /** Bring assets back from Immich's trash. */
+  restoreAssets: (c: ImmichConn, ids: string[]) =>
+    call("restoreAssets", c, (o) => sdk.restoreAssets({ bulkIdsDto: { ids } }, o)),
   /** The asset's description (Werejugo's caption). PUT /assets/:id is deprecated in 3.2 but is the only way until 4.0. */
   setDescription: (c: ImmichConn, id: string, description: string) =>
     call("setDescription", c, (o) => sdk.updateAsset({ id, updateAssetDto: { description } }, o)),
 };
 
-const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+/** Time to hand a file to Immich over the LAN: 10 minutes, plus a minute per 500 MB. */
+export const uploadTimeoutMs = (bytes: number) => 10 * 60_000 + Math.ceil(bytes / (500 * 1024 * 1024)) * 60_000;
 
 export type MediaSize = "thumbnail" | "preview" | "original" | "video";
 

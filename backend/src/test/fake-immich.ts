@@ -324,7 +324,8 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const name = fields.filename || file.filename;
     const video = /\.(mp4|mov|m4v|webm)$/i.test(name) || file.mime.startsWith("video/");
     const a = mkAsset(c.user.id, {
-      bytes: file.buf, originalFileName: name, mime: video ? "video/mp4" : file.mime === "application/octet-stream" ? "image/jpeg" : file.mime,
+      bytes: file.buf, originalFileName: name,
+      mime: video ? (file.mime.startsWith("video/") ? file.mime : "video/mp4") : file.mime === "application/octet-stream" ? "image/jpeg" : file.mime,
       type: video ? "VIDEO" : "IMAGE", fileCreatedAt: new Date(fields.fileCreatedAt).toISOString(), durationMs: video ? 12_345 : null,
     });
     return reply.code(201).send({ id: a.id, status: "created" });
@@ -362,6 +363,21 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       else { a.trashedAt = now(); touch(a); }
     }
     return reply.code(204).send();
+  });
+
+  app.post("/api/trash/restore/assets", async (req, reply) => {
+    if (!enter("restoreAssets", reply)) return reply;
+    const c = auth(req, reply, "asset.delete");
+    if (!c) return reply;
+    let count = 0;
+    for (const id of ((req.body ?? {}) as { ids?: string[] }).ids ?? []) {
+      const a = ownAsset(c, id);
+      if (!a || a.trashedAt === null) continue;
+      a.trashedAt = null;
+      touch(a);
+      count++;
+    }
+    return { count };
   });
 
   app.post("/api/search/metadata", async (req, reply) => {

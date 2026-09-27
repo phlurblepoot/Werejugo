@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startFakeImmich, type FakeImmich } from "../../test/fake-immich.js";
 import sharp from "sharp";
@@ -39,6 +40,14 @@ const errorOf = async (p: Promise<unknown>) => {
   throw new Error("expected the call to fail");
 };
 const email = () => `family-contract-${randomBytes(4).toString("hex")}@werejugo.local`;
+
+/** A fresh Immich account with its own "all" key, like a family's. */
+async function newFamily(name: string) {
+  const e = email();
+  await immich.createUser({ url, key: adminKey }, { email: e, name, password: "family-password-1" });
+  const s = await immich.login(url, e, "family-password-1");
+  return { url, key: (await immich.createApiKey({ url, token: s.accessToken }, "Werejugo")).secret };
+}
 
 describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`, () => {
   test("server answers ping and a supported version without a key", async () => {
@@ -164,6 +173,44 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     const trashed = await immich.searchAssets(fam, { filter: { trashedAt: { gt: started } }, size: 100 });
     expect(trashed.items.map((a) => a.id)).toContain(up.id);
   }, 60_000); // a real Immich takes a few seconds to make the thumbnail
+
+  test("a file uploaded again after it was trashed is a duplicate of the trashed one, and can be restored", async () => {
+    const fam = await newFamily("Contract Trash");
+    const jpeg = await sharp({ create: { width: 32, height: 32, channels: 3, background: { r: Math.floor(Math.random() * 255), g: 10, b: 200 } } }).jpeg().toBuffer();
+    const meta = { filename: "again.jpg", fileCreatedAt: "2024-02-01T09:00:00.000Z", fileModifiedAt: "2024-02-01T09:00:00.000Z" };
+    const up = await immich.uploadAsset(fam, new Blob([jpeg], { type: "image/jpeg" }), meta);
+    await immich.trashAssets(fam, [up.id]);
+
+    const again = await immich.uploadAsset(fam, new Blob([jpeg], { type: "image/jpeg" }), meta);
+    expect(again).toEqual({ id: up.id, status: "duplicate" });
+    expect((await immich.getAsset(fam, up.id)).isTrashed).toBe(true);
+    await immich.restoreAssets(fam, [up.id]);
+    expect((await immich.getAsset(fam, up.id)).isTrashed).toBe(false);
+  });
+
+  test("a video clip is a VIDEO whose bytes are served for playback; an AVIF photo is an IMAGE", async () => {
+    const fam = await newFamily("Contract Video");
+    const clip = await readFile(new URL("../../test/fixtures/clip.webm", import.meta.url));
+    const when = { fileCreatedAt: "2024-03-01T12:00:00.000Z", fileModifiedAt: "2024-03-01T12:00:00.000Z" };
+    const v = await immich.uploadAsset(fam, new Blob([clip], { type: "video/webm" }), { filename: "clip.webm", ...when });
+    expect(v.status).toBe("created");
+    expect((await immich.getAsset(fam, v.id)).type).toBe("VIDEO");
+    const play = await fetchMedia(fam, v.id, "video");
+    expect(play.status).toBe(200);
+    expect(play.headers.get("content-type")).toMatch(/^video\//);
+    expect((await play.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    const avif = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 30, g: Math.floor(Math.random() * 255), b: 90 } } }).avif().toBuffer();
+    const p = await immich.uploadAsset(fam, new Blob([avif], { type: "image/avif" }), { filename: "photo.avif", ...when });
+    expect(p.status).toBe("created");
+    expect((await immich.getAsset(fam, p.id)).type).toBe("IMAGE");
+  }, 30_000);
+
+  test("hidden and locked assets can be searched for (how the sync notices Live Photo clips Immich hid)", async () => {
+    const fam = await newFamily("Contract Hidden");
+    const r = await immich.searchAssets(fam, { filter: { visibility: { in: ["hidden", "locked"] as never }, updatedAt: { gt: "2020-01-01T00:00:00.000Z" } }, size: 10 });
+    expect(Array.isArray(r.items)).toBe(true);
+  });
 
   test("a file Immich can't take is refused with its reason", async () => {
     const e = email();
