@@ -86,6 +86,7 @@ async function snapshotA(): Promise<string> {
     media_uploads: "SELECT * FROM media_uploads WHERE family_id = $1",
     immich_people: "SELECT * FROM immich_people WHERE family_id = $1",
     trip_albums: "SELECT * FROM trip_albums WHERE family_id = $1",
+    suggestion_dismissals: "SELECT * FROM suggestion_dismissals WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -180,6 +181,14 @@ const CASES: Case[] = [
   c("GET /api/links", () => `/api/links?entity=trip:${A.trip}`, 404),
   c("POST /api/links", () => "/api/links", 400, () => ({ from: `person:${B.person}`, to: `trip:${A.trip}` })),
   c("DELETE /api/links/:id", () => `/api/links/${A.link}`, 404),
+
+  // Suggestions from photos
+  c("GET /api/suggestions", () => `/api/suggestions?for=trip:${A.trip}`, 404),
+  c("GET /api/suggestions", () => `/api/suggestions?for=visit:${A.visit}`, 404, undefined, "their place"),
+  c("GET /api/suggestions", () => "/api/suggestions?for=library", "clean"),
+  c("POST /api/suggestions/apply", () => "/api/suggestions/apply", 404, () => ({ key: `trip-photos:${A.trip}` })),
+  c("POST /api/suggestions/apply", () => "/api/suggestions/apply", 404, () => ({ key: `trip-person:${A.trip}:${A.person}` }), "their person on their trip"),
+  c("POST /api/suggestions/dismiss", () => "/api/suggestions/dismiss", 404, () => ({ key: `visit-photos:${A.visit}` })),
 
   // Faces found in photos
   c("GET /api/faces", () => "/api/faces?view=all", "clean"),
