@@ -28,8 +28,10 @@ export const BACKUP_TABLES = [
 export const NOT_BACKED_UP: Record<string, string> = {
   media_uploads: "files still on their way to Immich; a restore drops them",
   schema_migrations: "recreated by the migrations",
-  airports: "reference data, loaded by the migrations",
-  ports: "reference data, loaded by the migrations",
+  airports: "reference data, loaded at start-up",
+  ports: "reference data, loaded at start-up (ports learned from CruiseMapper are learned again)",
+  reference_data: "which reference files are loaded, alongside them",
+  lookup_cache: "answers from outside services, asked again when needed",
   spatial_ref_sys: "PostGIS's own",
 };
 

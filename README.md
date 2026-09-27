@@ -86,6 +86,15 @@ Each family's photos and videos live in its own account on an [Immich](https://i
 
 > **Upgrading from Milestone 1:** photos uploaded before Immich was added aren't carried over (the milestone ran on test data). Their files stay in the `storage` folder under `families/<id>/…/photos` and `families/<id>/loose/`; delete those folders once you no longer need them.
 
+## Map data
+
+Werejugo ships its own lists of places to pick from, loaded into the database at start-up (only when they change):
+
+- **Ports:** about 15,000. They come from the World Port Index (NGA Pub. 150, public domain; via [tayljordan/ports](https://github.com/tayljordan/ports), MIT), UN/LOCODE ports (UNECE) and [searoute-ts](https://github.com/mayurrawte/searoute-ts)'s port list, merged with Werejugo's own list of cruise ports. Ports seen on CruiseMapper sailings (private islands and the like) are added as they're found.
+- **Airports:** every airport with an IATA code (about 9,000), from [OurAirports](https://ourairports.com/data/) (public domain).
+
+`cd backend && npx tsx scripts/build-reference-data.ts` rebuilds both files (`backend/src/data/`) from their pinned sources.
+
 ## Modules
 
 Map · People · Photos · Documents · Planning · Packing — all views over one shared core (Person, Visit, Trip, Media, Document) connected by a universal links table. A global search (Ctrl/Cmd-K) jumps to anything.

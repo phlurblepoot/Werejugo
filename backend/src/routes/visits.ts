@@ -31,6 +31,8 @@ const visitSchema = z.object({
   geometry: geometrySchema.optional(),
   waypoints: z.array(waypointSchema).max(500).optional(),
 });
+// Create only: the editor's key for this new place, so a retry returns it rather than making another.
+const createSchema = visitSchema.extend({ clientKey: z.string().uuid().optional() });
 
 const DATE_ORDER = "The end date can't be before the start date";
 
@@ -124,28 +126,34 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/visits", async (req) => loadVisits(req.user.familyId));
 
   app.post("/api/visits", async (req, reply) => {
-    const b = visitSchema.parse(req.body);
+    const b = createSchema.parse(req.body);
     const scope = scopeOf(req);
     if (endsBeforeStart(b.occurredOn, b.occurredEnd)) throw badRequest(DATE_ORDER);
     await assertRefs(scope, { trip: b.tripId, theme: b.themeId });
-    const id = await tx(async (client) => {
+    const created = await tx(async (client) => {
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
       const res = await client.query<{ id: string }>(
-        `INSERT INTO visits (family_id, trip_id, kind, title, notes, theme_id, color, icon, occurred_on, occurred_end, geom, created_by, properties)
+        `INSERT INTO visits (family_id, trip_id, kind, title, notes, theme_id, color, icon, occurred_on, occurred_end, geom, created_by, properties, client_key)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
            CASE WHEN $11::text IS NULL THEN NULL ELSE ST_SetSRID(ST_GeomFromGeoJSON($11),4326) END,
-           $12, COALESCE($13::jsonb,'{}'::jsonb))
+           $12, COALESCE($13::jsonb,'{}'::jsonb), $14)
+         ON CONFLICT (family_id, client_key) WHERE client_key IS NOT NULL DO NOTHING
          RETURNING id`,
         [req.user.familyId, b.tripId ?? null, b.kind, b.title, b.notes ?? "", b.themeId ?? null,
          b.color ?? null, b.icon ?? null, b.occurredOn ?? null, b.occurredEnd ?? null, geomJson,
-         req.user.id, b.properties ? JSON.stringify(b.properties) : null],
+         req.user.id, b.properties ? JSON.stringify(b.properties) : null, b.clientKey ?? null],
       );
+      if (!res.rows[0]) return null; // this key's place already exists
       const vid = res.rows[0].id;
       if (b.waypoints?.length) await insertWaypoints(client, vid, b.waypoints);
       await recordActivity({ tripId: b.tripId, familyId: scope.familyId, userId: scope.userId, kind: "visit.added", targetType: "visit", targetId: vid, summary: b.title }, client);
       return vid;
     });
-    return reply.code(201).send(await loadVisit(req.user.familyId, id));
+    if (created) return reply.code(201).send(await loadVisit(req.user.familyId, created));
+    const existing = await query<{ id: string }>(
+      "SELECT id FROM visits WHERE family_id = $1 AND client_key = $2", [req.user.familyId, b.clientKey],
+    );
+    return reply.code(200).send(await loadVisit(req.user.familyId, existing.rows[0].id));
   });
 
   app.get("/api/visits/:id", async (req) => {
