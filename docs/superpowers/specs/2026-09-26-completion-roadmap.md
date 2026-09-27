@@ -13,8 +13,8 @@
 |---|---|
 | **Current milestone** | Milestone 3 — Finish every module (on the new design) |
 | **Current phase** | 3.1 |
-| **Next step** | Milestone 2 review: the owner installs Immich ([guide](../../immich-on-unraid.md)), sets `ENCRYPTION_KEY`, tests the preview image `claude-cool-hopper-pku4ne` (it migrates the Milestone 1 database in place), merges PR #2, and deletes the old branch `claude/confident-ramanujan-xDIFr` (the last 1.1 item). Then, with the go-ahead, plan Phase 3.1. |
-| **Blocked on** | The owner's Milestone 2 review |
+| **Next step** | Write the Phase 3.1 plan (Map & routes, including past cruises), then build it. The owner still deletes `claude/confident-ramanujan-xDIFr` on GitHub (the last 1.1 item). |
+| **Blocked on** | Nothing |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
 
@@ -99,6 +99,7 @@ Health: backend typecheck clean, **102/102** tests pass; frontend typecheck clea
 | Immich accounts | Each family gets an **account on the owner's Immich server** (not yet installed) |
 | Immich features | **Faces → people, trip ↔ Immich album sync, smart search, auto-suggest trip photos, location data to suggest new trips/visited places** |
 | Photo uploads (2026-09-27) | **Uploaded through Werejugo.** Werejugo also sees everything in the family's Immich account, including photos added in Immich directly, and uses the people, places and dates in them to suggest trips, places and people, for existing items and new ones. Choosing photos for any item **browses the whole Immich library** |
+| Past cruises (2026-09-27) | CruiseMapper lists only upcoming sailings, so a past cruise is built from: a listed sailing **matched by itinerary** (the same ports in order, on the ship or its sister ships) with its dates shifted; else **ports with per-day dates and legs routed along shipping lanes**; and **cruises proposed from the family's photos** (ports and trail from where the photos were taken). Not chosen: importing a recorded GPS track as a cruise's path, and paid ship-track history (AIS) |
 | Immich hardware (2026-09-27) | **NVIDIA RTX 5070**: the install guide uses CUDA for face recognition and NVENC for video (was §7 Q8) |
 | Albums | **Smart albums** (saved filters) |
 | Notifications | **Phone push** (web push) |
@@ -329,6 +330,8 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 - [ ] Editor fixes: photo upload no longer closes the editor; no duplicate visit on retry; pick-on-map can be cancelled; one click opens one detail view (not popup + modal).
 - [ ] **Cruises (essential):** cache CruiseMapper responses and **store the fetched route/ports/ship details on the visit** so they're never re-fetched; clear messages when blocked, with retry; honor `CRUISE_LOOKUP_ENABLED` everywhere; remove or admin-gate the diagnose endpoint; a full world ports list (NGA World Port Index) for manual entry; **sea-routing fallback** (e.g. `searoute-js`) so port-to-port legs follow water instead of crossing land when no sailed track exists; keep "reuse itinerary" for past cruises.
+- [ ] **Past cruises:** find a listed sailing by itinerary rather than date (the same ports in the same order, on the ship or its sister ships on the line) and shift it to the user's dates; when nothing matches, ports with a day each and legs routed along shipping lanes. (added 2026-09-27)
+- [ ] **Cruises from photos:** propose a cruise's ports and trail from the family's geotagged photos (days near a port become port calls, photos at sea shape the trail), and suggest cruises in "Trips in your photos". (added 2026-09-27)
 - [ ] **Flights:** bundle the OurAirports dataset (~9k airports with IATA codes); flight-number lookup via AeroDataBox with multi-leg support and date validation; flight date fills the visit date.
 - [ ] **Geocoding:** Photon for as-you-type place search (public server by default, self-hostable), with result caching.
 - [ ] **Road trips:** route drives along roads (OSRM or OpenRouteService), store the geometry and distance at save time, re-route when stops change.
@@ -497,6 +500,10 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Decided** — Past cruises (§2): matched by itinerary on CruiseMapper, else ports with sea-routed legs, plus cruises proposed from photos. The owner found that a cruise more than a few weeks in the past can't be looked up: CruiseMapper lists only upcoming sailings, and "reuse this itinerary" only helps when a similar sailing is listed. Of the options offered, the owner chose these three; importing a GPS track as a cruise's path and paid ship-track history were not chosen.
+- **Changed** — Phase 3.1 gains two items: past cruises (itinerary matching, sea-routed ports) and cruises from photos. Owner's decision above.
+- **Note** — Milestone 3 started with the owner's go-ahead. The owner installed Immich with StaXX (a compose-file plugin for Unraid) using the guide's stack with the values written in, connected it, and tested some of Milestone 2 ("they worked good"); the rest they'll test as they go. The session branch restarts from `main`.
+- **Done** — Milestone 2 Photos on Immich merged into `main` (PR #2).
 - **Note** — CI: the Immich contract job retries pulling Immich's images (up to 4 times, with a pause). One run failed before any test ran because the container registry rate-limited the pull (`toomanyrequests`).
 - **Note** — Milestone 2 is built and ready for the owner's review (PR #2). Exit criteria, checked:
   - **Each family's photos live in its Immich account but look native in Werejugo:**
