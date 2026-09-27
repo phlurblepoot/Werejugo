@@ -350,7 +350,7 @@ export interface ActivityEntry {
 }
 
 /** A suggestion from photos (lib/suggest.ts on the server); the sentence is written here. */
-export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip";
+export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip" | "new-cruise";
 export interface Suggestion {
   key: string;
   kind: SuggestionKind;
@@ -367,6 +367,8 @@ export interface Suggestion {
   endDate?: string;
   /** A new trip's suggested name. */
   name?: string;
+  /** A cruise found in photos: its ports, in order. */
+  stops?: string[];
 }
 export interface TripAlbum { name: string; assetCount: number; syncedAt: string | null; error: string | null }
 export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
@@ -1032,6 +1034,10 @@ export const api = {
     request<Array<{ name: string; url: string }>>(
       `/api/lookup/cruise/ships?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line ?? "")}`,
     ),
+  /** A cruise from my photos between two days: its ports, a trail on water, and the photos used (422 with why when there's too little to go on). */
+  cruiseFromPhotos: (from: string, to: string) =>
+    request<{ ports: Waypoint[]; path: number[][]; distanceM: number; photoIds: string[]; seaPhotos: number }>(
+      "/api/cruises/from-photos", { method: "POST", body: body({ from, to }) }),
   /** A past cruise: the same itinerary on another sailing of the ship or its sister ships. */
   matchCruise: (data: { ship?: string; shipUrl?: string; line?: string; ports?: Array<{ name?: string; lng: number; lat: number }>; departurePort?: string; nights?: number; date: string }) =>
     request<{ matches: ItineraryMatch[]; warnings: string[] }>("/api/lookup/cruise/match", { method: "POST", body: body(data) }),

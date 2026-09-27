@@ -160,6 +160,27 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
     }
   }
 
+  /** A past cruise from my photos of its days: the ports and a trail on water. */
+  async function buildFromPhotos() {
+    if (!draft.occurredOn) { setWarnings(["Set the day you sailed (and came back) first."]); return; }
+    setBusy(true);
+    setProblem(null);
+    try {
+      const r = await api.cruiseFromPhotos(draft.occurredOn, draft.occurredEnd || draft.occurredOn);
+      set({
+        stops: r.ports.map((p, i) => ({ ...p, seq: i })),
+        routePath: r.path.length >= 2 ? r.path : null,
+        route: { source: "photos", distanceM: r.distanceM },
+      });
+      setWarnings([`Built from ${r.photoIds.length} photo${r.photoIds.length === 1 ? "" : "s"} (${r.seaPhotos} at sea). Check the ports: each is the one nearest where you took photos that day.`]);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      setProblem(status === 422 ? { message: e instanceof Error ? e.message : "Not enough photos." } : { message: e instanceof Error ? e.message : "Couldn't build it.", retry: () => void buildFromPhotos() });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Use a matched sailing's ports and track, moved to this cruise's dates. */
   function applyMatch(m: ItineraryMatch) {
     const offsetMs = m.shiftDays * DAY_MS;
@@ -199,7 +220,7 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
 
   return {
     busy, result, lineConfirmed, shipConfirmed, reuse, lookupImage, warnings, problem, matches, pinBusy,
-    findSameItinerary, applyMatch,
+    findSameItinerary, applyMatch, buildFromPhotos,
     setReuse, onLineText, onLinePick, onShipText, onShipPick, find, pickSailing, addPort, useImageAsPin,
   };
 }

@@ -4,6 +4,8 @@ import { recordActivity } from "./activity.js";
 import { notFound, badRequest } from "./errors.js";
 import { createLink } from "./links.js";
 import { signMediaUrl } from "./media/urls.js";
+import { callWaypoints, planCruise, portsNear, type CruisePlan } from "./cruiseFromPhotos.js";
+import { seaPath } from "../services/seaRoute.js";
 
 /**
  * Suggestions from photos: what the dates, Immich's place names and the faces
@@ -15,9 +17,11 @@ import { signMediaUrl } from "./media/urls.js";
  *   trip-person:<trip>:<person>     someone in my photos of the trip, not linked to it
  *   visit-photos:<visit>            my photos taken there and then, not linked to it
  *   new-trip:<from>:<to>:<lat>,<lng> photos away from home, in no trip: a trip that doesn't exist yet
+ *   new-cruise:<from>:<to>:<lat>,<lng> the same, when some photos were taken at sea and the days
+ *                                   ashore were in ports: a trip and its cruise (lib/cruiseFromPhotos.ts)
  */
 
-export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip";
+export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip" | "new-cruise";
 
 export interface Suggestion {
   key: string;
@@ -35,8 +39,12 @@ export interface Suggestion {
   endDate?: string;
   /** A new trip's suggested name. */
   name?: string;
+  /** A cruise found in photos: its ports, in order. */
+  stops?: string[];
   /** The photos it's about (not sent to the browser). */
   mediaIds: string[];
+  /** A cruise found in photos: its calls and trail (not sent to the browser). */
+  plan?: CruisePlan;
 }
 
 /** Photos near one of a trip's places count as the trip's (when it has places). */
@@ -283,36 +291,52 @@ export async function forLibrary(scope: Scope): Promise<Suggestion[]> {
   const unplaced = (await query<{ id: string; t: Date }>(
     `SELECT id, taken_at AS t FROM media WHERE family_id = $1 AND trip_id IS NULL AND hidden_at IS NULL
         AND taken_at IS NOT NULL AND geom IS NULL ORDER BY taken_at`, [fam])).rows.map((r) => ({ id: r.id, t: new Date(r.t).getTime() }));
-  const dismissed = await dismissedKeys(fam, "new-trip:");
+  const dismissed = new Set([...await dismissedKeys(fam, "new-trip:"), ...await dismissedKeys(fam, "new-cruise:")]);
 
-  return kept
-    .map((run): Suggestion => {
-      const from = day(run[0].t);
-      const to = day(run[run.length - 1].t);
-      const lat = run.reduce((a, p) => a + p.lat, 0) / run.length;
-      const lng = run.reduce((a, p) => a + p.lng, 0) / run.length;
-      const extra = unplaced.filter((u) => u.t >= run[0].t && u.t <= run[run.length - 1].t).map((u) => u.id);
-      const ids = [...run.map((p) => p.id), ...extra];
+  const out: Suggestion[] = [];
+  for (const run of kept) {
+    const from = day(run[0].t);
+    const to = day(run[run.length - 1].t);
+    const lat = run.reduce((a, p) => a + p.lat, 0) / run.length;
+    const lng = run.reduce((a, p) => a + p.lng, 0) / run.length;
+    const extra = unplaced.filter((u) => u.t >= run[0].t && u.t <= run[run.length - 1].t).map((u) => u.id);
+    const ids = [...run.map((p) => p.id), ...extra];
+    const where = `${from}:${to}:${lat.toFixed(1)},${lng.toFixed(1)}`;
+    const base = { count: ids.length, thumbUrls: thumbs(run.map((p) => p.id)), lat, lng, startDate: from, endDate: to, mediaIds: ids };
+    const plan = await cruiseIn(run);
+    if (plan) {
+      out.push({
+        ...base, key: `new-cruise:${where}`, kind: "new-cruise", label: plan.calls.map((c) => c.label).join(" → "),
+        stops: plan.calls.map((c) => c.label), name: tripName(`Cruise from ${plan.calls[0].label}`, from, to), plan,
+      });
+    } else {
       const label = placeLabel(run);
-      return {
-        key: `new-trip:${from}:${to}:${lat.toFixed(1)},${lng.toFixed(1)}`, kind: "new-trip", count: ids.length,
-        thumbUrls: thumbs(run.map((p) => p.id)), label, lat, lng, startDate: from, endDate: to, name: tripName(label, from, to), mediaIds: ids,
-      };
-    })
-    .filter((s) => !dismissed.has(s.key))
-    .reverse()
-    .slice(0, 20);
+      out.push({ ...base, key: `new-trip:${where}`, kind: "new-trip", label, name: tripName(label, from, to) });
+    }
+  }
+  return out.filter((s) => !dismissed.has(s.key)).reverse().slice(0, 20);
+}
+
+/**
+ * A run of photos that's a cruise: some taken at sea (a location, but no place
+ * name from Immich) on two days or more, and at least two port calls.
+ */
+async function cruiseIn(run: Pt[]): Promise<CruisePlan | null> {
+  const atSea = run.filter((p) => !p.country && !p.city);
+  if (atSea.length < 3 || new Set(atSea.map((p) => day(p.t))).size < 2 || !run.some((p) => p.country)) return null;
+  const plan = planCruise(run.map((p) => ({ id: p.id, t: p.t, lat: p.lat, lng: p.lng, country: p.country })), await portsNear(run));
+  return plan && plan.calls.length >= 2 ? plan : null;
 }
 
 // ---- Applying and dismissing ----
 
-const KEY = /^(trip-photos|trip-place|trip-person|visit-photos|new-trip):[-0-9a-f:.,]+$/;
+const KEY = /^(trip-photos|trip-place|trip-person|visit-photos|new-trip|new-cruise):[-0-9a-f:.,]+$/;
 
 /** The suggestion with this key as it stands now (checking access), or a 404. */
 export async function findSuggestion(scope: Scope, key: string): Promise<Suggestion> {
   if (!KEY.test(key)) throw badRequest("Unknown suggestion");
   const [kind, target] = key.split(":");
-  const list = kind === "new-trip" ? await forLibrary(scope)
+  const list = kind === "new-trip" || kind === "new-cruise" ? await forLibrary(scope)
     : kind === "visit-photos" ? await forVisit(scope, target)
     : kind === "trip-photos" ? await tripPhotosFor(scope, target)
     : kind === "trip-place" ? (await loadReadable("trip", target, scope), await tripPlaces(scope, target))
@@ -379,6 +403,35 @@ export async function applySuggestion(scope: Scope, key: string, opts: { name?: 
         return id;
       });
       return { tripId, attached: s.mediaIds.length };
+    }
+    case "new-cruise": {
+      const plan = s.plan!;
+      const name = opts.name?.trim() || s.name!;
+      const route = await seaPath(plan.sequence);
+      const title = plan.calls.length > 5
+        ? [...plan.calls.slice(0, 4).map((c) => c.label), "…", plan.calls[plan.calls.length - 1].label].join(" → ")
+        : plan.calls.map((c) => c.label).join(" → ");
+      return tx(async (client) => {
+        const tripId = (await client.query<{ id: string }>(
+          `INSERT INTO trips (family_id, name, start_date, end_date, status, created_by) VALUES ($1, $2, $3, $4, 'done', $5) RETURNING id`,
+          [fam, name, s.startDate, s.endDate, scope.userId])).rows[0].id;
+        const visitId = (await client.query<{ id: string }>(
+          `INSERT INTO visits (family_id, trip_id, kind, title, occurred_on, occurred_end, geom, properties, created_by)
+           VALUES ($1, $2, 'cruise', $3, $4, $5, ST_SetSRID(ST_GeomFromGeoJSON($6), 4326), $7, $8) RETURNING id`,
+          [fam, tripId, title, s.startDate, s.endDate, JSON.stringify({ type: "LineString", coordinates: route.path }),
+            { route: { source: "photos", distanceM: route.distanceM } }, scope.userId])).rows[0].id;
+        const waypoints = callWaypoints(plan.calls);
+        for (let i = 0; i < waypoints.length; i++) {
+          const w = waypoints[i];
+          await client.query(
+            `INSERT INTO visit_waypoints (visit_id, label, kind, seq, geom, arrive_at, depart_at)
+             VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, $8)`,
+            [visitId, w.label, w.kind, i, w.lng, w.lat, w.arriveAt, w.departAt]);
+        }
+        await client.query("UPDATE media SET trip_id = $1 WHERE id = ANY($2::uuid[]) AND family_id = $3 AND trip_id IS NULL", [tripId, s.mediaIds, fam]);
+        await recordActivity({ tripId, familyId: fam, userId: scope.userId, kind: "visit.added", targetType: "visit", targetId: visitId, summary: title }, client);
+        return { tripId, visitId, attached: s.mediaIds.length };
+      });
     }
   }
 }

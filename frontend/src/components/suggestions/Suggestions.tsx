@@ -31,6 +31,15 @@ export function describe(s: Suggestion): { title: string; detail: string; action
         detail: `${formatDateRange(s.startDate ?? null, s.endDate ?? null)} · ${photos(s.count)} in no trip`,
         action: "Create trip", nameField: "Trip name",
       };
+    case "new-cruise": {
+      const stops = s.stops ?? [];
+      const route = stops.length > 5 ? [...stops.slice(0, 4), "…", stops[stops.length - 1]] : stops;
+      return {
+        title: `Looks like a cruise: ${route.join(" → ")}`,
+        detail: `${formatDateRange(s.startDate ?? null, s.endDate ?? null)} · ${photos(s.count)}, some at sea`,
+        action: "Create trip and cruise", nameField: "Trip name",
+      };
+    }
   }
 }
 
@@ -48,7 +57,8 @@ export function SuggestionCard({ s, onReview, onApplied }: {
   const qc = useQueryClient();
   const { toast } = useToast();
   const text = describe(s);
-  const [name, setName] = useState(s.kind === "new-trip" ? s.name ?? "" : s.label ?? "");
+  const isNew = s.kind === "new-trip" || s.kind === "new-cruise";
+  const [name, setName] = useState(isNew ? s.name ?? "" : s.label ?? "");
   const [busy, setBusy] = useState(false);
 
   async function apply() {
@@ -58,6 +68,7 @@ export function SuggestionCard({ s, onReview, onApplied }: {
       invalidate(qc);
       toast(
         s.kind === "new-trip" ? `Created “${name}” with ${photos(r.attached ?? 0)}`
+          : s.kind === "new-cruise" ? `Created “${name}” and its cruise, with ${photos(r.attached ?? 0)}`
           : s.kind === "trip-place" ? `Added “${name || "the place"}” with ${photos(r.attached ?? 0)}`
           : s.kind === "trip-person" ? `${s.person?.displayName} is on the trip`
           : `Added ${photos(r.attached ?? 0)}`,
@@ -96,7 +107,7 @@ export function SuggestionCard({ s, onReview, onApplied }: {
           <input className="sugg-name" aria-label={text.nameField} value={name} placeholder={text.nameField} onChange={(e) => setName(e.target.value)} />
         )}
         <div className="sugg-actions">
-          <Button size="sm" variant="primary" disabled={busy || (s.kind === "new-trip" && !name.trim())} onClick={apply}>{text.action}</Button>
+          <Button size="sm" variant="primary" disabled={busy || (isNew && !name.trim())} onClick={apply}>{text.action}</Button>
           {onReview && <Button size="sm" variant="ghost" onClick={onReview}>Review</Button>}
         </div>
       </div>

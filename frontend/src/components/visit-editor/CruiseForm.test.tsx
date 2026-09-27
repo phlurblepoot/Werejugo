@@ -12,6 +12,7 @@ const h = vi.hoisted(() => {
       findCruise: vi.fn(),
       getSailingDetail: vi.fn(),
       matchCruise: vi.fn(),
+      cruiseFromPhotos: vi.fn(),
     },
   };
 });
@@ -128,4 +129,21 @@ describe("a past cruise", () => {
     expect(added.stops[1]).toMatchObject({ label: "Nassau, Bahamas", arriveAt: "2025-03-17T00:00:00.000Z" });
     expect(added.routePath).toBeNull();
   });
+});
+
+test("a past cruise from my photos of its days", async () => {
+  h.api.cruiseFromPhotos.mockResolvedValue({
+    ports: [
+      { label: "Miami", kind: "origin", lng: -80.18, lat: 25.77, arriveAt: null, departAt: "2023-03-03T00:00:00.000Z" },
+      { label: "Cozumel", kind: "destination", lng: -86.95, lat: 20.51, arriveAt: "2023-03-05T00:00:00.000Z", departAt: null },
+    ],
+    path: [[-80.18, 25.77], [-84, 23], [-86.95, 20.51]], distanceM: 900_000, photoIds: ["a", "b", "c"], seaPhotos: 1,
+  } as never);
+  const set = vi.fn();
+  render(<CruiseForm draft={draft({ occurredOn: "2023-03-03", occurredEnd: "2023-03-09" })} set={set} />);
+  await userEvent.click(screen.getByRole("button", { name: "Build from my photos" }));
+  expect(h.api.cruiseFromPhotos).toHaveBeenCalledWith("2023-03-03", "2023-03-09");
+  const built = set.mock.calls.map((c) => c[0]).find((p) => p.stops);
+  expect(built).toMatchObject({ routePath: [[-80.18, 25.77], [-84, 23], [-86.95, 20.51]], route: { source: "photos", distanceM: 900_000 } });
+  expect(await screen.findByText(/Built from 3 photos \(1 at sea\)/)).toBeInTheDocument();
 });

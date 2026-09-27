@@ -27,6 +27,10 @@ test("each kind reads as a sentence", () => {
   const trip = say(sug({ kind: "new-trip", count: 143, label: "Lisbon", startDate: "2019-03-03", endDate: "2019-03-09" }));
   expect(trip.title).toBe("Looks like you were in Lisbon");
   expect(trip.detail).toMatch(/143 photos in no trip$/);
+  const cruise = say(sug({ kind: "new-cruise", count: 86, stops: ["Miami", "Cozumel", "Roatán", "Costa Maya", "Belize City", "Miami"], startDate: "2019-03-03", endDate: "2019-03-10" }));
+  expect(cruise.title).toBe("Looks like a cruise: Miami → Cozumel → Roatán → Costa Maya → … → Miami");
+  expect(cruise.detail).toMatch(/86 photos, some at sea$/);
+  expect(cruise.action).toBe("Create trip and cruise");
 });
 
 test("a trip's suggestions: add photos, review them in the picker, or dismiss", async () => {

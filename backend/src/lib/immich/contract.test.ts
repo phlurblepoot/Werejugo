@@ -300,6 +300,21 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(exif?.country).toBe("France");
   }, 120_000);
 
+  test("a photo taken at sea gets no place name: no city, no country (how cruises are found in photos)", async () => {
+    const fam = await newFamily("Contract At Sea");
+    const shot = await jpeg({ date: "2024-05-02T10:00:00", lat: 30.0, lng: -45.0 }); // the middle of the Atlantic
+    const up = await immich.uploadAsset(fam, new Blob([shot], { type: "image/jpeg" }), { filename: "sea.jpg", fileCreatedAt: "2024-05-02T10:00:00.000Z", fileModifiedAt: "2024-05-02T10:00:00.000Z" });
+    // The place is looked up with the rest of the file's details: once the location is read, it's done.
+    let exif: { city?: string | null; country?: string | null; latitude?: number | null } | undefined;
+    for (let i = 0; i < 90 && exif?.latitude == null; i++) {
+      exif = (await immich.getAsset(fam, up.id)).exifInfo ?? undefined;
+      if (exif?.latitude == null) await new Promise((r) => setTimeout(r, 1000));
+    }
+    expect(exif?.latitude).toBeCloseTo(30, 3);
+    expect(exif?.city ?? null).toBeNull();
+    expect(exif?.country ?? null).toBeNull();
+  }, 120_000);
+
   test("smart search without Immich's machine learning is refused, and says why", async () => {
     const fam = await newFamily("Contract Smart");
     const err = await errorOf(immich.smartSearch(fam, { query: "beach at sunset", size: 10, page: 1, type: "IMAGE" }));

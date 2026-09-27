@@ -73,6 +73,7 @@ export function CruiseForm({ draft, set }: Props) {
                 Find the same itinerary
               </button>
               <button type="button" onClick={() => document.getElementById(PORT_INPUT)?.focus()}>Build from ports</button>
+              <button type="button" onClick={() => void c.buildFromPhotos()} disabled={c.busy}>Build from my photos</button>
             </div>
             <div className="sub" style={{ marginTop: 4 }}>
               {draft.stops.length >= 2
