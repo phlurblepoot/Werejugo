@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
 | **Current phase** | 2.6 |
-| **Next step** | Plan Phase 2.6 (trip ↔ Immich album sync): one Immich album per trip per member family, Werejugo's changes written at once, Immich's picked up by the sync and **Refresh from Immich** |
+| **Next step** | Build Phase 2.6 ([plan](../plans/2026-09-27-phase-2.6-trip-albums.md)): an Immich album for each trip in each family's account, kept the same both ways (a three-way merge against the last pass; database triggers mark changes) |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -300,7 +300,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.6 Trip ↔ Immich album sync — S
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.6](../plans/2026-09-27-phase-2.6-trip-albums.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] One Immich album per trip per member family; two-way sync (Werejugo writes immediately; Immich-side changes picked up by polling plus an on-demand "refresh").
 
@@ -495,6 +495,8 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-27
+
+- **Note** — Planning 2.6: an album deleted in Immich is made again rather than taking its photos out of the trip, and album names follow the trip's. Each family's album holds its own photos of a shared trip. Other families' photos stay visible only in Werejugo, as §3.3 decided.
 
 - **Done** — Phase 2.5 Faces → people (PR #2).
   - **Faces:** after every library sync, each family's Immich people come into Werejugo with their photo counts. Renames, hiding and removal in Immich follow.
