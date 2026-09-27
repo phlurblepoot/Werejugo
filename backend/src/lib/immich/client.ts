@@ -1,4 +1,9 @@
 import * as sdk from "@immich/sdk";
+import { randomBytes } from "node:crypto";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { ImmichVersion } from "./version.js";
 
 export type { AssetResponseDto as ImmichAsset } from "@immich/sdk";
@@ -59,27 +64,29 @@ function opts(c: ImmichConn): RequestOpts {
   return { baseUrl: `${c.url}/api`, headers, signal: AbortSignal.timeout(TIMEOUT_MS) };
 }
 
-function explain(op: string, url: string, e: unknown): ImmichError {
-  if (e instanceof ImmichError) return e;
-  if (sdk.isHttpError(e)) {
-    const status = e.status;
-    // Immich sends a string, or a list of strings for validation errors.
-    const raw: unknown = e.data?.message;
-    const detail = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.join("; ") : "";
-    if (status === 401) return new ImmichError("unauthorized", "Immich rejected the API key (it may have been deleted or mistyped)", status, op);
-    if (status === 403) {
-      return new ImmichError("forbidden", detail.startsWith("Missing required permission")
-        ? `The Immich API key is missing a permission (${detail.replace("Missing required permission: ", "")}). Create a key with all permissions.`
-        : "The Immich API key isn't allowed to do this (it must belong to an Immich admin)", status, op);
-    }
-    return new ImmichError(status >= 500 ? "unexpected" : "rejected", detail || `Immich answered ${status}`, status, op);
+/** An error answer from Immich, as an ImmichError. */
+function httpFailure(op: string, status: number, data: unknown): ImmichError {
+  // Immich sends a string, or a list of strings for validation errors.
+  const raw: unknown = (data as { message?: unknown } | null)?.message;
+  const detail = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.join("; ") : "";
+  if (status === 401) return new ImmichError("unauthorized", "Immich rejected the API key (it may have been deleted or mistyped)", status, op);
+  if (status === 403) {
+    return new ImmichError("forbidden", detail.startsWith("Missing required permission")
+      ? `The Immich API key is missing a permission (${detail.replace("Missing required permission: ", "")}). Create a key with all permissions.`
+      : "The Immich API key isn't allowed to do this (it must belong to an Immich admin)", status, op);
   }
+  return new ImmichError(status >= 500 ? "unexpected" : "rejected", detail || `Immich answered ${status}`, status, op);
+}
+
+function explain(op: string, url: string, e: unknown, timeoutMs = TIMEOUT_MS): ImmichError {
+  if (e instanceof ImmichError) return e;
+  if (sdk.isHttpError(e)) return httpFailure(op, e.status, e.data);
   if (sdk.isMalformedResponseError(e)) {
     return new ImmichError("unexpected", `${url} answered, but not like Immich does. Check the address.`, e.status, op);
   }
   const name = (e as { name?: string })?.name;
   if (name === "TimeoutError" || name === "AbortError") {
-    return new ImmichError("unreachable", `Immich at ${url} didn't answer within ${TIMEOUT_MS / 1000} seconds`, null, op);
+    return new ImmichError("unreachable", `Immich at ${url} didn't answer within ${Math.round(timeoutMs / 1000)} seconds`, null, op);
   }
   return new ImmichError("unreachable", `Werejugo can't reach Immich at ${url}. Check the address and that Immich is running.`, null, op);
 }
@@ -117,11 +124,8 @@ export const immich = {
    * name, so the bytes go as a named File. A file-backed Blob
    * (`fs.openAsBlob`) is streamed, never read into memory.
    */
-  uploadAsset: (c: ImmichConn, file: Blob, meta: { filename: string; fileCreatedAt: string; fileModifiedAt: string }, opts: { timeoutMs?: number } = {}) => {
-    const named = file instanceof File && file.name ? file : new File([file], meta.filename, { type: file.type });
-    const timeout = opts.timeoutMs ?? uploadTimeoutMs(file.size);
-    return call("uploadAsset", c, (o) => sdk.uploadAsset({ assetMediaCreateDto: { assetData: named, ...meta } }, { ...o, signal: AbortSignal.timeout(timeout) }));
-  },
+  uploadAsset: (c: ImmichConn, file: Blob, meta: UploadMeta, opts: { timeoutMs?: number } = {}) =>
+    streamUpload(c, file, meta, opts.timeoutMs ?? uploadTimeoutMs(file.size)),
   getAsset: (c: ImmichConn, id: string) => call("getAsset", c, (o) => sdk.getAssetInfo({ id }, o)),
   /** Immich 3.2's structured search: `filter`, cursor paging, optional EXIF in the results. */
   searchAssets: (c: ImmichConn, q: { filter?: sdk.SearchFilter; cursor?: string; size?: number; withExif?: boolean }) =>
@@ -136,6 +140,59 @@ export const immich = {
   setDescription: (c: ImmichConn, id: string, description: string) =>
     call("setDescription", c, (o) => sdk.updateAsset({ id, updateAssetDto: { description } }, o)),
 };
+
+interface UploadMeta { filename: string; fileCreatedAt: string; fileModifiedAt: string }
+
+/**
+ * POST /api/assets as the SDK's uploadAsset would send it, but streamed with
+ * node:http: fetch holds a whole request body in memory, which a 4 GB video
+ * can't afford. The file part carries the file's own name, which Immich uses
+ * to decide whether it can take the file.
+ */
+async function streamUpload(c: ImmichConn, file: Blob, meta: UploadMeta, timeoutMs: number): Promise<sdk.AssetMediaResponseDto> {
+  const op = "uploadAsset";
+  const boundary = `----werejugo${randomBytes(12).toString("hex")}`;
+  const name = meta.filename.replace(/["\\\r\n]/g, "_");
+  const field = (k: string, v: string) => `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`;
+  const body = new Blob([
+    field("fileCreatedAt", meta.fileCreatedAt) + field("fileModifiedAt", meta.fileModifiedAt) + field("filename", name)
+      + `--${boundary}\r\nContent-Disposition: form-data; name="assetData"; filename="${name}"\r\nContent-Type: ${file.type || "application/octet-stream"}\r\n\r\n`,
+    file,
+    `\r\n--${boundary}--\r\n`,
+  ]);
+  const url = new URL(`${c.url}/api/assets`);
+  const headers: Record<string, string> = {
+    "content-type": `multipart/form-data; boundary=${boundary}`, "content-length": String(body.size), accept: "application/json",
+  };
+  if (c.key) headers["x-api-key"] = c.key;
+  else if (c.token) headers.authorization = `Bearer ${c.token}`;
+
+  try {
+    return await new Promise<sdk.AssetMediaResponseDto>((resolve, reject) => {
+      let answered = false;
+      const req = (url.protocol === "https:" ? httpsRequest : httpRequest)(url, { method: "POST", headers, signal: AbortSignal.timeout(timeoutMs) }, (res) => {
+        answered = true;
+        const chunks: Buffer[] = [];
+        res.on("data", (d: Buffer) => chunks.push(d));
+        res.on("error", reject);
+        res.on("end", () => {
+          const status = res.statusCode ?? 0;
+          let data: unknown = null;
+          try { data = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { /* not JSON */ }
+          const r = data as Partial<sdk.AssetMediaResponseDto> | null;
+          if (status >= 200 && status < 300 && typeof r?.id === "string" && typeof r.status === "string") resolve(r as sdk.AssetMediaResponseDto);
+          else if (status >= 200 && status < 300) reject(new ImmichError("unexpected", `${c.url} answered, but not like Immich does. Check the address.`, status, op));
+          else reject(httpFailure(op, status, data));
+          req.destroy(); // Immich may answer before reading everything (a refused type)
+        });
+      });
+      req.on("error", (e) => { if (!answered) reject(e); });
+      pipeline(Readable.fromWeb(body.stream() as import("node:stream/web").ReadableStream), req).catch((e) => { if (!answered) reject(e); });
+    });
+  } catch (e) {
+    throw explain(op, c.url, e, timeoutMs);
+  }
+}
 
 /** Time to hand a file to Immich over the LAN: 10 minutes, plus a minute per 500 MB. */
 export const uploadTimeoutMs = (bytes: number) => 10 * 60_000 + Math.ceil(bytes / (500 * 1024 * 1024)) * 60_000;

@@ -6,10 +6,9 @@ import { assertRefs, loadEditable, readableWhere, scopeOf } from "../lib/access.
 import { recordActivity } from "../lib/activity.js";
 import { badRequest, HttpError, notFound } from "../lib/errors.js";
 import { uuid, ymd } from "../lib/validate.js";
-import { extractExif } from "../lib/exif.js";
 import { ImmichError, immich } from "../lib/immich/client.js";
 import { familyConnCached } from "../lib/immich/provision.js";
-import { fieldsFromAsset, upsertAsset } from "../lib/media/assets.js";
+import { importToImmich, isMediaFile, NO_IMMICH, type ImportResult } from "../lib/media/import.js";
 import { MEDIA_COLUMNS, mediaDto, type MediaDtoRow } from "../lib/media/dto.js";
 
 /**
@@ -17,8 +16,6 @@ import { MEDIA_COLUMNS, mediaDto, type MediaDtoRow } from "../lib/media/dto.js";
  * a reference (with date, place, size and caption) and serves them at its own
  * signed URLs (routes/media-files.ts).
  */
-
-const NO_IMMICH = "Photos need Immich. Ask the server admin to connect your family (Admin → Immich).";
 
 async function connFor(familyId: string) {
   const conn = await familyConnCached(familyId);
@@ -52,8 +49,6 @@ const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
-const KINDS: Record<string, "image" | "video"> = { image: "image", video: "video" };
-
 export async function mediaRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
@@ -69,36 +64,19 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
       else if (part.fieldname === "caption" && typeof part.value === "string") caption = part.value.slice(0, 500);
     }
     if (!file || file.buf.length === 0) throw badRequest("No file provided");
-    if (!KINDS[file.mime.split("/")[0]] && !/\.(jpe?g|png|heic|heif|webp|gif|tiff?|dng|cr2|cr3|nef|arw|raf|orf|rw2|mp4|mov|m4v|3gp|avi|mkv|webm)$/i.test(file.name)) {
-      throw badRequest("Only photos and videos can be added");
-    }
+    if (!isMediaFile(file.name, file.mime)) throw badRequest("Only photos and videos can be added");
 
-    // Read the date and place now, for suggestions right away; Immich fills in
-    // its own a few seconds later and the library sync picks that up.
-    const exif = await extractExif(file.buf);
-    const when = exif.takenAt ?? new Date().toISOString();
-    let up: { id: string; status: string };
+    let result: ImportResult;
     try {
-      up = await immich.uploadAsset(conn, new Blob([file.buf], { type: file.mime }), { filename: file.name, fileCreatedAt: when, fileModifiedAt: when });
+      result = await importToImmich(conn, {
+        familyId: req.user.familyId, userId: req.user.id, file: new Blob([file.buf], { type: file.mime }),
+        filename: file.name, exifSource: file.buf, caption,
+      });
     } catch (e) {
       return fromImmich(e);
     }
-    const duplicate = up.status === "duplicate";
-    const asset = await immich.getAsset(conn, up.id).catch(() => null);
-    const fields = (asset && fieldsFromAsset(asset)) ?? {
-      kind: file.mime.startsWith("video/") ? "video" as const : "image" as const, originalName: file.name, mime: file.mime,
-      bytes: file.buf.length, durationMs: null, thumbhash: null, takenAt: null, lat: null, lng: null, width: null, height: null,
-      caption: null, updatedAt: null,
-    };
-    const saved = await upsertAsset(req.user.familyId, up.id, fields, {
-      createdBy: duplicate ? null : req.user.id, fallback: { takenAt: exif.takenAt, lat: exif.lat, lng: exif.lng },
-    });
-    if (!saved) throw new HttpError(409, "That photo belongs to another family's Immich account");
-    if (caption && !duplicate) {
-      await immich.setDescription(conn, up.id, caption).catch(fromImmich);
-      await query("UPDATE media SET caption = $2 WHERE id = $1", [saved.id, caption]);
-    }
-    const dto = mediaDto(await loadMedia(req.user.familyId, saved.id));
+    const { mediaId, duplicate } = result;
+    const dto = mediaDto(await loadMedia(req.user.familyId, mediaId));
     return reply.code(duplicate ? 200 : 201).send({ ...dto, duplicate });
   });
 

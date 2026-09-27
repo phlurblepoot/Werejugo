@@ -25,6 +25,8 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   uploadsDir: process.env.UPLOADS_DIR ?? "/app/uploads",
+  /** The largest photo or video one upload may be (unfinished uploads wait in UPLOADS_DIR). */
+  maxUploadBytes: Math.round(Number(process.env.MAX_UPLOAD_GB || 20) * 1024 ** 3),
   storageDir: process.env.STORAGE_DIR ?? "/app/storage",
   aerodataboxKey: process.env.AERODATABOX_RAPIDAPI_KEY ?? "",
   nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",

@@ -7,7 +7,7 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
-  # Allow photo / icon / overlay uploads (backend caps at 25 MB).
+  # Icon / overlay uploads and the older single-request photo upload (backend caps at 25 MB).
   client_max_body_size 30m;
 
   # Security headers for the app itself. `always` so they're sent on errors too.
@@ -66,6 +66,24 @@ server {
     proxy_request_buffering off;
     proxy_read_timeout 3600s;
     proxy_send_timeout 3600s;
+  }
+
+  # Photo and video uploads arrive in 8 MB pieces (the backend takes up to 32 MB
+  # each), streamed straight through so progress is real and nothing is
+  # buffered to disk here.
+  location ^~ /api/media/uploads/ {
+    resolver 127.0.0.11 valid=30s;
+    set $media_upload_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
+    proxy_pass $media_upload_upstream$request_uri;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 40m;
+    proxy_request_buffering off;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
   }
 
   # Reverse-proxy the API. Using a variable + Docker's embedded DNS resolver

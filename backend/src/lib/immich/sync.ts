@@ -100,6 +100,11 @@ async function run(familyId: string, opts: { full?: boolean }): Promise<SyncResu
       for await (const items of allPages(conn, { trashedAt: { gt: since } }, false)) {
         removed += await removeRefs(familyId, items.map((a) => a.id));
       }
+      // Hidden since (Immich pairs a Live Photo's clip with its photo and hides
+      // the clip) or moved to Immich's locked folder: out of Werejugo too.
+      for await (const items of allPages(conn, { visibility: { in: ["hidden", "locked"] }, updatedAt: { gt: since } }, false)) {
+        removed += await removeRefs(familyId, items.map((a) => a.id));
+      }
     }
     await query(
       `UPDATE family_immich SET sync_since = $2, last_sync_at = now(), sync_error = NULL,

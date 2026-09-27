@@ -43,6 +43,7 @@ beforeAll(async () => {
   A.person2 = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person 2') RETURNING id`, [fa]);
   A.personLink = await one("INSERT INTO person_links (person_a, person_b) VALUES ($1, $2) RETURNING id", [A.person, A.person2]);
   await query(`INSERT INTO activity (trip_id, family_id, kind, summary) VALUES ($1, $2, 'visit.added', '${CANARY} activity')`, [A.trip, fa]);
+  A.upload = await one(`INSERT INTO media_uploads (family_id, user_id, filename, size, state, error) VALUES ($1, $2, '${CANARY}.jpg', 100, 'failed', 'x') RETURNING id`, [fa, A.user]);
 
   const fb = b.familyId;
   B.trip = await one("INSERT INTO trips (family_id, name) VALUES ($1, 'B trip') RETURNING id", [fb]);
@@ -80,6 +81,7 @@ async function snapshotA(): Promise<string> {
     person_links: "SELECT l.* FROM person_links l JOIN people p ON p.id = l.person_a WHERE p.family_id = $1",
     activity: "SELECT a.* FROM activity a JOIN trips t ON t.id = a.trip_id WHERE t.family_id = $1",
     family_immich: "SELECT * FROM family_immich WHERE family_id = $1",
+    media_uploads: "SELECT * FROM media_uploads WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -186,6 +188,12 @@ const CASES: Case[] = [
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [B.media], tripId: A.trip })),
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [B.media], visitId: A.visit })),
   c("GET /api/files/*", () => `/api/files/families/${ctx.familyId}/documents/passport-1234abcd.pdf`, 403, undefined, "no signature"),
+  c("POST /api/media/uploads", () => "/api/media/uploads", 400, () => ({ filename: "a.jpg", size: 10, mime: "image/jpeg", linkTo: `visit:${A.visit}` }), "for their place"),
+  c("GET /api/media/uploads", () => "/api/media/uploads", "clean"),
+  c("GET /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}`, 404),
+  c("PUT /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}?offset=0`, 404, () => ({ bytes: "x" })),
+  c("POST /api/media/uploads/:id/retry", () => `/api/media/uploads/${A.upload}/retry`, 404),
+  c("DELETE /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}`, 404),
   c("GET /api/m/:id/:size", () => `/api/m/${A.media}/thumbnail`, 403, undefined, "their photo, no signature"),
   c("GET /api/m/:id/:size", () => `/api/m/${A.media}/original?e=9999999999&s=forged`, 403, undefined, "their photo, forged signature"),
 

@@ -5,6 +5,7 @@ import type pg from "pg";
  * Every application table, in FK-safe INSERT order (parents before children).
  * Reference tables (airports/ports/spatial_ref_sys) and schema_migrations are
  * intentionally excluded — they are recreated by migrations/seed, not restored.
+ * So are media_uploads (files still on their way to Immich; a restore drops them).
  */
 export const BACKUP_TABLES = [
   "families", "users", "themes", "trips", "visits", "media", "people",

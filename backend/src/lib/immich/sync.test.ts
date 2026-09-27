@@ -85,6 +85,22 @@ test("photos in Immich's trash stay out, even though Immich's search includes th
   expect((await refs()).map((x) => x.immich_asset_id)).toEqual([kept.id]);
 });
 
+test("a clip Immich hides after pairing it with its Live Photo (or a photo moved to the locked folder) leaves at the next sync", async () => {
+  const clip = fake.addAsset(immichUserId, { type: "VIDEO", mime: "video/quicktime", originalFileName: "IMG_0001.MOV" });
+  const locked = fake.addAsset(immichUserId);
+  const photo = fake.addAsset(immichUserId, { originalFileName: "IMG_0001.HEIC" });
+  await syncFamily(ctx.familyId, { full: true });
+  await query("UPDATE family_immich SET sync_since = now() - interval '1 second' WHERE family_id = $1", [ctx.familyId]);
+  await later();
+  clip.visibility = "hidden";
+  locked.visibility = "locked";
+  clip.updatedAt = locked.updatedAt = new Date(Date.now() + 1000).toISOString();
+
+  const r = await syncFamily(ctx.familyId);
+  expect(r.removed).toBe(2);
+  expect((await refs()).map((x) => x.immich_asset_id)).toEqual([photo.id]);
+});
+
 test("photos deleted for good in Immich go at the next full sync, but a fresh upload is kept", async () => {
   const a = fake.addAsset(immichUserId);
   await syncFamily(ctx.familyId, { full: true });
