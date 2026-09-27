@@ -1,13 +1,11 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { requireAuth } from "../lib/auth.js";
+import { requireAdmin, requireAuth } from "../lib/auth.js";
 import { lookupFlightByCodes, lookupFlightByNumber } from "../services/flightLookup.js";
 import {
   diagnoseCruise,
   findCruise,
   getSailingDetail,
-  lookupCruiseByPorts,
-  lookupCruiseByShip,
   searchCruiseLines,
   searchCruiseShips,
 } from "../services/cruiseLookup.js";
@@ -16,11 +14,6 @@ import { findPort, searchAirports, searchPorts, searchPlaces } from "../services
 const flightSchema = z.union([
   z.object({ codes: z.array(z.string().min(2).max(5)).min(2) }),
   z.object({ flightNumber: z.string().min(2).max(10), date: z.string() }),
-]);
-
-const cruiseSchema = z.union([
-  z.object({ ports: z.array(z.string().min(1)).min(1) }),
-  z.object({ ship: z.string().min(2) }),
 ]);
 
 export async function lookupRoutes(app: FastifyInstance): Promise<void> {
@@ -32,14 +25,6 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     const b = parsed.data;
     const result =
       "codes" in b ? await lookupFlightByCodes(b.codes) : await lookupFlightByNumber(b.flightNumber, b.date);
-    return result;
-  });
-
-  app.post("/api/lookup/cruise", async (req, reply) => {
-    const parsed = cruiseSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
-    const result = "ports" in b ? await lookupCruiseByPorts(b.ports) : await lookupCruiseByShip(b.ship);
     return result;
   });
 
@@ -55,9 +40,9 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
 
   // Full itinerary for one sailing (ports on their dates + the real sailed route).
   app.post("/api/lookup/cruise/sailing", async (req, reply) => {
-    const parsed = z.object({ id: z.string().regex(/^\d+$/) }).safeParse(req.body);
+    const parsed = z.object({ id: z.string().regex(/^\d+$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "numeric sailing id required" });
-    return getSailingDetail(parsed.data.id);
+    return getSailingDetail(parsed.data.id, parsed.data.date);
   });
 
   // Autocomplete for cruise lines and ships (ships require a cruise line).
@@ -72,7 +57,7 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
 
   // Diagnostic: shows what this server actually receives from CruiseMapper, so the
   // scraper can be tuned to the real HTML. POST { "query": "symphony" } or { "url": "..." }.
-  app.post("/api/lookup/cruise/diagnose", async (req) => {
+  app.post("/api/lookup/cruise/diagnose", { preHandler: requireAdmin }, async (req) => {
     const b = (req.body ?? {}) as { url?: string; query?: string; selector?: string; raw?: boolean; maxLen?: number };
     return diagnoseCruise({ url: b.url, query: b.query, selector: b.selector, raw: b.raw, maxLen: b.maxLen });
   });

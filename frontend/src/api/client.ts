@@ -228,6 +228,21 @@ export interface PathSettings {
   byLine?: Record<string, PathStyle>;
 }
 
+/** A cruise's details from CruiseMapper, kept on the visit (`properties.cruise`) so they're never looked up again. */
+export interface CruiseDetails {
+  line: string | null;
+  ship: string | null;
+  shipUrl: string | null;
+  shipImage: string | null;
+  lineLogo: string | null;
+  sailingId: string | null;
+  sailingTitle: string | null;
+  sailingDate: string | null;
+  /** How the sailing was chosen: its own date, or the same itinerary on another date (then moved by shiftDays). */
+  matchedBy: "date" | "itinerary" | null;
+  shiftDays: number;
+}
+
 /** Where a route's line came from, and how long it is (kept in `properties.route`). */
 export type RouteSource = "cruisemapper" | "sea" | "road" | "great-circle" | "photos" | "straight";
 export interface RouteInfo { source: RouteSource; distanceM?: number | null }
@@ -996,8 +1011,6 @@ export const api = {
   // lookups
   lookupFlight: (data: Record<string, unknown>) =>
     request<LookupResult>("/api/lookup/flight", { method: "POST", body: body(data) }),
-  lookupCruise: (data: Record<string, unknown>) =>
-    request<LookupResult>("/api/lookup/cruise", { method: "POST", body: body(data) }),
   findCruise: (data: { line?: string; ship?: string; shipUrl?: string }) =>
     request<CruiseFindResult>("/api/lookup/cruise/find", { method: "POST", body: body(data) }),
   searchCruiseLines: (q: string) =>
@@ -1006,8 +1019,9 @@ export const api = {
     request<Array<{ name: string; url: string }>>(
       `/api/lookup/cruise/ships?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line ?? "")}`,
     ),
-  getSailingDetail: (id: string) =>
-    request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id }) }),
+  /** One sailing's ports and track; `date` (its first day) dates the port days. */
+  getSailingDetail: (id: string, date?: string | null) =>
+    request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id, date: date ?? null }) }),
   /** A line through the points along roads (503 with the reason when there's none). */
   routeRoad: (points: [number, number][]) =>
     request<RouteLine>("/api/routes/road", { method: "POST", body: body({ points }) }),

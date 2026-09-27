@@ -3,7 +3,8 @@ import { ZodError } from "zod";
 
 /** An error with an HTTP status that is safe to show to the user. */
 export class HttpError extends Error {
-  constructor(public readonly statusCode: number, message: string) {
+  /** `extra` goes in the response beside `error` (such as `blocked: true`). */
+  constructor(public readonly statusCode: number, message: string, public readonly extra?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -37,7 +38,7 @@ export function installErrorHandling(app: FastifyInstance): void {
   });
 
   app.setErrorHandler((err: FastifyError | Error, req, reply) => {
-    if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message });
+    if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message, ...err.extra });
     if (err instanceof ZodError) return reply.code(400).send({ error: err.flatten() });
 
     const pgCode = (err as { code?: unknown }).code;

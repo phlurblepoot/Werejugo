@@ -74,6 +74,13 @@ export function CruiseForm({ draft, set }: Props) {
         )}
       </div>
 
+      {c.problem && (
+        <div className="warnings" role="alert">
+          {c.problem.message}
+          {c.problem.retry && <button type="button" style={{ marginLeft: 8 }} onClick={c.problem.retry}>Try again</button>}
+        </div>
+      )}
+
       {c.warnings.length > 0 && (
         <div className="warnings">{c.warnings.map((w, i) => <div key={i}>• {w}</div>)}</div>
       )}

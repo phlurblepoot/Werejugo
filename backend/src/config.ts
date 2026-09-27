@@ -35,6 +35,8 @@ export const config = {
   routingUrl: (process.env.ROUTING_URL || "https://routing.openstreetmap.de/routed-car").replace(/\/+$/, ""),
   /** How Werejugo introduces itself to the services it asks (Photon, road routing). */
   userAgent: process.env.WEREJUGO_USER_AGENT || "Werejugo (self-hosted family travel map; https://github.com/phlurblepoot/Werejugo)",
+  /** CruiseMapper's address (tests point it at a stand-in). */
+  cruiseMapperUrl: (process.env.CRUISEMAPPER_URL || "https://www.cruisemapper.com").replace(/\/+$/, ""),
   cruiseLookupEnabled: (process.env.CRUISE_LOOKUP_ENABLED ?? "true") === "true",
   cruiseUserAgent:
     process.env.CRUISE_USER_AGENT ??

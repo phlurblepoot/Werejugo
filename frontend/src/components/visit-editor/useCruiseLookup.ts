@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { api, type CruiseFindResult, type CruiseSailing } from "../../api/client";
+import { lineMetres } from "../../lib/routing";
 import type { VisitDraft } from "./useVisitDraft";
+
+/** Something went wrong asking CruiseMapper: what to say, and whether trying again could help. */
+export interface CruiseProblem { message: string; retry?: () => void }
+
+const DAY_MS = 24 * 3600 * 1000;
 
 /** Shift an ISO datetime by a millisecond offset (realigns reused itineraries). */
 export function shiftIso(iso: string | null, offsetMs: number): string | null {
@@ -30,7 +36,15 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
   const [reuse, setReuse] = useState(false);
   const [lookupImage, setLookupImage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [problem, setProblem] = useState<CruiseProblem | null>(null);
   const [pinBusy, setPinBusy] = useState(false);
+
+  /** Turned off (409) says so; not answering (503) offers Try again. */
+  function trouble(e: unknown, retry: () => void) {
+    const status = (e as { status?: number }).status;
+    const message = e instanceof Error && e.message ? e.message : "Couldn't reach CruiseMapper.";
+    setProblem(status === 409 ? { message } : { message, retry: () => { setProblem(null); retry(); } });
+  }
 
   const onLineText = (t: string) => { set({ cruiseLine: t }); setLineConfirmed(false); setShipConfirmed(false); setShipUrl(null); };
   const onLinePick = (name: string) => { set({ cruiseLine: name }); setLineConfirmed(true); };
@@ -60,6 +74,7 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
   async function find() {
     if (!draft.ship.trim()) { setWarnings(["Enter or pick a ship to search CruiseMapper."]); return; }
     setBusy(true);
+    setProblem(null);
     try {
       const res = await api.findCruise({
         line: draft.cruiseLine.trim() || undefined,
@@ -71,23 +86,35 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
       setLookupImage(res.image ?? null);
       if (!reuse) {
         const closest = closestSailing(res.sailings, draft.occurredOn);
-        if (closest) await pickSailing(closest);
+        if (closest) await pickSailing(closest, res);
       }
+    } catch (e) {
+      trouble(e, () => void find());
     } finally {
       setBusy(false);
     }
   }
 
-  async function pickSailing(s: CruiseSailing) {
-    if (!draft.title.trim()) set({ title: `${result?.shipName || draft.ship} — ${s.title}`.trim() });
+  async function pickSailing(s: CruiseSailing, found: CruiseFindResult | null = result) {
+    if (!draft.title.trim()) set({ title: `${found?.shipName || draft.ship} — ${s.title}`.trim() });
     if (!reuse && s.dateISO) set({ occurredOn: s.dateISO });
     const offsetMs = reuse && draft.occurredOn && s.dateISO ? Date.parse(draft.occurredOn) - Date.parse(s.dateISO) : 0;
     if (!s.id) { if (s.departurePort) addPort(s.departurePort, null, null); return; }
     setBusy(true);
+    setProblem(null);
     try {
-      const d = await api.getSailingDetail(s.id);
+      const d = await api.getSailingDetail(s.id, s.dateISO);
       if (d.ports.length) {
+        const path = d.path && d.path.length >= 2 ? d.path : null;
         set({
+          // Kept with the cruise, so it's never looked up again.
+          cruise: {
+            line: found?.lineName ?? (draft.cruiseLine || null), ship: found?.shipName || draft.ship || null,
+            shipUrl: found?.shipUrl ?? shipUrl, shipImage: found?.image ?? null, lineLogo: found?.lineLogo ?? null,
+            sailingId: s.id, sailingTitle: s.title || null, sailingDate: s.dateISO,
+            matchedBy: "date", shiftDays: Math.round(offsetMs / DAY_MS),
+          },
+          route: path ? { source: "cruisemapper", distanceM: lineMetres(path) } : null,
           stops: d.ports.map((p, i) => {
             const baseDepart = p.departAt ?? (p.dateISO ? `${p.dateISO}T00:00:00.000Z` : null);
             return {
@@ -96,13 +123,15 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
               departAt: shiftIso(baseDepart, offsetMs),
             };
           }),
-          routePath: d.path && d.path.length >= 2 ? d.path : null,
+          routePath: path,
         });
         if (d.warnings.length) setWarnings(d.warnings);
       } else {
-        setWarnings(d.warnings.length ? d.warnings : ["Couldn't read that sailing's ports — add them manually below."]);
+        setWarnings(d.warnings.length ? d.warnings : ["Couldn't read that sailing's ports. Add them below."]);
         if (s.departurePort) addPort(s.departurePort, null, null);
       }
+    } catch (e) {
+      trouble(e, () => void pickSailing(s, found));
     } finally {
       setBusy(false);
     }
@@ -121,7 +150,7 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
   }
 
   return {
-    busy, result, lineConfirmed, shipConfirmed, reuse, lookupImage, warnings, pinBusy,
+    busy, result, lineConfirmed, shipConfirmed, reuse, lookupImage, warnings, problem, pinBusy,
     setReuse, onLineText, onLinePick, onShipText, onShipPick, find, pickSailing, addPort, useImageAsPin,
   };
 }

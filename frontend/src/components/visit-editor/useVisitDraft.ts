@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type {
-  Geometry, Item, ItemKind, PathSettings, PathStyle, PinSettings, PinStyle, RouteInfo, Waypoint,
+  CruiseDetails, Geometry, Item, ItemKind, PathSettings, PathStyle, PinSettings, PinStyle, RouteInfo, Waypoint,
 } from "../../api/client";
 import { buildRoutePath, type LngLat } from "../../lib/geo";
 import { defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "../../lib/style";
@@ -27,6 +27,8 @@ export interface VisitDraft {
   route: RouteInfo | null;
   cruiseLine: string;
   ship: string;
+  /** From CruiseMapper, kept with the cruise. */
+  cruise: CruiseDetails | null;
   baseProperties: Record<string, unknown>;
 }
 
@@ -66,6 +68,7 @@ function makeInitial(item: Item | null, kind: ItemKind, pin?: PinSettings, path?
     route: (props.route as RouteInfo | undefined) ?? null,
     cruiseLine: (props.cruiseLine as string) ?? "",
     ship: (props.ship as string) ?? "",
+    cruise: (props.cruise as CruiseDetails | undefined) ?? null,
     baseProperties: props,
   };
 }
@@ -132,6 +135,9 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
     if (draft.kind === "cruise") {
       if (draft.cruiseLine) properties.cruiseLine = draft.cruiseLine; else delete properties.cruiseLine;
       if (draft.ship) properties.ship = draft.ship; else delete properties.ship;
+      if (draft.cruise) properties.cruise = draft.cruise; else delete properties.cruise;
+    } else {
+      delete properties.cruise;
     }
     return {
       kind: draft.kind,
