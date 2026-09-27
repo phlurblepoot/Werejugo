@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
 | **Current phase** | 2.7 |
-| **Next step** | Plan Phase 2.7 (suggestions from photos): photos for a trip from its dates and places; trips and places that don't exist yet, from photo clusters; people whose faces are in a trip's photos |
+| **Next step** | Build Phase 2.7 ([plan](../plans/2026-09-27-phase-2.7-photo-suggestions.md)): suggestions on trips (photos, places, people), places (photos) and the library (trips found in photos), from Immich's place names, dates and faces; apply or dismiss each |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -306,7 +306,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.7 Suggestions from photos — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.7](../plans/2026-09-27-phase-2.7-photo-suggestions.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
 - [ ] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
@@ -487,6 +487,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 6. **Base map tiles:** OpenFreeMap (free, no key) stays the default.
 7. **Printed book:** browser "Save as PDF" first; server-rendered PDFs only if needed.
 8. ~~**Immich face recognition hardware:** CPU works; a GPU speeds it up if your Unraid box has one.~~ Decided 2026-09-27: an NVIDIA RTX 5070 (§2).
+9. **Home, for "trips found in your photos":** inferred from where most photos were taken (by distinct days); photos more than 50 km away count as travel. *Alternative:* each family sets its home in Settings. (added 2026-09-27)
 
 ---
 
@@ -495,6 +496,8 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-27
+
+- **Note** — Planning 2.7: place names come from Immich's own reverse geocoding (now kept on each photo), so Werejugo calls no geocoding service. A family's home is inferred for "trips found in your photos" (§7 Q9 added). Suggestions are computed on request, not stored; dismissing a photo suggestion lets newer photos bring it back.
 
 - **Done** — Phase 2.6 Trip ↔ Immich album sync (PR #2).
   - **Every trip a family is on is also an album in its Immich account,** empty ones too, holding that family's photos of the trip.
