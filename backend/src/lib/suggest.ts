@@ -10,7 +10,7 @@ import { signMediaUrl } from "./media/urls.js";
  * say is missing. Computed when asked (no stored state but dismissals). Each
  * has a stable key, so applying or dismissing one checks it again here.
  *
- *   trip-photos:<trip>              my photos taken during the trip, in no trip
+ *   trip-photos:<trip>              my photos taken during the trip (away from home or near its places), in no trip
  *   trip-place:<trip>:<lat>,<lng>   a spot I took photos at, not yet a place on the trip
  *   trip-person:<trip>:<person>     someone in my photos of the trip, not linked to it
  *   visit-photos:<visit>            my photos taken there and then, not linked to it
@@ -85,17 +85,21 @@ async function tripPhotos(scope: Scope, trip: { id: string; start_date: string |
   if (!trip.start_date) return null;
   const key = `trip-photos:${trip.id}`;
   const since = await dismissedAt(scope.familyId, key);
+  const home = await familyHome(scope.familyId);
   const ids = (await query<{ id: string }>(
     `SELECT m.id FROM media m
       WHERE m.family_id = $1 AND m.trip_id IS NULL AND m.hidden_at IS NULL AND m.taken_at IS NOT NULL
         AND m.taken_at >= ($3::date - 1) AND m.taken_at < ($4::date + 2)
         AND (m.geom IS NULL
-             OR NOT EXISTS (SELECT 1 FROM visits v WHERE v.trip_id = $2 AND v.geom IS NOT NULL)
+             -- away from home (anywhere, when there's no clear home)
+             OR $6::float8 IS NULL
+             OR ST_DistanceSphere(m.geom, ST_SetSRID(ST_MakePoint($7, $6), 4326)) > ${AWAY_KM * 1000}
+             -- or near one of its places
              OR EXISTS (SELECT 1 FROM visits v WHERE v.trip_id = $2 AND v.geom IS NOT NULL
                           AND ST_DWithin(m.geom::geography, v.geom::geography, ${TRIP_RADIUS_M})))
         AND ($5::timestamptz IS NULL OR m.created_at > $5)
       ORDER BY m.taken_at, m.id`,
-    [scope.familyId, trip.id, trip.start_date, trip.end_date ?? trip.start_date, since])).rows.map((r) => r.id);
+    [scope.familyId, trip.id, trip.start_date, trip.end_date ?? trip.start_date, since, home?.lat ?? null, home?.lng ?? null])).rows.map((r) => r.id);
   if (!ids.length) return null;
   return { key, kind: "trip-photos", tripId: trip.id, count: ids.length, thumbUrls: thumbs(ids), mediaIds: ids };
 }
@@ -208,6 +212,25 @@ export function inferHome(pts: Array<{ t: number; lat: number; lng: number }>): 
 export const cityName = (raw: string | null): string | null => (raw ? raw.replace(/\s+\d{1,2}(\s.*)?$/, "") || raw : null);
 const CITY_SQL = (col: string) => `NULLIF(regexp_replace(${col}, '\\s+\\d{1,2}(\\s.*)?$', ''), '')`;
 
+/** The geotagged photos a home is inferred from. */
+async function homePoints(familyId: string) {
+  return (await query<{ t: Date; lat: number; lng: number }>(
+    `SELECT taken_at AS t, ST_Y(geom) AS lat, ST_X(geom) AS lng FROM media
+      WHERE family_id = $1 AND hidden_at IS NULL AND taken_at IS NOT NULL AND geom IS NOT NULL`, [familyId])).rows
+    .map((r) => ({ t: new Date(r.t).getTime(), lat: r.lat, lng: r.lng }));
+}
+// Inferring a home reads every geotagged photo; it's kept until the family's photos change.
+const homes = new Map<string, { stamp: string; home: { lat: number; lng: number } | null }>();
+export async function familyHome(familyId: string): Promise<{ lat: number; lng: number } | null> {
+  const stamp = JSON.stringify((await query(
+    "SELECT count(*)::int AS n, max(created_at) AS latest FROM media WHERE family_id = $1 AND geom IS NOT NULL", [familyId])).rows[0]);
+  const hit = homes.get(familyId);
+  if (hit?.stamp === stamp) return hit.home;
+  const home = inferHome(await homePoints(familyId));
+  homes.set(familyId, { stamp, home });
+  return home;
+}
+
 /** "Lisbon", "Lisbon and Porto", or the country. */
 function placeLabel(pts: Pt[]): string | null {
   const count = (vals: Array<string | null>) => {
@@ -237,7 +260,7 @@ export async function forLibrary(scope: Scope): Promise<Suggestion[]> {
     `SELECT id, taken_at AS t, ST_Y(geom) AS lat, ST_X(geom) AS lng, city, country, trip_id FROM media
       WHERE family_id = $1 AND hidden_at IS NULL AND taken_at IS NOT NULL AND geom IS NOT NULL ORDER BY taken_at, id`, [fam])).rows
     .map((r) => ({ id: r.id, t: new Date(r.t).getTime(), lat: r.lat, lng: r.lng, city: r.city, country: r.country, tripId: r.trip_id }));
-  const home = inferHome(pts);
+  const home = await familyHome(fam);
   // The family's trips' dates (±1 day): photos then are those trips' suggestions instead.
   const spans = (await query<{ s: Date; e: Date }>(
     `SELECT (t.start_date - 1)::timestamptz AS s, (COALESCE(t.end_date, t.start_date) + 2)::timestamptz AS e FROM trips t

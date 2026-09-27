@@ -316,6 +316,25 @@ export interface ActivityEntry {
   familyId: string | null; familyName: string | null; userName: string | null;
 }
 
+/** A suggestion from photos (lib/suggest.ts on the server); the sentence is written here. */
+export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip";
+export interface Suggestion {
+  key: string;
+  kind: SuggestionKind;
+  count: number;
+  thumbUrls: string[];
+  tripId?: string;
+  visitId?: string;
+  person?: { id: string; displayName: string; familyName: string | null };
+  /** Where (Immich's place names), for a place or a new trip. */
+  label?: string | null;
+  lat?: number;
+  lng?: number;
+  startDate?: string;
+  endDate?: string;
+  /** A new trip's suggested name. */
+  name?: string;
+}
 export interface TripAlbum { name: string; assetCount: number; syncedAt: string | null; error: string | null }
 export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
 
@@ -854,6 +873,12 @@ export const api = {
     request<Person>(`/api/people/${id}`, { method: "PATCH", body: body(data) }),
   deletePerson: (id: string) => request<void>(`/api/people/${id}`, { method: "DELETE" }),
   listFamilyMembers: () => request<FamilyMember[]>("/api/family-members"),
+
+  // suggestions from photos: for=trip:<id> | visit:<id> | library
+  listSuggestions: (target: string) => request<{ items: Suggestion[] }>(`/api/suggestions?for=${encodeURIComponent(target)}`),
+  applySuggestion: (key: string, name?: string) =>
+    request<{ tripId?: string; visitId?: string; attached?: number; linked?: boolean }>("/api/suggestions/apply", { method: "POST", body: body({ key, name }) }),
+  dismissSuggestion: (key: string) => request<void>("/api/suggestions/dismiss", { method: "POST", body: body({ key }) }),
 
   // faces Immich found, and who they are
   listFaces: (view: FaceView = "review") => request<Face[]>(`/api/faces?view=${view}`),

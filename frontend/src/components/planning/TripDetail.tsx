@@ -12,6 +12,7 @@ import { useAuth } from "../../lib/auth";
 import { TripFamilies, ROLE_LABEL } from "./TripFamilies";
 import { TripActivity } from "./TripActivity";
 import { PhotoPicker } from "../photos/PhotoPicker";
+import { Suggestions } from "../suggestions/Suggestions";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const STATUSES: Status[] = ["idea", "planning", "booked", "done"];
@@ -91,6 +92,7 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
           {!!photos.data?.total && <Link className="btn-link" to={`/photos?trip=${trip.id}`}>Open album</Link>}
           <button type="button" onClick={() => setPicking({ entity: `trip:${trip.id}`, uploadLinkTo: `trip:${trip.id}` })}>Add photos</button>
         </div>
+        <Suggestions target={`trip:${trip.id}`} onReview={() => setPicking({ entity: `trip:${trip.id}`, uploadLinkTo: `trip:${trip.id}` })} />
         {album.data && (
           <div className="er-sub trip-album">
             {album.data.error

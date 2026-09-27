@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   deletePhoto: vi.fn(async () => {}),
   getRelations: vi.fn(async () => []),
   searchEntities: vi.fn(async () => []),
+  listSuggestions: vi.fn(async (): Promise<{ items: unknown[] }> => ({ items: [] })),
 }));
 const auth = vi.hoisted(() => ({ user: { familyId: "f1", isAdmin: false } as Record<string, unknown> }));
 vi.mock("../lib/auth", () => ({ useAuth: () => auth }));
@@ -109,4 +110,12 @@ test("'Refresh from Immich' asks for a sync and says when the library was last u
   const btn = await screen.findByRole("button", { name: /Refresh from Immich \(updated/ });
   await userEvent.click(btn);
   await waitFor(() => expect(h.refreshImmich).toHaveBeenCalled());
+});
+
+test("trips found in the photos are pointed out, with a link to Planning", async () => {
+  h.listSuggestions.mockResolvedValueOnce({ items: [{ key: "new-trip:a", kind: "new-trip" }, { key: "new-trip:b", kind: "new-trip" }] });
+  page();
+  const banner = await screen.findByRole("link", { name: /Your photos suggest 2 trips/ });
+  expect(banner).toHaveAttribute("href", "/planning");
+  expect(h.listSuggestions).toHaveBeenCalledWith("library");
 });

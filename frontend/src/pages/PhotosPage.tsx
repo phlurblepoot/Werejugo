@@ -44,6 +44,9 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   }, [wantedPhoto, setParams]);
 
   const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
+  // Trips found in the photos (they're made in Planning).
+  const { data: found } = useQuery({ queryKey: ["suggestions", "library"], queryFn: () => api.listSuggestions("library"), staleTime: 60_000 });
+  const foundTrips = found?.items.length ?? 0;
   const timeline = useTimeline(filters);
   const months = useMemo(() => (timeline.data?.months ?? []).map((m) => m.month), [timeline.data]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["media"] });
@@ -161,6 +164,11 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
       />
 
       <PhotoFilters value={filters} onChange={(f) => { setFilters(f); stopSelecting(); }} trips={trips} />
+      {foundTrips > 0 && (
+        <Link className="sugg-banner" to="/planning">
+          ✨ Your photos suggest {foundTrips} {foundTrips === 1 ? "trip" : "trips"} you haven't made yet. See them in Planning
+        </Link>
+      )}
 
       {selecting && (
         <div className="select-bar" role="toolbar" aria-label="Selected photos">

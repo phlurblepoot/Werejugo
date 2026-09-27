@@ -108,20 +108,22 @@ test("the library with no clear home: everywhere counts, still split by gaps", a
   expect((await forLibrary(scope)).map((s) => [s.startDate, s.count])).toEqual([["2019-03-20", 6], ["2019-03-03", 6]]);
 });
 
-test("a trip's photos: mine, in no trip, during its dates and near its places (or with no location)", async () => {
+test("a trip's photos: mine, in no trip, during its dates, away from home or near its places (or with no location)", async () => {
+  await homeLife();
   const italy = await trip("Italy 2024", "2024-06-03", "2024-06-10");
   await place(italy, "Colosseum", ROME);
   const near = await series(3, "2024-06-04T09:00:00Z", { lat: ROME.lat + 0.1, lng: ROME.lng });
   const noPlace = await photo({ at: "2024-06-11T20:00:00Z" }); // the day after counts
-  await photo({ at: "2024-06-05T09:00:00Z", where: LISBON }); // far from its places
+  const florence = await photo({ at: "2024-06-05T09:00:00Z", where: FLORENCE }); // far from its places, but away from home
+  await photo({ at: "2024-06-05T09:00:00Z", where: HOME }); // someone at home meanwhile
   await photo({ at: "2024-06-20T09:00:00Z", where: ROME }); // after
   await photo({ at: "2024-06-05T09:00:00Z", where: ROME, hidden: true });
   await photo({ at: "2024-06-05T09:00:00Z", where: ROME, trip: await trip("Other", null, null) });
   await photo({ at: "2024-06-05T09:00:00Z", where: ROME, familyId: smiths.familyId });
 
   const s = (await forTrip(scope, italy)).find((x) => x.kind === "trip-photos")!;
-  expect(s.mediaIds.sort()).toEqual([...near, noPlace].sort());
-  expect(s.count).toBe(4);
+  expect(s.mediaIds.sort()).toEqual([...near, noPlace, florence].sort());
+  expect(s.count).toBe(5);
 
   // Dismissed: only photos added since bring it back.
   await post("/api/suggestions/dismiss", { key: s.key });
@@ -135,10 +137,10 @@ test("a trip's photos: mine, in no trip, during its dates and near its places (o
   expect((await query("SELECT trip_id FROM media WHERE id = $1", [later])).rows[0].trip_id).toBe(italy);
 });
 
-test("a trip with no places takes photos from its dates wherever they were", async () => {
+test("with no clear home, a trip takes photos from its dates wherever they were", async () => {
   const t = await trip("Road trip", "2023-08-01", "2023-08-02");
   await photo({ at: "2023-08-01T10:00:00Z", where: LISBON });
-  await photo({ at: "2023-08-02T10:00:00Z", where: PORTO });
+  await photo({ at: "2023-08-02T10:00:00Z", where: HOME });
   expect((await forTrip(scope, t)).find((x) => x.kind === "trip-photos")?.count).toBe(2);
 });
 

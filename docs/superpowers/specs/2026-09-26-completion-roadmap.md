@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.7 |
-| **Next step** | Build Phase 2.7 ([plan](../plans/2026-09-27-phase-2.7-photo-suggestions.md)): suggestions on trips (photos, places, people), places (photos) and the library (trips found in photos), from Immich's place names, dates and faces; apply or dismiss each |
+| **Current phase** | 2.8 |
+| **Next step** | Plan Phase 2.8 (smart search & smart albums): Immich's smart search (CLIP) and structured search in the command palette and the Photos page; smart albums as saved filters, shareable by link |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -306,11 +306,11 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.7 Suggestions from photos — M
 
-**Status:** In progress · **Plan:** [phase-2.7](../plans/2026-09-27-phase-2.7-photo-suggestions.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.7](../plans/2026-09-27-phase-2.7-photo-suggestions.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
-- [ ] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
-- [ ] For existing items: photos for a place (its date and location), places missing from a trip (where its photos were taken), and people whose faces appear in a trip's or place's photos ("Grandma is in 12 photos from this trip — add her?"). (added 2026-09-27)
+- [x] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
+- [x] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
+- [x] For existing items: photos for a place (its date and location), places missing from a trip (where its photos were taken), and people whose faces appear in a trip's or place's photos ("Grandma is in 12 photos from this trip — add her?"). (added 2026-09-27)
 
 #### 2.8 Smart search & smart albums — S
 
@@ -497,6 +497,25 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Done** — Phase 2.7 Suggestions from photos (PR #2).
+  - **Planning, "Trips in your photos":** runs of photos away from home that are in no trip become "Looks like you were in Lisbon and Porto · 3–7 Mar 2019 · 12 photos", with a name to edit and **Create trip**, which makes the trip with its photos and opens it. The Photos page points there.
+  - **A trip:**
+    - Its photos: taken during it, and away from home or near its places.
+    - Spots with 3 or more of its photos that aren't places yet ("You took 4 photos near Florence"), added with a name.
+    - People in its photos, by face or tag, who aren't on it.
+  - **A place:** photos taken within 2 km on its dates.
+  - **Review** opens the photo picker. ✕ dismisses a suggestion; a photo suggestion comes back only for photos added later.
+  - **Place names are Immich's own** (kept on each photo by the sync), so Werejugo calls no geocoding service.
+  - **Verified:**
+    - Backend 454/454 (11 suggestion tests, isolation cases for the 3 routes) and frontend 254/254.
+    - The contract passes against the real Immich: a photo at the Eiffel Tower gets `city` and `country`.
+    - Playwright through nginx with the stand-in: 31 checks, including every kind applied, dismissing, and phone layout. With 20,000 photos, the library's suggestions take about 60 ms and a trip's about 20 ms.
+- **Note** — Found in 2.7:
+  - **Immich names districts:** the real Immich calls the Eiffel Tower's spot "Paris 16 Passy" (GeoNames lists city districts). Labels drop a trailing district number and name, so the suggestion says "Paris"; the stand-in now does the same.
+  - **Photos taken on a trip but far from its places** (a day in Florence on a Rome trip) weren't suggested anywhere. They're outside every new-trip run because they fall in the trip's dates, and too far from its places. A trip's photos now include anything taken away from home during its dates.
+  - **Class names:** `.suggestions` was already the entity picker's dropdown (fixed height, scrolling), which clipped the new cards. They're now `sugg-`.
+  - **Opening a made trip:** Planning cleared the `?trip=` it was told to open before its trip list had the new trip. It now refetches the list first.
+  - **The stand-in** now reads a photo's date and GPS on upload and names the place, like Immich's metadata extraction.
 - **Note** — Planning 2.7: place names come from Immich's own reverse geocoding (now kept on each photo), so Werejugo calls no geocoding service. A family's home is inferred for "trips found in your photos" (§7 Q9 added). Suggestions are computed on request, not stored; dismissing a photo suggestion lets newer photos bring it back.
 
 - **Done** — Phase 2.6 Trip ↔ Immich album sync (PR #2).

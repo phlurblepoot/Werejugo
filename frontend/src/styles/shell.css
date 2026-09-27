@@ -376,3 +376,23 @@ button.fchip:not(.act) { background: var(--color-surface); color: var(--color-te
 .face-strip { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .face-mini { padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; }
 .face-mini .face-thumb { width: 48px; height: 48px; }
+
+/* Suggestions from photos (components/suggestions) */
+.sugg-section { margin: 8px 0 12px; }
+.sugg-section .section-title svg { vertical-align: -2px; color: var(--color-accent); }
+.sugg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.sugg-card {
+  display: flex; gap: 8px; align-items: flex-start; padding: 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface);
+}
+.sugg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sugg-title { font-weight: 600; overflow-wrap: anywhere; }
+.sugg-thumbs { display: flex; gap: 4px; }
+.sugg-thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius-sm, 6px); background: var(--color-surface-2); }
+.sugg-name { max-width: 100%; }
+.sugg-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.sugg-banner {
+  display: block; margin: 8px 16px 0; padding: 8px 12px; border-radius: var(--radius-md);
+  background: var(--color-accent-soft, var(--color-surface-2)); color: var(--color-text); text-decoration: none; font-size: var(--text-sm, 0.9rem);
+}
+.sugg-banner:hover { text-decoration: underline; }
