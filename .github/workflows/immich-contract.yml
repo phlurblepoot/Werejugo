@@ -1,0 +1,87 @@
+name: Immich contract
+
+# Runs Werejugo's Immich contract tests against a real Immich, so the stand-in
+# used by the regular test suite (backend/src/test/fake-immich.ts) can't drift
+# from the real API. On pull requests that touch the Immich code, nightly, and
+# on demand.
+
+on:
+  pull_request:
+    paths:
+      - "backend/src/lib/immich/**"
+      - "backend/src/test/fake-immich.ts"
+      - "backend/package.json"
+      - "backend/package-lock.json"
+      - "ci/immich/**"
+      - ".github/workflows/immich-contract.yml"
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: immich-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Immich contract (real Immich)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: werejugo
+          POSTGRES_PASSWORD: change-me-in-production
+          POSTGRES_DB: werejugo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U werejugo -d werejugo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Start Immich
+        run: docker compose -f ci/immich/docker-compose.yml up -d
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Wait for Immich
+        run: |
+          for i in $(seq 1 120); do
+            if curl -sf http://localhost:2283/api/server/ping >/dev/null; then echo "Immich is up"; exit 0; fi
+            sleep 2
+          done
+          docker compose -f ci/immich/docker-compose.yml logs immich-server | tail -100
+          exit 1
+      - name: Create the Immich admin and an API key
+        run: |
+          set -euo pipefail
+          curl -sf -X POST http://localhost:2283/api/auth/admin-sign-up -H 'content-type: application/json' \
+            -d '{"email":"admin@ci.test","password":"ci-admin-password","name":"CI Admin"}' >/dev/null
+          token=$(curl -sf -X POST http://localhost:2283/api/auth/login -H 'content-type: application/json' \
+            -d '{"email":"admin@ci.test","password":"ci-admin-password"}' | jq -r .accessToken)
+          key=$(curl -sf -X POST http://localhost:2283/api/api-keys -H 'content-type: application/json' \
+            -H "Authorization: Bearer $token" -d '{"name":"werejugo-ci","permissions":["all"]}' | jq -r .secret)
+          test -n "$key" && test "$key" != null
+          echo "::add-mask::$key"
+          echo "IMMICH_TEST_ADMIN_KEY=$key" >> "$GITHUB_ENV"
+          curl -sf http://localhost:2283/api/server/version
+      - name: Contract tests
+        working-directory: backend
+        env:
+          IMMICH_TEST_URL: http://localhost:2283
+        run: npx vitest run src/lib/immich/contract.test.ts
+      - name: Immich logs
+        if: failure()
+        run: docker compose -f ci/immich/docker-compose.yml logs --tail 200 immich-server
