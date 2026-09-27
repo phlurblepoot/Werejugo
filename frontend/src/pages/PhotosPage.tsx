@@ -1,47 +1,173 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type MediaFilters, type MediaItem } from "../api/client";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckSquare, EyeOff, Eye, FolderMinus, Images, LayoutGrid, Map as MapIcon, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { api, type MediaFilters, type MediaItem, type SmartAlbum } from "../api/client";
+import { SearchResults } from "../components/photos/SearchResults";
+import { AlbumBar, SaveAlbumDialog, SmartAlbumMenu, albumFilters } from "../components/photos/SmartAlbums";
 import { MediaUploader } from "../components/shared/MediaUploader";
 import { PhotoFilters } from "../components/photos/PhotoFilters";
-import { PhotoGrid } from "../components/photos/PhotoGrid";
+import { LibraryTimeline } from "../components/photos/LibraryTimeline";
 import { PhotoMap } from "../components/photos/PhotoMap";
-import { PhotoDetail } from "../components/photos/PhotoDetail";
+import { PhotoViewer } from "../components/photos/PhotoViewer";
 import { UploadReview } from "../components/photos/UploadReview";
-import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { neighbour, useTimeline } from "../components/photos/useLibrary";
+import { EmptyState } from "../components/ui";
 import { ShareButton } from "../components/shared/ShareButton";
-import { PageHeader, SegmentedControl } from "../components/kit";
-import { Images, LayoutGrid, Map as MapIcon } from "lucide-react";
+import { Button, IconButton, PageHeader, SegmentedControl, useConfirm } from "../components/kit";
+import { useToast } from "../components/Toast";
+import { formatRelative } from "../lib/dates";
 import { useAuth } from "../lib/auth";
 
 export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<MediaFilters>(initialTrip ? { trip: initialTrip } : {});
-  const [view, setView] = useState<"grid" | "map">("grid");
-  const [selected, setSelected] = useState<MediaItem | null>(null);
-  // /photos?photo=<id> (e.g. from search) opens that photo.
+  const confirm = useConfirm();
+  const { toast } = useToast();
   const [params, setParams] = useSearchParams();
+  const [filters, setFilters] = useState<MediaFilters>(() => {
+    // /photos?trip=… and /photos?person=… (a person's page links here) open filtered.
+    const trip = initialTrip ?? params.get("trip") ?? undefined;
+    const person = params.get("person") ?? undefined;
+    return { ...(trip ? { trip } : {}), ...(person ? { person } : {}) };
+  });
+  const [view, setView] = useState<"grid" | "map">("grid");
+  // Smart search (what's in the photos): /photos?q=… opens one.
+  const [q, setQ] = useState(params.get("q") ?? "");
+  const [draft, setDraft] = useState(q);
+  // A smart album: /photos?album=<id> opens it (its filters and search).
+  const [albumId, setAlbumId] = useState<string | null>(params.get("album"));
+  const [saving, setSaving] = useState(false);
+  const { data: albums = [] } = useQuery({ queryKey: ["smart-albums"], queryFn: api.listSmartAlbums });
+  const album = albums.find((a) => a.id === albumId) ?? null;
+  const [appliedAlbum, setAppliedAlbum] = useState<string | null>(null);
+  function openAlbum(a: SmartAlbum) {
+    const { q: text = "", ...f } = a.filters;
+    setFilters(f);
+    setQ(text);
+    setDraft(text);
+    setAlbumId(a.id);
+    setAppliedAlbum(a.id);
+    setView("grid");
+  }
+  useEffect(() => {
+    if (album && appliedAlbum !== album.id) openAlbum(album);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album, appliedAlbum]);
+  // Asked for again while the page is open (the command palette, a link): follow the address.
+  const wantedQ = params.get("q");
+  useEffect(() => {
+    if (wantedQ !== null) { setQ(wantedQ); setDraft(wantedQ); }
+  }, [wantedQ]);
+  const wantedAlbum = params.get("album");
+  useEffect(() => {
+    if (wantedAlbum) { setAlbumId(wantedAlbum); setAppliedAlbum(null); }
+  }, [wantedAlbum]);
+  const current = albumFilters(filters, q);
+  // The results being stepped through in the viewer, when they're a search's.
+  const [searchList, setSearchList] = useState<MediaItem[] | null>(null);
+  const [open, setOpen] = useState<MediaItem | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [uploadedIds, setUploadedIds] = useState<string[] | null>(null);
+
+  // /photos?photo=<id> (from search, the map…) opens that photo.
   const wantedPhoto = params.get("photo");
   useEffect(() => {
     if (!wantedPhoto) return;
-    api.getMedia(wantedPhoto).then(setSelected).catch(() => {});
+    api.getMedia(wantedPhoto).then(setOpen).catch(() => {});
     setParams({}, { replace: true });
   }, [wantedPhoto, setParams]);
-  const [uploadedIds, setUploadedIds] = useState<string[] | null>(null);
 
   const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
-
-  const mediaQuery = useInfiniteQuery({
-    queryKey: ["media", filters],
-    queryFn: ({ pageParam }) => api.listMedia({ ...filters, before: pageParam, limit: 60 }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-  });
-
-  const items: MediaItem[] = mediaQuery.data?.pages.flatMap((p) => p.items) ?? [];
+  // Trips found in the photos (they're made in Planning).
+  const { data: found } = useQuery({ queryKey: ["suggestions", "library"], queryFn: () => api.listSuggestions("library"), staleTime: 60_000 });
+  const foundTrips = found?.items.length ?? 0;
+  const timeline = useTimeline(filters);
+  const months = useMemo(() => (timeline.data?.months ?? []).map((m) => m.month), [timeline.data]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["media"] });
 
+  // Photos live in the family's Immich account.
+  const immich = useQuery({ queryKey: ["immich", "status"], queryFn: api.immichStatus });
+  const noImmich = immich.data && !immich.data.enabled;
+  const [pulling, setPulling] = useState(false);
+  async function pullFromImmich() {
+    setPulling(true);
+    try {
+      await api.refreshImmich();
+      // The sync runs in the background; look again shortly.
+      await new Promise((r) => setTimeout(r, 2500));
+      await Promise.all([refresh(), qc.invalidateQueries({ queryKey: ["immich", "status"] })]);
+    } catch {
+      /* the next automatic sync will catch up */
+    } finally {
+      setPulling(false);
+    }
+  }
+  const synced = immich.data?.lastSyncAt ? `updated ${formatRelative(immich.data.lastSyncAt)}` : "not updated yet";
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+  // Only my family's photos can be changed (a shared trip's album shows others' too).
+  const isMine = (m: MediaItem) => !m.familyId || m.familyId === user?.familyId;
+  function toggle(item: MediaItem, range: MediaItem[] | null) {
+    if (!isMine(item)) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const on = !prev.has(item.id);
+      for (const m of (range ?? [item]).filter(isMine)) { if (on) next.add(m.id); else next.delete(m.id); }
+      return next;
+    });
+  }
+
+  async function bulk(change: { hidden?: boolean; tripId?: string | null }, done: string) {
+    try {
+      await api.bulkMedia({ mediaIds: [...selected], ...change });
+      toast(done, "success");
+      stopSelecting();
+      await refresh();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't change them", "error");
+    }
+  }
+  async function deleteSelected() {
+    const n = selected.size;
+    const ok = await confirm({
+      title: `Delete ${n} ${n === 1 ? "photo" : "photos"}?`,
+      message: "They go to your family's Immich trash, where they can be restored for 30 days.",
+      confirmLabel: "Delete", danger: true,
+    });
+    if (!ok) return;
+    let failed = 0;
+    for (const id of [...selected]) await api.deletePhoto(id).catch(() => { failed++; });
+    toast(failed ? `${n - failed} deleted, ${failed} couldn't be` : `${n} deleted`, failed ? "error" : "success");
+    stopSelecting();
+    await refresh();
+  }
+
+  if (noImmich) {
+    return (
+      <div className="page">
+        <PageHeader icon={Images} title="Photos" />
+        <div className="page-fill">
+          <EmptyState
+            emoji="🖼️"
+            title="Photos need Immich"
+            hint={immich.data!.state === "error"
+              ? "Werejugo can't reach your family's photo library right now."
+              : "Your family's photos are kept in its own Immich photo library, which isn't connected yet."}
+          />
+          <p className="er-sub" style={{ textAlign: "center" }}>
+            {user?.isAdmin ? <>Connect it in <Link to="/admin?tab=immich">Admin → Immich</Link>.</> : "Ask the server admin to connect your family."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const n = selected.size;
   return (
     <div className="page">
       <PageHeader
@@ -51,42 +177,117 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
           <SegmentedControl
             label="View"
             value={view}
-            onChange={setView}
+            onChange={(v) => { setView(v); stopSelecting(); }}
             options={[{ value: "grid", label: "Grid", icon: LayoutGrid }, { value: "map", label: "Map", icon: MapIcon }]}
           />
         }
         actions={
           <>
-            {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
+            {filters.trip && !album && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
+            <SmartAlbumMenu albums={albums} current={current} onOpen={openAlbum} onSave={() => setSaving(true)} />
+            {view === "grid" && (
+              <IconButton icon={CheckSquare} label={selecting ? "Stop selecting" : "Select photos"} aria-pressed={selecting}
+                onClick={() => (selecting ? stopSelecting() : setSelecting(true))} />
+            )}
+            <IconButton
+              icon={RefreshCw}
+              label={pulling ? "Refreshing from Immich…" : `Refresh from Immich (${synced})`}
+              onClick={() => void pullFromImmich()}
+              disabled={pulling}
+            />
             <MediaUploader multiple label="Upload" onUploaded={() => {}} onAllUploaded={(media) => setUploadedIds(media.map((m) => m.id))} />
           </>
         }
       />
 
-      <PhotoFilters value={filters} onChange={setFilters} trips={trips} />
+      <form className="photo-search" role="search" onSubmit={(e) => { e.preventDefault(); setQ(draft.trim()); stopSelecting(); }}>
+        <Search size={16} aria-hidden="true" />
+        <input
+          type="search" aria-label="Search photos" value={draft} onChange={(e) => { setDraft(e.target.value); if (!e.target.value) setQ(""); }}
+          placeholder="Search what's in your photos, like “beach at sunset”"
+        />
+        {q && <IconButton size="sm" icon={X} label="Clear search" onClick={() => { setQ(""); setDraft(""); }} />}
+      </form>
+      <PhotoFilters value={filters} onChange={(f) => { setFilters(f); stopSelecting(); }} trips={trips} />
+      {album && (
+        <AlbumBar
+          album={album} current={current}
+          onClose={() => { setAlbumId(null); setAppliedAlbum(null); setFilters({}); setQ(""); setDraft(""); }}
+          onChanged={(a) => { if (!a) { setAlbumId(null); setAppliedAlbum(null); } }}
+        />
+      )}
+      {foundTrips > 0 && (
+        <Link className="sugg-banner" to="/planning">
+          ✨ Your photos suggest {foundTrips} {foundTrips === 1 ? "trip" : "trips"} you haven't made yet. See them in Planning
+        </Link>
+      )}
 
-      <div className="page-fill" style={{ overflow: view === "grid" ? "auto" : "hidden" }}>
-        {mediaQuery.isError ? (
-          <ErrorState hint="Couldn't load photos." onRetry={() => mediaQuery.refetch()} />
-        ) : mediaQuery.isLoading ? (
-          <Spinner label="Loading photos…" />
-        ) : items.length === 0 ? (
-          <EmptyState emoji="🖼️" title="No photos yet" hint="Upload photos to start your family library." />
+      {selecting && (
+        <div className="select-bar" role="toolbar" aria-label="Selected photos">
+          <strong>{n ? `${n} selected` : "Tap photos to select them"}</strong>
+          {n > 0 && (
+            <>
+              <select aria-label="Add to trip" value="" onChange={(e) => {
+                const trip = trips.find((t) => t.id === e.target.value);
+                if (trip) void bulk({ tripId: trip.id }, `${n} added to ${trip.name}`);
+              }}>
+                <option value="">Add to trip…</option>
+                {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <Button size="sm" icon={FolderMinus} onClick={() => void bulk({ tripId: null }, `${n} taken out of their trip`)}>Remove from trip</Button>
+              {filters.hidden === "only"
+                ? <Button size="sm" icon={Eye} onClick={() => void bulk({ hidden: false }, `${n} back in the library`)}>Show</Button>
+                : <Button size="sm" icon={EyeOff} onClick={() => void bulk({ hidden: true }, `${n} hidden from the library`)}>Hide</Button>}
+              <Button size="sm" variant="danger" icon={Trash2} onClick={() => void deleteSelected()}>Delete</Button>
+            </>
+          )}
+          <IconButton size="sm" icon={X} label="Stop selecting" onClick={stopSelecting} />
+        </div>
+      )}
+
+      <div className="page-fill" style={{ overflow: "hidden" }}>
+        {view === "grid" && q ? (
+          <SearchResults q={q} filters={filters} onOpen={(m, list) => { setSearchList(list); setOpen(m); }} />
         ) : view === "grid" ? (
-          <div style={{ padding: 16 }}>
-            <PhotoGrid items={items} onOpen={setSelected} hasMore={mediaQuery.hasNextPage} onLoadMore={() => mediaQuery.fetchNextPage()} myFamilyId={user?.familyId} />
-          </div>
+          <LibraryTimeline
+            filters={filters}
+            onOpen={setOpen}
+            selection={selecting ? { selected, onToggle: toggle } : undefined}
+            onLongPress={(m) => { if (isMine(m)) { setSelecting(true); setSelected(new Set([m.id])); } }}
+            myFamilyId={user?.familyId}
+            empty={filters.hidden === "only"
+              ? <EmptyState emoji="🙈" title="Nothing hidden" hint="Photos you hide from the library show up here." />
+              : <EmptyState emoji="🖼️" title="No photos yet" hint="Upload photos here, or add them in Immich; they show up here within a few minutes." />}
+          />
         ) : (
-          <PhotoMap items={items} onOpen={setSelected} />
+          <PhotoMap filters={filters} onOpen={(id) => void api.getMedia(id).then(setOpen).catch(() => {})} />
         )}
       </div>
 
-      {selected && (
-        <PhotoDetail item={selected} trips={trips} myFamilyId={user?.familyId} onClose={() => setSelected(null)} onChanged={() => { refresh(); setSelected(null); }} />
+      {open && (
+        <PhotoViewer
+          item={open}
+          trips={trips}
+          myFamilyId={user?.familyId}
+          onClose={() => setOpen(null)}
+          onChanged={() => void refresh()}
+          onStep={(dir) => {
+            if (q && searchList) {
+              const next = searchList[searchList.findIndex((m) => m.id === open.id) + dir] ?? null;
+              if (next) setOpen(next);
+              return Promise.resolve(next);
+            }
+            return neighbour(qc, filters, months, open, dir).then((next) => { if (next) setOpen(next); return next; });
+          }}
+        />
+      )}
+
+      {saving && (
+        <SaveAlbumDialog filters={current} onClose={() => setSaving(false)} onSaved={(a) => { setSaving(false); setAlbumId(a.id); setAppliedAlbum(a.id); }} />
       )}
 
       {uploadedIds && (
-        <UploadReview mediaIds={uploadedIds} onDone={() => { setUploadedIds(null); refresh(); }} />
+        <UploadReview mediaIds={uploadedIds} onDone={() => { setUploadedIds(null); void refresh(); }} />
       )}
     </div>
   );

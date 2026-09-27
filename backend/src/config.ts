@@ -14,6 +14,8 @@ export const config = {
   databaseUrl: required("DATABASE_URL", "postgres://werejugo:change-me-in-production@localhost:5432/werejugo"),
   jwtSecret: secrets.jwtSecret,
   fileSigningSecret: secrets.fileSigningSecret,
+  /** Seals stored secrets (Immich keys; document files in 3.3). Optional until Immich is turned on. */
+  encryptionKey: process.env.ENCRYPTION_KEY,
   /** Problems worth logging at startup (e.g. a weak secret outside production). */
   startupWarnings: secrets.warnings,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "30d",
@@ -23,6 +25,8 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   uploadsDir: process.env.UPLOADS_DIR ?? "/app/uploads",
+  /** The largest photo or video one upload may be (unfinished uploads wait in UPLOADS_DIR). */
+  maxUploadBytes: Math.round(Number(process.env.MAX_UPLOAD_GB || 20) * 1024 ** 3),
   storageDir: process.env.STORAGE_DIR ?? "/app/storage",
   aerodataboxKey: process.env.AERODATABOX_RAPIDAPI_KEY ?? "",
   nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",

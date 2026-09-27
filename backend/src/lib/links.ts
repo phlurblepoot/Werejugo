@@ -1,7 +1,6 @@
 import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
 import { parseRef, type CoreType, type EntityRef } from "./refs.js";
-import { reconcileMediaTrip } from "./reconcile.js";
 import { assertRefs, loadReadable, type Scope } from "./access.js";
 import { badRequest, conflict } from "./errors.js";
 
@@ -40,7 +39,7 @@ export async function createLink(scope: Scope, fromRaw: string, toRaw: string, r
   const familyId = scope.familyId;
   const userId = scope.userId;
 
-  // media↔visit: a photo inherits the visit's trip (move-on-link). Reject conflicts.
+  // media↔visit: a photo inherits the visit's trip. Reject conflicts.
   const mediaVisit = pickMediaVisit(from, to);
   if (mediaVisit) {
     const problem = await applyTripInheritance(familyId, mediaVisit.mediaId, mediaVisit.visitId);
@@ -85,10 +84,7 @@ async function applyTripInheritance(
     return "This photo already belongs to a different trip";
   }
   if (!mediaTrip) {
-    await tx(async (client: PoolClient) => {
-      await client.query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [visitTrip, mediaId, familyId]);
-      await reconcileMediaTrip(client, mediaId);
-    });
+    await query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [visitTrip, mediaId, familyId]);
   }
   return null;
 }

@@ -31,11 +31,11 @@ test("searchEntities passes type and query", async () => {
   expect(calls[0].url).toContain("/api/entities/search?type=visit&q=eiffel");
 });
 
-test("uploadMedia posts multipart and createLink posts a link", async () => {
-  const file = new File(["x"], "a.jpg", { type: "image/jpeg" });
-  const m = await api.uploadMedia(file);
-  expect(m.id).toBe("m1");
-  expect(calls[0].url).toContain("/api/media");
+test("an upload in pieces is created with its details, and createLink posts a link", async () => {
+  await api.createUpload({ filename: "a.jpg", size: 10, mime: "image/jpeg", linkTo: "visit:v1" });
+  expect(calls[0].url).toContain("/api/media/uploads");
+  expect(calls[0].method).toBe("POST");
+  expect(JSON.parse(calls[0].body)).toMatchObject({ filename: "a.jpg", size: 10, linkTo: "visit:v1" });
   await api.createLink("media:m1", "person:p1", "shows");
   expect(JSON.parse(calls[1].body)).toMatchObject({ from: "media:m1", to: "person:p1", role: "shows" });
 });

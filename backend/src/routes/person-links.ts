@@ -4,7 +4,7 @@ import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { loadEditable, loadReadable, readableWhere, scopeOf } from "../lib/access.js";
 import { badRequest, conflict, notFound } from "../lib/errors.js";
-import { signFileUrl } from "../lib/filesign.js";
+import { signMediaUrl } from "../lib/media/urls.js";
 import { uuid } from "../lib/validate.js";
 
 interface LinkRow {
@@ -84,17 +84,17 @@ export async function personLinkRoutes(app: FastifyInstance): Promise<void> {
     const id = (req.params as { id: string }).id;
     const scope = scopeOf(req);
     await loadReadable("trip", id, scope);
-    const { rows } = await query<{ id: string; display_name: string; family_id: string; family_name: string; rel_path: string | null; thumb_rel_path: string | null }>(
-      `SELECT p.id, p.display_name, p.family_id, f.name AS family_name, m.rel_path, m.thumb_rel_path
+    const { rows } = await query<{ id: string; display_name: string; family_id: string; family_name: string; avatar_id: string | null }>(
+      `SELECT p.id, p.display_name, p.family_id, f.name AS family_name, m.id AS avatar_id
          FROM people p JOIN families f ON f.id = p.family_id
          LEFT JOIN media m ON m.id = p.avatar_media_id AND m.family_id = p.family_id
         WHERE (p.family_id = (SELECT family_id FROM trips WHERE id = $1)
                OR p.family_id IN (SELECT family_id FROM trip_members WHERE trip_id = $1))
           AND ${readableWhere("person", "p", "$2")}
         ORDER BY (p.family_id = $2) DESC, f.name, p.display_name`, [id, scope.familyId]);
-    return rows.map((r) => {
-      const rel = r.thumb_rel_path ?? r.rel_path;
-      return { id: r.id, displayName: r.display_name, familyId: r.family_id, familyName: r.family_name, mine: r.family_id === scope.familyId, avatarUrl: rel ? signFileUrl(rel) : null };
-    });
+    return rows.map((r) => ({
+      id: r.id, displayName: r.display_name, familyId: r.family_id, familyName: r.family_name, mine: r.family_id === scope.familyId,
+      avatarUrl: r.avatar_id ? signMediaUrl(r.avatar_id, "thumbnail") : null,
+    }));
   });
 }

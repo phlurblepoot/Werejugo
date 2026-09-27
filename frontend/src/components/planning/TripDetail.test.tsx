@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   listShares: vi.fn(async () => []), createShare: vi.fn(), deleteShare: vi.fn(),
   tripMembers: vi.fn(async () => ({ myRole: "host", host: { familyId: "f1", familyName: "Us" }, members: [], invites: [] })),
   tripActivity: vi.fn(async () => []),
+  tripAlbum: vi.fn(async (): Promise<unknown> => null),
 }));
 vi.mock("../../api/client", () => ({ API_URL: "", api: h }));
 vi.mock("../../lib/auth", () => ({ useAuth: () => ({ user: { familyId: "f1", role: "owner" } }) }));
@@ -57,4 +58,21 @@ test("a guest family sees who hosts it, can't change the trip, and only edits it
   expect(screen.getByTitle("Added by The Hosts")).toBeInTheDocument();
   expect(await screen.findByRole("button", { name: /Leave this trip/ })).toBeInTheDocument();
   expect(screen.getAllByText(/only your family sees/).length).toBe(2);
+});
+
+test("says the trip is also an album in Immich, or why the album couldn't be updated", async () => {
+  h.tripAlbum.mockResolvedValueOnce({ name: "Italy 2025", assetCount: 12, syncedAt: new Date().toISOString(), error: null });
+  const { unmount } = render(withQC(<TripDetail trip={trip} onClose={() => {}} onChanged={() => {}} />));
+  expect(await screen.findByText(/Also an album in Immich:/)).toHaveTextContent("Also an album in Immich: Italy 2025 · up to date just now");
+  unmount();
+
+  h.tripAlbum.mockResolvedValueOnce({ name: "Italy 2025", assetCount: 12, syncedAt: null, error: "Immich didn't answer" });
+  render(withQC(<TripDetail trip={trip} onClose={() => {}} onChanged={() => {}} />));
+  expect(await screen.findByText(/couldn't be updated/)).toHaveTextContent("Its album in Immich, “Italy 2025”, couldn't be updated: Immich didn't answer.");
+});
+
+test("no album line without Immich", async () => {
+  render(withQC(<TripDetail trip={trip} onClose={() => {}} onChanged={() => {}} />));
+  await waitFor(() => expect(h.tripAlbum).toHaveBeenCalledWith("t1"));
+  expect(screen.queryByText(/album in Immich/)).toBeNull();
 });

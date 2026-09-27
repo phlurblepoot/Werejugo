@@ -130,3 +130,10 @@ test("a backup from an older version restores: missing columns get defaults, som
   const u = (await query<{ is_admin: boolean; token_version: number }>("SELECT is_admin, token_version FROM users WHERE email = 'old@test.dev'")).rows[0];
   expect(u).toEqual({ is_admin: true, token_version: 0 });
 });
+
+test("every table is backed up, or left out for a stated reason", async () => {
+  const { BACKUP_TABLES, NOT_BACKED_UP } = await import("../lib/archive.js");
+  const tables = (await query<{ t: string }>("SELECT tablename AS t FROM pg_tables WHERE schemaname = 'public' ORDER BY 1")).rows.map((r) => r.t);
+  const known = new Set<string>([...BACKUP_TABLES, ...Object.keys(NOT_BACKED_UP)]);
+  expect(tables.filter((t) => !known.has(t))).toEqual([]);
+});

@@ -13,6 +13,12 @@ import { authRoutes } from "./routes/auth.js";
 import { fileRoutes } from "./routes/files.js";
 import { linkRoutes } from "./routes/links.js";
 import { mediaRoutes } from "./routes/media.js";
+import { mediaUploadRoutes } from "./routes/media-uploads.js";
+import { mediaPickerRoutes } from "./routes/media-picker.js";
+import { smartAlbumRoutes } from "./routes/smart-albums.js";
+import { suggestionRoutes } from "./routes/suggestions.js";
+import { faceRoutes } from "./routes/faces.js";
+import { mediaFileRoutes } from "./routes/media-files.js";
 import { mediaSuggestRoutes } from "./routes/media-suggest.js";
 import { visitRoutes } from "./routes/visits.js";
 import { themeRoutes } from "./routes/themes.js";
@@ -41,6 +47,10 @@ import { familyRoutes } from "./routes/family.js";
 import { familyExportRoutes } from "./routes/family-export.js";
 import { downloadRoutes } from "./routes/downloads.js";
 import { adminRoutes } from "./routes/admin.js";
+import { adminImmichRoutes, familyImmichRoutes } from "./routes/immich.js";
+import { checkServer } from "./lib/immich/provision.js";
+import { enqueueAlbumSync, startJobs } from "./lib/jobs.js";
+import { SUPPORTED_RANGE } from "./lib/immich/version.js";
 
 export interface RegisteredRoute {
   method: string;
@@ -103,12 +113,31 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   app.decorate("registeredRoutes", routes);
 
+  // After anything that can change a photo's trip (or a trip), bring the family's
+  // Immich albums up to date straight away (lib/immich/albums.ts). Trips' own
+  // routes also ask for the other families on the trip.
+  const ALBUM_ROUTES = new Set([
+    "PATCH /api/media/:id", "POST /api/media/bulk", "POST /api/media/attach", "POST /api/media/apply-suggestion",
+    "POST /api/links", "POST /api/trip-invites/:token/accept",
+  ]);
+  app.addHook("onResponse", async (req, reply) => {
+    if (reply.statusCode < 400 && req.user?.familyId && ALBUM_ROUTES.has(`${req.method} ${req.routeOptions.url}`)) {
+      enqueueAlbumSync(req.user.familyId);
+    }
+  });
+
   app.get("/api/health", async () => ({ ok: true }));
 
   await app.register(authRoutes);
   await app.register(fileRoutes);
   await app.register(linkRoutes);
   await app.register(mediaRoutes);
+  await app.register(mediaUploadRoutes);
+  await app.register(mediaPickerRoutes);
+  await app.register(faceRoutes);
+  await app.register(suggestionRoutes);
+  await app.register(smartAlbumRoutes);
+  await app.register(mediaFileRoutes);
   await app.register(mediaSuggestRoutes);
   await app.register(visitRoutes);
   await app.register(themeRoutes);
@@ -137,6 +166,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(familyExportRoutes);
   await app.register(downloadRoutes);
   await app.register(adminRoutes);
+  await app.register(adminImmichRoutes);
+  await app.register(familyImmichRoutes);
 
   return app;
 }
@@ -144,6 +175,15 @@ export async function buildApp(): Promise<FastifyInstance> {
 async function main(): Promise<void> {
   const app = await buildApp();
   await app.listen({ host: "0.0.0.0", port: config.port });
+  // Background jobs (Immich library sync). If they can't start, the app still works.
+  await startJobs(app.log).catch((e) => app.log.warn(`Background jobs didn't start: ${e instanceof Error ? e.message : e}`));
+  // Say whether Immich is there and supported; never stop the server over it.
+  checkServer().then((c) => {
+    if (!c) return;
+    if (!c.ok) app.log.warn(`Immich: ${c.error}`);
+    else if (!c.supported) app.log.warn(`Immich ${c.version} isn't a supported version (supported: ${SUPPORTED_RANGE}); things may break`);
+    else app.log.info(`Immich ${c.version} connected`);
+  }).catch((e) => app.log.warn(`Immich check failed: ${e instanceof Error ? e.message : e}`));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

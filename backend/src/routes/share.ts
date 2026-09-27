@@ -3,19 +3,27 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { signFileUrl } from "../lib/filesign.js";
+import { mediaUrls } from "../lib/media/urls.js";
+import { familyConnCached } from "../lib/immich/provision.js";
+import { evaluateSmartAlbum } from "../lib/media/search.js";
+import { albumFiltersSchema } from "./smart-albums.js";
+
+/** A public smart album shows at most this many photos. */
+const PUBLIC_ALBUM_LIMIT = 500;
 
 const makeToken = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 20);
 
+const TARGETS = z.enum(["trip", "album", "smart_album"]);
 const createSchema = z.object({
-  targetType: z.enum(["trip", "album"]),
+  targetType: TARGETS,
   targetId: z.string().uuid(),
 });
 
-/** A trip and its album (its photo gallery) both resolve to a trip the family owns. */
+/** A trip and its album (its photo gallery) both resolve to a trip the family owns; a smart album is the family's. */
 async function ownsTarget(familyId: string, targetType: string, targetId: string): Promise<boolean> {
   // Both 'trip' and 'album' targets reference a trip id (an album is that trip's gallery).
-  const { rowCount } = await query("SELECT 1 FROM trips WHERE id = $1 AND family_id = $2", [targetId, familyId]);
+  const table = targetType === "smart_album" ? "smart_albums" : "trips";
+  const { rowCount } = await query(`SELECT 1 FROM ${table} WHERE id = $1 AND family_id = $2`, [targetId, familyId]);
   return Boolean(rowCount);
 }
 
@@ -39,7 +47,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/shares", { preHandler: requireAuth }, async (req) => {
-    const { targetType, targetId } = z.object({ targetType: z.enum(["trip", "album"]), targetId: z.string().uuid() }).parse(req.query);
+    const { targetType, targetId } = z.object({ targetType: TARGETS, targetId: z.string().uuid() }).parse(req.query);
     const { rows } = await query<any>(
       `SELECT id, token, target_type, target_id, created_at FROM share_links
        WHERE family_id = $1 AND target_type = $2 AND target_id = $3 ORDER BY created_at DESC`,
@@ -64,14 +72,27 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
     if (!link.rows[0]) return reply.code(404).send({ error: "Link not found or revoked" });
     const { target_type: targetType, target_id: tripId, family_id: familyId } = link.rows[0];
 
-    const photosOf = async (whereTripPhotos = true) => {
+    // A smart album, evaluated now: the family's own photos only (never another family's on a shared trip).
+    if (targetType === "smart_album") {
+      const album = (await query<{ name: string; filters: unknown }>(
+        "SELECT name, filters FROM smart_albums WHERE id = $1 AND family_id = $2", [tripId, familyId])).rows[0];
+      if (!album) return reply.code(404).send({ error: "Link not found or revoked" });
+      const filters = albumFiltersSchema.parse(album.filters);
+      const photos = await evaluateSmartAlbum(await familyConnCached(familyId), familyId, filters, PUBLIC_ALBUM_LIMIT, { ownOnly: true });
+      return {
+        targetType, album: { name: album.name },
+        photos: photos.map((m, i) => ({ id: m.id, ...mediaUrls({ id: m.id, kind: m.kind }), mediaType: m.kind, caption: m.caption, seq: i })),
+      };
+    }
+
+    // Photos hidden from the library aren't shared either.
+    const photosOf = async () => {
       const { rows } = await query<any>(
-        `SELECT id, rel_path, thumb_rel_path, kind, caption FROM media
-         WHERE family_id = $1 AND trip_id = $2 ORDER BY taken_at NULLS LAST, created_at ASC`,
+        `SELECT id, kind, caption FROM media
+         WHERE family_id = $1 AND trip_id = $2 AND hidden_at IS NULL ORDER BY taken_at NULLS LAST, created_at ASC`,
         [familyId, tripId]);
       return rows.map((m, i) => ({
-        id: m.id, url: signFileUrl(m.rel_path), thumbUrl: m.thumb_rel_path ? signFileUrl(m.thumb_rel_path) : null,
-        mediaType: m.kind, caption: m.caption, seq: i,
+        id: m.id, ...mediaUrls(m), mediaType: m.kind, caption: m.caption, seq: i,
       }));
     };
 
@@ -90,10 +111,9 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
     const visits = (await query<any>(
       `SELECT v.id, v.kind, v.title, v.notes, v.color, v.icon, v.occurred_on,
               ST_AsGeoJSON(v.geom) AS geom,
-              COALESCE((SELECT json_agg(json_build_object('id', m.id, 'rel_path', m.rel_path,
-                         'thumb_rel_path', m.thumb_rel_path, 'mediaType', m.kind, 'caption', m.caption) ORDER BY m.created_at)
+              COALESCE((SELECT json_agg(json_build_object('id', m.id, 'mediaType', m.kind, 'caption', m.caption) ORDER BY m.created_at)
                        FROM links l JOIN media m ON m.id = CASE WHEN l.from_type='media' THEN l.from_id ELSE l.to_id END
-                                   AND m.family_id = l.family_id
+                                   AND m.family_id = l.family_id AND m.hidden_at IS NULL
                        WHERE l.family_id = v.family_id
                          AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=v.id)
                            OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=v.id))), '[]') AS photos
@@ -103,8 +123,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
         id: r.id, kind: r.kind, title: r.title, notes: r.notes, color: r.color, icon: r.icon, occurredOn: r.occurred_on,
         geometry: r.geom ? JSON.parse(r.geom) : null,
         photos: (r.photos as any[]).map((p, i) => ({
-          id: p.id, url: signFileUrl(p.rel_path), thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
-          mediaType: p.mediaType, caption: p.caption, seq: i,
+          id: p.id, ...mediaUrls({ id: p.id, kind: p.mediaType }), mediaType: p.mediaType, caption: p.caption, seq: i,
         })),
       }));
 

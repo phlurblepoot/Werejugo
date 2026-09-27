@@ -57,9 +57,34 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 | `DATABASE_URL` | Postgres connection string | `postgres://werejugo:change-me-in-production@localhost:5432/werejugo` |
 | `JWT_SECRET` | Signs login tokens. **Required in production**, at least 32 characters | — |
 | `FILE_SIGNING_SECRET` | Signs photo/document links | derived from `JWT_SECRET` |
-| `STORAGE_DIR` | Photos, videos, documents (browsable tree) | `/app/storage` |
-| `UPLOADS_DIR` | Custom pin icons | `/app/uploads` |
+| `ENCRYPTION_KEY` | Encrypts the Immich keys Werejugo stores (and, later, document files). At least 32 characters (`openssl rand -hex 32`). Needed to turn on Immich. **Keep a copy**: a backup restored without it needs the Immich keys entered again | — |
+| `STORAGE_DIR` | Document files (browsable tree) | `/app/storage` |
+| `UPLOADS_DIR` | Custom pin icons, and photos and videos while they upload (each is removed once Immich has it). Leave room for the largest batch you'll upload | `/app/uploads` |
+| `MAX_UPLOAD_GB` | The largest single photo or video that can be uploaded | `20` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `http://localhost:8080` |
+
+## Photos (Immich)
+
+Each family's photos and videos live in its own account on an [Immich](https://immich.app) server next to Werejugo; Werejugo shows them in its own pages (thumbnails, previews, originals and seekable video at its own signed links) and Immich stays off the internet. Uploading in Werejugo puts the file in the family's Immich account; photos added in Immich directly show up in Werejugo within about five minutes (or at once with **Refresh from Immich** on the Photos page), and edits and deletions follow. Deleting a photo in Werejugo moves it to Immich's trash, where it can be restored for 30 days. Install Immich with [docs/immich-on-unraid.md](docs/immich-on-unraid.md), set `ENCRYPTION_KEY` on the backend, then connect it in **Admin → Immich** (address + an Immich admin API key) and **Connect all families**. Werejugo supports Immich 3.2 up to (not including) 4.0.
+
+**The library:** the Photos page is one timeline, fast with tens of thousands of photos. Jump to any year from the rail on the right; filter by person, trip, place, dates, photos or videos, photos in no trip, and hidden photos. **Hide** takes screenshots, receipts and the like out of Werejugo without deleting them from Immich. Select several photos (the tick button, Shift+click for a range, or a long press on a phone) to put them in a trip, hide or delete them together. A photo opens full-screen; ← and → step through the library. The Map view shows every photo with a place, clustered, with thumbnails. Places, trips (and their itinerary days) and people have **Add photos**, which opens on the photos taken then and there and can browse the whole library.
+
+**Faces:** Immich recognises the people in a family's photos (face recognition runs on the Immich server; a GPU makes it faster). **People → Faces** lists the faces waiting to be named, most photos first, and People shows how many. For each, say who it is: someone already in Werejugo (including a person from a family you share a trip with), a new person, or nobody to keep. Every photo with that face is then tagged with that person, and new photos are tagged as they arrive. A person's page shows their faces and **See N photos**, which counts the photos you can see of them in any family linked as the same person.
+
+**Trips are albums in Immich:** every trip your family is on is also an album in your Immich account, holding your photos of the trip (on a trip shared with another family, each family's album holds its own photos). Putting photos in a trip in Werejugo adds them to the album within seconds; adding photos to the album in Immich's app puts them in the trip within about five minutes (or at once with **Refresh from Immich**), and removing them takes them out. The album's name follows the trip's, deleting a trip deletes its album (not the photos), and an album deleted in Immich is made again, so delete a trip in Werejugo instead. If a photo is changed on both sides at once, Werejugo's change wins. A trip's Photos section shows its album.
+
+**Suggestions from photos:** Werejugo reads your photos' dates, places (Immich names them) and faces, and offers to fill the gaps, one tap each:
+- **Planning:** "Looks like you were in Lisbon, March 2019. Create trip?" for photos taken away from home that aren't in any trip. Home is worked out from where most of your photos were taken.
+- **A trip:** the photos taken during it, places you took photos at that aren't on it yet, and people in its photos who aren't on it.
+- **A place:** the photos taken there and then.
+
+**Review** opens the photo picker, and ✕ dismisses a suggestion (a photo suggestion comes back only for photos added later).
+
+**Smart search and smart albums:** search what's in your photos ("beach at sunset", "birthday cake") from the command palette (Ctrl/Cmd-K) or the Photos page's search field. This uses Immich's machine learning, so it needs the machine-learning container from the guide; without it, Werejugo says so. The results respect the Photos page's filters. **Smart albums** keep a search and filters under a name: they fill themselves as new photos arrive, and can be shared by a public link like a trip's album. Public links never show photos you've hidden from the library.
+
+**Uploading:** files go up in 8 MB pieces (well under Cloudflare's 100 MB request limit), three at a time, with each file's progress in the upload panel at the bottom of the screen. A dropped connection is retried on its own; after a reload, choose the same file again and it continues where it stopped. Once a file is in, Werejugo hands it to Immich in the background, so you can leave the page; a photo added to a place or person is linked to it when it arrives. A file already in the library says "Already in your library" (and comes back out of Immich's trash if it was deleted). iPhone HEIC and Live Photos, camera RAW files and videos go to Immich as they are. On an iPhone, Safari usually sends a JPEG copy and only the still of a Live Photo; for full quality, back the phone up with Immich's own app (the photos then appear in Werejugo through the sync).
+
+> **Upgrading from Milestone 1:** photos uploaded before Immich was added aren't carried over (the milestone ran on test data). Their files stay in the `storage` folder under `families/<id>/…/photos` and `families/<id>/loose/`; delete those folders once you no longer need them.
 
 ## Modules
 

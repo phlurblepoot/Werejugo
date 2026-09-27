@@ -57,3 +57,12 @@ export function formatRelative(iso: string | null | undefined, now = Date.now(),
   }
   return "just now";
 }
+
+/** A video's length: 75_000 → "1:15", 3_725_000 → "1:02:05". */
+export function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}

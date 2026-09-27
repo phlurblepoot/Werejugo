@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   revokeMemberInvite: vi.fn(async () => undefined),
   renameFamily: vi.fn(async () => ({ ok: true })),
   downloadLink: vi.fn(async () => "/api/family/export?ticket=abc"),
+  immichStatus: vi.fn(async () => ({ enabled: false, state: "none" })),
 }));
 vi.mock("../api/client", () => ({ API_URL: "", api: h }));
 const OWNER = { id: "u1", familyId: "f1", role: "owner", isAdmin: false, displayName: "Pat", email: "pat@test.dev", color: "#0f766e" };

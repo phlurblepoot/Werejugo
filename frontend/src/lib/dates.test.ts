@@ -47,3 +47,10 @@ test("formatRelative describes how long ago something happened", () => {
   expect(formatRelative("2026-09-26T11:59:40Z", now, "en-US")).toBe("just now");
   expect(formatRelative(null, now)).toBe("");
 });
+
+test("video lengths read like a player's", async () => {
+  const { formatDuration } = await import("./dates");
+  expect(formatDuration(75_000)).toBe("1:15");
+  expect(formatDuration(3_725_000)).toBe("1:02:05");
+  expect(formatDuration(9_000)).toBe("0:09");
+});

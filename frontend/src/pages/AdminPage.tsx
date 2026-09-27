@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Ban, CheckCircle2, Crown, DatabaseBackup, Download, Eye, History, House, KeyRound, MoreHorizontal, Pencil,
+  Ban, CheckCircle2, Crown, DatabaseBackup, Download, Eye, History, House, Images, KeyRound, MoreHorizontal, Pencil,
   Search as SearchIcon, Shield, ShieldOff, Trash2, Upload, User as UserIcon, UserPlus, Users, X,
 } from "lucide-react";
 import { api, type AdminFamily, type AdminUser, type AuditEntry, type IssuedLink } from "../api/client";
@@ -16,9 +16,10 @@ import {
   SegmentedControl, Spinner, useConfirm, type MenuEntry,
 } from "../components/kit";
 import { errorText } from "./AuthCard";
+import { ImmichTab } from "../components/admin/ImmichTab";
 
-type Tab = "families" | "people" | "backup" | "audit";
-const TABS: Tab[] = ["families", "people", "backup", "audit"];
+type Tab = "families" | "people" | "immich" | "backup" | "audit";
+const TABS: Tab[] = ["families", "people", "immich", "backup", "audit"];
 
 /** Server administration (admins only): families, people, backups, audit log. */
 export function AdminPage() {
@@ -52,6 +53,7 @@ export function AdminPage() {
             options={[
               { value: "families", label: "Families", icon: House },
               { value: "people", label: "People", icon: Users },
+              { value: "immich", label: "Immich", icon: Images },
               { value: "backup", label: "Backup", icon: DatabaseBackup },
               { value: "audit", label: "Audit", icon: History },
             ]}
@@ -62,6 +64,7 @@ export function AdminPage() {
         <div className="settings-stack admin-stack">
           {tab === "families" && <FamiliesTab />}
           {tab === "people" && <PeopleTab />}
+          {tab === "immich" && <ImmichTab />}
           {tab === "backup" && <BackupTab />}
           {tab === "audit" && <AuditTab />}
         </div>
@@ -476,7 +479,7 @@ function BackupTab() {
   }
 
   return (
-    <Card title="Backup & restore" description="The whole server — every family, account, photo, document, pin icon and map overlay — as one archive.">
+    <Card title="Backup & restore" description="The whole server — every family, account, photo, document and pin icon — as one archive.">
       <Button variant="primary" icon={Download} disabled={busy} onClick={() => void download()}>Download backup</Button>
 
       <div className="settings-divider" />
@@ -526,6 +529,12 @@ const ACTIONS: Record<string, string> = {
   "admin.return": "returned to their own family",
   "backup.downloaded": "downloaded a backup",
   "backup.restored": "restored a backup",
+  "immich.configured": "connected Werejugo to Immich",
+  "immich.family_connected": "gave a family its Immich account",
+  "immich.family_linked": "linked a family to an existing Immich account",
+  "immich.family_disconnected": "disconnected a family from Immich",
+  "immich.connect_all": "connected all families to Immich",
+  "immich.password_set": "set the family's Immich password",
 };
 
 export const describeAction = (action: string) => ACTIONS[action] ?? action;

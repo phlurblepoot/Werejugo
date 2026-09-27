@@ -109,6 +109,44 @@ export interface AdminUser {
   isYou: boolean;
 }
 
+export type ImmichFamilyState = "none" | "created" | "linked" | "error";
+
+/** Admin → Immich: the connection to the Immich server and each family's account. Keys never come back. */
+export interface ImmichAdmin {
+  encryptionReady: boolean;
+  encryptionProblem: string | null;
+  configured: boolean;
+  url: string | null;
+  adminKeySet: boolean;
+  updatedAt: string | null;
+  check: { ok: boolean; version: string | null; supported: boolean | null; error: string | null; at: string } | null;
+  supportedRange: string;
+  families: Array<{
+    id: string;
+    name: string;
+    state: ImmichFamilyState;
+    mode: "created" | "linked" | null;
+    immichEmail: string | null;
+    lastError: string | null;
+    lastOkAt: string | null;
+  } & Partial<ImmichFamilySync>>;
+  results?: Array<{ id: string; name: string; ok: boolean; error?: string }>;
+}
+// Per-family library sync state, on the admin page.
+export interface ImmichFamilySync { lastSyncAt: string | null; syncError: string | null; photoCount: number | null }
+
+/** Is Immich on for my family? Owners also get the login for using Immich directly. */
+export interface ImmichStatus {
+  enabled: boolean;
+  state: ImmichFamilyState;
+  url?: string;
+  email?: string;
+  mode?: "created" | "linked";
+  canSetPassword?: boolean;
+  lastSyncAt?: string | null;
+  photoCount?: number | null;
+}
+
 export interface AuditEntry {
   id: string;
   at: string;
@@ -201,8 +239,13 @@ export type MediaType = "image" | "video" | "audio";
 
 export interface Photo {
   id: string;
+  /** A large preview (a still frame for videos). */
   url: string;
   thumbUrl: string | null;
+  /** Videos: the playable file (seekable). */
+  videoUrl?: string | null;
+  /** The original file, as a download. */
+  originalUrl?: string;
   mediaType: MediaType;
   caption: string;
   seq: number;
@@ -273,6 +316,26 @@ export interface ActivityEntry {
   familyId: string | null; familyName: string | null; userName: string | null;
 }
 
+/** A suggestion from photos (lib/suggest.ts on the server); the sentence is written here. */
+export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip";
+export interface Suggestion {
+  key: string;
+  kind: SuggestionKind;
+  count: number;
+  thumbUrls: string[];
+  tripId?: string;
+  visitId?: string;
+  person?: { id: string; displayName: string; familyName: string | null };
+  /** Where (Immich's place names), for a place or a new trip. */
+  label?: string | null;
+  lat?: number;
+  lng?: number;
+  startDate?: string;
+  endDate?: string;
+  /** A new trip's suggested name. */
+  name?: string;
+}
+export interface TripAlbum { name: string; assetCount: number; syncedAt: string | null; error: string | null }
 export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
 
 export interface PersonLinkEntry {
@@ -311,7 +374,7 @@ export interface SearchResults {
   people: SearchHit[]; trips: SearchHit[]; visits: SearchHit[]; photos: SearchHit[]; documents: SearchHit[];
 }
 
-export type ShareTargetType = "trip" | "album";
+export type ShareTargetType = "trip" | "album" | "smart_album";
 export interface ShareLink {
   id: string; token: string; targetType: ShareTargetType; targetId: string; createdAt: string;
 }
@@ -327,7 +390,13 @@ export interface SharedVisit {
 export interface SharedItineraryItem { id: string; title: string; notes: string; scheduledOn: string | null; seq: number; }
 export interface TripSharePayload { targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[]; }
 export interface AlbumSharePayload { targetType: "album"; trip: SharedTrip; photos: SharedPhoto[]; }
-export type SharePayload = TripSharePayload | AlbumSharePayload;
+/** A smart album, evaluated when the link is opened. */
+export interface SmartAlbumSharePayload { targetType: "smart_album"; album: { name: string }; photos: SharedPhoto[]; }
+export type SharePayload = TripSharePayload | AlbumSharePayload | SmartAlbumSharePayload;
+
+/** A smart album: the library's filters and a smart-search text, kept under a name. */
+export interface SmartAlbumFilters extends Pick<MediaFilters, "person" | "trip" | "visit" | "from" | "to" | "kind" | "noTrip"> { q?: string }
+export interface SmartAlbum { id: string; name: string; filters: SmartAlbumFilters; createdAt: string; updatedAt: string }
 
 export interface Stats {
   items: number;
@@ -440,16 +509,50 @@ export interface EntitySummary {
   familyName?: string | null;
 }
 
+/** A face Immich found in the family's photos (lib/immich/faces on the server). */
+export interface Face {
+  id: string;
+  /** Its name in Immich ("" if none). */
+  name: string;
+  thumbUrl: string;
+  photoCount: number | null;
+  ignored: boolean;
+  hiddenInImmich: boolean;
+  firstSeenAt: string;
+  /** The Werejugo person it is; familyName is set when that's another family's. */
+  person: { id: string; displayName: string; familyName: string | null } | null;
+}
+export type FaceView = "review" | "mapped" | "ignored" | "all";
+
 export interface Relation { linkId: string; role: string; entity: EntitySummary; canRemove?: boolean; }
 
-export interface MediaDto { id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string; }
+export interface MediaDto {
+  id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string;
+  videoUrl?: string | null; originalUrl?: string;
+  /** Upload result: the same file was already in the family's library. */
+  duplicate?: boolean;
+}
+
+/** A photo or video on its way to Immich (uploaded in pieces). */
+export interface MediaUpload {
+  id: string; filename: string; size: number; offset: number;
+  state: "receiving" | "processing" | "done" | "failed";
+  duplicate: boolean; error: string | null; canRetry: boolean; media: MediaDto | null;
+}
 
 export interface MediaItem {
   id: string;
   kind: MediaType;
   tripId: string | null;
+  /** A large preview (a still frame for videos). */
   url: string;
   thumbUrl: string | null;
+  /** Videos: the playable file (seekable). */
+  videoUrl?: string | null;
+  /** The original file, as a download. */
+  originalUrl?: string;
+  originalName?: string;
+  durationMs?: number | null;
   caption: string;
   takenAt: string | null;
   createdAt: string;
@@ -461,12 +564,33 @@ export interface MediaItem {
   /** Another family's photo on a shared trip is shown with who added it, view-only. */
   familyId?: string;
   familyName?: string | null;
+  /** Hidden from the library by the family (still in Immich). */
+  hidden?: boolean;
 }
 
 export interface MediaFilters {
   person?: string; trip?: string; visit?: string;
   from?: string; to?: string; bbox?: string;
+  kind?: "image" | "video";
+  /** "only": just the hidden photos. */
+  hidden?: "only";
+  /** "1": photos in no trip. */
+  noTrip?: "1";
+  /** "2025-07": one month. */
+  month?: string;
   limit?: number; before?: string;
+}
+
+export interface MediaTimeline { months: Array<{ month: string; count: number }>; total: number }
+
+/** The photo picker's opening view for an item. */
+export interface PickerSuggestions {
+  label: string;
+  window: { from: string; to: string } | null;
+  near: boolean;
+  /** The month the library should open at ("2025-07"). */
+  month: string | null;
+  items: Array<MediaItem & { attached: boolean; match: "both" | "date" | "place" }>;
 }
 
 export interface MediaPage { items: MediaItem[]; nextCursor: string | null; }
@@ -567,6 +691,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 const body = (data: unknown) => JSON.stringify(data);
 
+/** Filters as a query string (empty values left out). */
+function queryString(f: object): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  return qs.toString();
+}
+
 export const api = {
   // auth
   login: (data: { email: string; password: string }) =>
@@ -615,6 +746,8 @@ export const api = {
   removeTripMember: (tripId: string, familyId: string) => request<void>(`/api/trips/${tripId}/members/${familyId}`, { method: "DELETE" }),
   tripActivity: (tripId: string) => request<ActivityEntry[]>(`/api/trips/${tripId}/activity`),
   tripPeople: (tripId: string) => request<TripPerson[]>(`/api/trips/${tripId}/people`),
+  /** My family's album for the trip in its Immich account; null without Immich. */
+  tripAlbum: (tripId: string) => request<TripAlbum | null>(`/api/trips/${tripId}/album`),
 
   // the same person in two families
   personLinks: () => request<PersonLinks>("/api/person-links"),
@@ -640,6 +773,19 @@ export const api = {
   adminViewFamily: (familyId: string) =>
     request<{ token: string }>("/api/admin/view-family", { method: "POST", body: body({ familyId }) }),
   adminReturn: () => request<{ token: string }>("/api/admin/return", { method: "POST" }),
+  immichAdmin: () => request<ImmichAdmin>("/api/admin/immich"),
+  saveImmichServer: (url: string, adminKey?: string) =>
+    request<ImmichAdmin>("/api/admin/immich", { method: "PUT", body: body(adminKey ? { url, adminKey } : { url }) }),
+  checkImmich: () => request<ImmichAdmin>("/api/admin/immich/check", { method: "POST" }),
+  connectImmichFamily: (familyId: string) => request<ImmichAdmin>(`/api/admin/immich/families/${familyId}/connect`, { method: "POST" }),
+  linkImmichFamily: (familyId: string, apiKey: string) =>
+    request<ImmichAdmin>(`/api/admin/immich/families/${familyId}/link`, { method: "POST", body: body({ apiKey }) }),
+  disconnectImmichFamily: (familyId: string) => request<ImmichAdmin>(`/api/admin/immich/families/${familyId}`, { method: "DELETE" }),
+  connectAllImmich: () => request<ImmichAdmin>("/api/admin/immich/connect-all", { method: "POST" }),
+  syncImmichFamily: (familyId: string) => request<{ queued: true }>(`/api/admin/immich/families/${familyId}/sync`, { method: "POST" }),
+  refreshImmich: () => request<{ queued: true }>("/api/immich/refresh", { method: "POST" }),
+  immichStatus: () => request<ImmichStatus>("/api/immich"),
+  setImmichPassword: (password: string) => request<{ ok: true }>("/api/immich/password", { method: "POST", body: body({ password }) }),
   auditLog: (before?: string) =>
     request<AuditEntry[]>(`/api/admin/audit${before ? `?before=${encodeURIComponent(before)}` : ""}`),
 
@@ -672,11 +818,17 @@ export const api = {
   deletePhoto: (id: string) => request<void>(`/api/media/${id}`, { method: "DELETE" }),
 
   // media library
-  listMedia: (f: MediaFilters = {}) => {
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
-    return request<MediaPage>(`/api/media?${qs.toString()}`);
-  },
+  listMedia: (f: MediaFilters = {}) => request<MediaPage>(`/api/media?${queryString(f)}`),
+  mediaTimeline: (f: MediaFilters = {}) => request<MediaTimeline>(`/api/media/timeline?${queryString(f)}`),
+  mediaGeo: (f: MediaFilters = {}) => request<{ points: Array<[string, number, number, MediaType]> }>(`/api/media/geo?${queryString(f)}`),
+  mediaLinks: (ids: string[]) => request<Record<string, { thumbUrl: string | null; url: string }>>("/api/media/links", { method: "POST", body: body({ ids }) }),
+  bulkMedia: (data: { mediaIds: string[]; hidden?: boolean; tripId?: string | null }) =>
+    request<{ updated: number }>("/api/media/bulk", { method: "POST", body: body(data) }),
+  setMediaHidden: (id: string, hidden: boolean) =>
+    request<MediaItem>(`/api/media/${id}`, { method: "PATCH", body: body({ hidden }) }),
+  mediaFor: (entity: string) => request<PickerSuggestions>(`/api/media/for?entity=${encodeURIComponent(entity)}`),
+  attachMedia: (mediaIds: string[], to: string) =>
+    request<{ attached: number; skipped: Array<{ id: string; reason: string }> }>("/api/media/attach", { method: "POST", body: body({ mediaIds, to }) }),
   setMediaTrip: (id: string, tripId: string | null) =>
     request<unknown>(`/api/media/${id}`, { method: "PATCH", body: body({ tripId }) }),
   getMediaSuggestions: (mediaIds: string[]) =>
@@ -728,19 +880,44 @@ export const api = {
   deletePerson: (id: string) => request<void>(`/api/people/${id}`, { method: "DELETE" }),
   listFamilyMembers: () => request<FamilyMember[]>("/api/family-members"),
 
+  // smart search (Immich's machine learning) within the library, and smart albums
+  searchMedia: (q: string, f: MediaFilters = {}, page = 1) =>
+    request<{ items: MediaItem[]; nextPage: number | null }>(`/api/media/search?${queryString({ ...f, q, page } as MediaFilters)}`),
+  listSmartAlbums: () => request<SmartAlbum[]>("/api/smart-albums"),
+  createSmartAlbum: (name: string, filters: SmartAlbumFilters) =>
+    request<SmartAlbum>("/api/smart-albums", { method: "POST", body: body({ name, filters }) }),
+  updateSmartAlbum: (id: string, b: { name?: string; filters?: SmartAlbumFilters }) =>
+    request<SmartAlbum>(`/api/smart-albums/${id}`, { method: "PATCH", body: body(b) }),
+  deleteSmartAlbum: (id: string) => request<void>(`/api/smart-albums/${id}`, { method: "DELETE" }),
+
+  // suggestions from photos: for=trip:<id> | visit:<id> | library
+  listSuggestions: (target: string) => request<{ items: Suggestion[] }>(`/api/suggestions?for=${encodeURIComponent(target)}`),
+  applySuggestion: (key: string, name?: string) =>
+    request<{ tripId?: string; visitId?: string; attached?: number; linked?: boolean }>("/api/suggestions/apply", { method: "POST", body: body({ key, name }) }),
+  dismissSuggestion: (key: string) => request<void>("/api/suggestions/dismiss", { method: "POST", body: body({ key }) }),
+
+  // faces Immich found, and who they are
+  listFaces: (view: FaceView = "review") => request<Face[]>(`/api/faces?view=${view}`),
+  facesCount: () => request<{ review: number }>("/api/faces/count"),
+  updateFace: (id: string, b: { personId?: string | null; ignored?: boolean }) =>
+    request<{ face: Face; tagged: number; untagged: number }>(`/api/faces/${id}`, { method: "PATCH", body: body(b) }),
+  personFromFace: (id: string, displayName: string) =>
+    request<{ face: Face; personId: string; tagged: number }>(`/api/faces/${id}/person`, { method: "POST", body: body({ displayName }) }),
+  personFaces: (personId: string) => request<Face[]>(`/api/people/${personId}/faces`),
+
   // entity graph
   getRelations: (entity: string) =>
     request<Relation[]>(`/api/relations?entity=${encodeURIComponent(entity)}`),
   searchEntities: (type: CoreType, q: string) =>
     request<EntitySummary[]>(`/api/entities/search?type=${type}&q=${encodeURIComponent(q)}`),
 
-  // generic media + links
-  uploadMedia: (file: File, caption = "") => {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("caption", caption);
-    return request<MediaDto>("/api/media", { method: "POST", body: fd });
-  },
+  // Photo and video uploads go in pieces (lib/uploads); the pieces themselves go by XHR, for progress.
+  createUpload: (b: { filename: string; size: number; mime: string; lastModified?: number; caption?: string; linkTo?: string; linkRole?: string }) =>
+    request<MediaUpload & { chunkSize: number }>("/api/media/uploads", { method: "POST", body: body(b) }),
+  getUpload: (id: string) => request<MediaUpload>(`/api/media/uploads/${id}`),
+  listUploads: () => request<{ items: MediaUpload[] }>("/api/media/uploads"),
+  retryUpload: (id: string) => request<MediaUpload>(`/api/media/uploads/${id}/retry`, { method: "POST" }),
+  cancelUpload: (id: string) => request<void>(`/api/media/uploads/${id}`, { method: "DELETE" }),
   createLink: (from: string, to: string, role = "") =>
     request<{ id: string }>("/api/links", { method: "POST", body: body({ from, to, role }) }),
   deleteLink: (id: string) => request<void>(`/api/links/${id}`, { method: "DELETE" }),

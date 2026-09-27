@@ -5,14 +5,33 @@ import type pg from "pg";
  * Every application table, in FK-safe INSERT order (parents before children).
  * Reference tables (airports/ports/spatial_ref_sys) and schema_migrations are
  * intentionally excluded — they are recreated by migrations/seed, not restored.
+ * So are media_uploads (files still on their way to Immich; a restore drops them).
  */
 export const BACKUP_TABLES = [
-  "families", "users", "themes", "trips", "visits", "media", "people",
+  // trip_albums before media: restoring media fires the trigger that marks albums (0009).
+  "families", "users", "themes", "trips", "trip_albums", "visits", "media", "people",
   "icons", "documents", "links", "visit_waypoints", "comments",
   "itinerary_items", "packing_lists", "packing_items", "blackout_periods", "share_links",
   "invites", "password_resets", "audit_log",
   "trip_members", "trip_invites", "person_links", "activity",
+  // Immich connection; its keys stay sealed with ENCRYPTION_KEY inside the archive.
+  "immich_server", "family_immich",
+  // Which Immich face is which person (without it, a restore would untag every face).
+  "immich_people",
+  // Suggestions a family said no to.
+  "suggestion_dismissals",
+  // Saved searches.
+  "smart_albums",
 ] as const;
+
+/** Tables that aren't backed up, and why. Every other table must be in BACKUP_TABLES. */
+export const NOT_BACKED_UP: Record<string, string> = {
+  media_uploads: "files still on their way to Immich; a restore drops them",
+  schema_migrations: "recreated by the migrations",
+  airports: "reference data, loaded by the migrations",
+  ports: "reference data, loaded by the migrations",
+  spatial_ref_sys: "PostGIS's own",
+};
 
 /** Tables older backups may contain that no longer exist; restore skips them. */
 export const RETIRED_TABLES = ["map_sets", "map_set_visits"] as const;

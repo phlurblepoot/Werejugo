@@ -11,11 +11,11 @@
 
 | Field | Value |
 |---|---|
-| **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.1 |
-| **Next step** | Milestone 1 review: the owner tests the preview image `claude-cool-hopper-pku4ne` (reset the database first — README), merges PR #1 and approves deleting the old branch (the last 1.1 item). Then plan Phase 2.1. |
-| **Blocked on** | The owner's Milestone 1 review |
-| **Last updated** | 2026-09-26 |
+| **Current milestone** | Milestone 3 — Finish every module (on the new design) |
+| **Current phase** | 3.1 |
+| **Next step** | Milestone 2 review: the owner installs Immich ([guide](../../immich-on-unraid.md)), sets `ENCRYPTION_KEY`, tests the preview image `claude-cool-hopper-pku4ne` (it migrates the Milestone 1 database in place), merges PR #2, and deletes the old branch `claude/confident-ramanujan-xDIFr` (the last 1.1 item). Then, with the go-ahead, plan Phase 3.1. |
+| **Blocked on** | The owner's Milestone 2 review |
+| **Last updated** | 2026-09-27 |
 <!-- status:end -->
 
 **How tracking works**
@@ -98,6 +98,8 @@ Health: backend typecheck clean, **102/102** tests pass; frontend typecheck clea
 | Photo backend | **Immich is the photo store and backend**, but Werejugo must feel seamless (images look native to Werejugo) |
 | Immich accounts | Each family gets an **account on the owner's Immich server** (not yet installed) |
 | Immich features | **Faces → people, trip ↔ Immich album sync, smart search, auto-suggest trip photos, location data to suggest new trips/visited places** |
+| Photo uploads (2026-09-27) | **Uploaded through Werejugo.** Werejugo also sees everything in the family's Immich account, including photos added in Immich directly, and uses the people, places and dates in them to suggest trips, places and people, for existing items and new ones. Choosing photos for any item **browses the whole Immich library** |
+| Immich hardware (2026-09-27) | **NVIDIA RTX 5070**: the install guide uses CUDA for face recognition and NVENC for video (was §7 Q8) |
 | Albums | **Smart albums** (saved filters) |
 | Notifications | **Phone push** (web push) |
 | Document security | **Encrypt document files at rest** |
@@ -204,7 +206,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
 - [x] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
 - [x] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
-- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`. *(Waiting on the owner's approval at the Milestone 1 review.)*
+- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`. *(Approved 2026-09-27. The session can't delete other branches, so the owner deletes it on GitHub; tick when it's gone.)*
 - [x] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
 
 #### 1.2 Design system & responsive shell — M
@@ -261,57 +263,61 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.1 Immich connector & provisioning — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.1](../plans/2026-09-27-phase-2.1-immich-connector.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Admin setup (URL + admin key), version check, health on the admin page; per-family Immich user + API key creation (or link existing); keys encrypted at rest.
-- [ ] Adapter module; fixtures-based unit tests; contract tests against a real Immich in CI (a nightly job if too slow for every PR).
-- [ ] Unraid guide for installing Immich alongside Werejugo (GPU acceleration for face recognition optional).
+- [x] Admin setup (URL + admin key), version check, health on the admin page; per-family Immich user + API key creation (or link existing); keys encrypted at rest.
+- [x] Adapter module; fixtures-based unit tests; contract tests against a real Immich in CI (a nightly job if too slow for every PR).
+- [x] Unraid guide for installing Immich alongside Werejugo (GPU acceleration for face recognition optional).
+- [x] A family can also use Immich directly (its web page or app): an owner sets the family's Immich password in Settings → Family. (added 2026-09-27)
 
 #### 2.2 Media references & seamless serving — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.2](../plans/2026-09-27-phase-2.2-media-on-immich.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
-- [ ] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
-- [ ] pg-boss job queue (§3.7).
+- [x] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
+- [x] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
+- [x] pg-boss job queue (§3.7).
+- [x] Library sync: everything in a family's Immich account, including photos added in Immich directly, shows up in Werejugo within minutes; edits and deletions follow. (added 2026-09-27)
 
 #### 2.3 Uploads at scale — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.3](../plans/2026-09-27-phase-2.3-uploads-at-scale.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Resumable chunked uploads (Cloudflare-safe) with per-file progress, retry and background hand-off to Immich; iPhone HEIC/Live Photos, RAW and video via Immich; duplicate detection surfaced ("already in your library").
+- [x] Resumable chunked uploads (Cloudflare-safe) with per-file progress, retry and background hand-off to Immich; iPhone HEIC/Live Photos, RAW and video via Immich; duplicate detection surfaced ("already in your library").
 
 #### 2.4 Library UI — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.4](../plans/2026-09-27-phase-2.4-library-ui.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
+- [x] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
+- [x] Photo picker for any item (place, trip, person, itinerary item): browses the whole library, starting with photos taken near the item's dates and place. (added 2026-09-27)
 
 #### 2.5 Faces → people — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.5](../plans/2026-09-27-phase-2.5-faces-people.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Import Immich people per family; mapping UI (Immich face ↔ Werejugo person, including cross-family linked people); auto-tag photos; review queue for new faces.
+- [x] Import Immich people per family; mapping UI (Immich face ↔ Werejugo person, including cross-family linked people); auto-tag photos; review queue for new faces.
 
 #### 2.6 Trip ↔ Immich album sync — S
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.6](../plans/2026-09-27-phase-2.6-trip-albums.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] One Immich album per trip per member family; two-way sync (Werejugo writes immediately; Immich-side changes picked up by polling plus an on-demand "refresh").
+- [x] One Immich album per trip per member family; two-way sync (Werejugo writes immediately; Immich-side changes picked up by polling plus an on-demand "refresh").
 
 #### 2.7 Suggestions from photos — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.7](../plans/2026-09-27-phase-2.7-photo-suggestions.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
-- [ ] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
+- [x] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
+- [x] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
+- [x] For existing items: photos for a place (its date and location), places missing from a trip (where its photos were taken), and people whose faces appear in a trip's or place's photos ("Grandma is in 12 photos from this trip — add her?"). (added 2026-09-27)
 
 #### 2.8 Smart search & smart albums — S
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-2.8](../plans/2026-09-27-phase-2.8-smart-search.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Immich smart search inside the command palette ("beach sunset").
-- [ ] Smart albums = saved filters (person, place, date range, trip, search text) that update automatically; shareable by link.
+- [x] Immich smart search inside the command palette ("beach sunset").
+- [x] Smart albums = saved filters (person, place, date range, trip, search text) that update automatically; shareable by link.
 
 **Milestone 2 exit:** each family's photos live in its Immich account but look native in Werejugo; 20k+ photos and videos browse smoothly; faces tag people; trips suggest and sync their photos.
 
@@ -343,7 +349,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 **Status:** Not started · **Plan:** — · **PR:** —
 
-- [ ] **Encryption at rest** (AES-256-GCM) for document files, key from a required `DOCUMENTS_ENCRYPTION_KEY`, key-rotation command, and loud docs: back the key up separately (without it, backups can't decrypt documents).
+- [ ] **Encryption at rest** (AES-256-GCM) for document files, key from the server's `ENCRYPTION_KEY` (introduced in 2.1 for stored Immich keys), key-rotation command, and loud docs: back the key up separately (without it, backups can't decrypt documents).
 - [ ] Fix search focus loss and the empty-filter dead end; delete confirmations; the renewals banner uses all documents, not the filtered list.
 - [ ] Bookings on shared trips stay private to the adding family.
 
@@ -480,13 +486,184 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 5. **Booking-email parsing with an LLM:** decide at 4.6 (needs an API key; structured markup covers most bookings without it).
 6. **Base map tiles:** OpenFreeMap (free, no key) stays the default.
 7. **Printed book:** browser "Save as PDF" first; server-rendered PDFs only if needed.
-8. **Immich face recognition hardware:** CPU works; a GPU speeds it up if your Unraid box has one.
+8. ~~**Immich face recognition hardware:** CPU works; a GPU speeds it up if your Unraid box has one.~~ Decided 2026-09-27: an NVIDIA RTX 5070 (§2).
+9. **Home, for "trips found in your photos":** inferred from where most photos were taken (by distinct days); photos more than 50 km away count as travel. *Alternative:* each family sets its home in Settings. (added 2026-09-27)
 
 ---
 
 ## 8. Progress & change log
 
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
+
+### 2026-09-27
+
+- **Note** — CI: the Immich contract job retries pulling Immich's images (up to 4 times, with a pause). One run failed before any test ran because the container registry rate-limited the pull (`toomanyrequests`).
+- **Note** — Milestone 2 is built and ready for the owner's review (PR #2). Exit criteria, checked:
+  - **Each family's photos live in its Immich account but look native in Werejugo:**
+    - 2.1 gives each family its own Immich account.
+    - 2.2 serves thumbnails, previews, originals and video at Werejugo's own signed links, and syncs photos added in Immich directly.
+    - 2.3 uploads in pieces.
+    - The contract suite (16 tests) passes against a real Immich 3.2.2 in CI.
+  - **20k+ photos and videos browse smoothly:** 2.4, Playwright with 20,007 photos: the first screen in ~0.2 s, about 50 cells in the page at a time, and months fetched as they scroll in.
+  - **Faces tag people:** 2.5, a review queue and automatic tags, including another family's person.
+  - **Trips suggest and sync their photos:** 2.6 (each trip an album in Immich, both ways) and 2.7 (suggestions for trips, places and people, and trips found in the photos).
+  - **Also:** 2.8, smart search and smart albums.
+
+  Last step: an upgrade from Milestone 1. A database built with `main`'s migrations and the dev seed took migrations 0004–0011 cleanly, and the backend then answered the new routes on it without Immich (library, faces, suggestions, smart albums; search explains that Immich is needed). Backend 468/468, frontend 266/266, typecheck and build clean. CI (both suites, the roadmap check and the real-Immich contract) runs on every push.
+
+  For the owner: install Immich with the guide (machine learning on the RTX 5070 powers faces and smart search), set `ENCRYPTION_KEY` on the backend, and connect it in Admin → Immich. Photos uploaded before Milestone 2 aren't carried over (test data), as the README says. Still open: 1.1's last item, deleting `claude/confident-ramanujan-xDIFr`, which the owner does on GitHub.
+- **Done** — Phase 2.8 Smart search & smart albums (PR #2).
+  - **Smart search:** Immich's smart search (what's in the photos: "beach at sunset") is in the command palette ("In your photos", with thumbnails and "All photos of …") and on the Photos page, in Immich's relevance order and within Werejugo's filters. When Immich's machine learning is off, it says so.
+  - **Smart albums:** a search and filters saved under a name, from the Photos page's **Smart albums** menu. They fill themselves as photos arrive, open at `/photos?album=`, can be renamed, updated to the current search, deleted, and shared by a public link. The link shows the family's own photos, evaluated when it's opened.
+  - **Verified:**
+    - Backend 468/468 (6 search and album tests, and isolation cases) and frontend 266/266.
+    - The contract passes against the real Immich without machine learning: the refusal is well-formed and says why.
+    - Playwright through nginx with the stand-in: 20 checks, including the palette, a person filter, saving, a new photo filling the album, the public link logged out, rename, delete, and phone layout.
+- **Note** — Found in 2.8:
+  - **Public trip and album links showed photos hidden from the library.** They no longer do, and smart albums follow the same rule. Test added.
+  - **The Photos page** only read `?q=` when it first opened, so "All photos of …" from the palette, on the Photos page itself, didn't search. It now follows the address, for `?album=` too.
+- **Note** — Planning 2.8:
+  - Smart search needs Immich's machine learning, which CI's Immich doesn't run. The contract checks the refusal instead, and the stand-in imitates both states.
+  - Found: a public album link shows photos hidden from the library. They're left out of public links from 2.8.
+
+- **Done** — Phase 2.7 Suggestions from photos (PR #2).
+  - **Planning, "Trips in your photos":** runs of photos away from home that are in no trip become "Looks like you were in Lisbon and Porto · 3–7 Mar 2019 · 12 photos", with a name to edit and **Create trip**, which makes the trip with its photos and opens it. The Photos page points there.
+  - **A trip:**
+    - Its photos: taken during it, and away from home or near its places.
+    - Spots with 3 or more of its photos that aren't places yet ("You took 4 photos near Florence"), added with a name.
+    - People in its photos, by face or tag, who aren't on it.
+  - **A place:** photos taken within 2 km on its dates.
+  - **Review** opens the photo picker. ✕ dismisses a suggestion; a photo suggestion comes back only for photos added later.
+  - **Place names are Immich's own** (kept on each photo by the sync), so Werejugo calls no geocoding service.
+  - **Verified:**
+    - Backend 454/454 (11 suggestion tests, isolation cases for the 3 routes) and frontend 254/254.
+    - The contract passes against the real Immich: a photo at the Eiffel Tower gets `city` and `country`.
+    - Playwright through nginx with the stand-in: 31 checks, including every kind applied, dismissing, and phone layout. With 20,000 photos, the library's suggestions take about 60 ms and a trip's about 20 ms.
+- **Note** — Found in 2.7:
+  - **Immich names districts:** the real Immich calls the Eiffel Tower's spot "Paris 16 Passy" (GeoNames lists city districts). Labels drop a trailing district number and name, so the suggestion says "Paris"; the stand-in now does the same.
+  - **Photos taken on a trip but far from its places** (a day in Florence on a Rome trip) weren't suggested anywhere. They're outside every new-trip run because they fall in the trip's dates, and too far from its places. A trip's photos now include anything taken away from home during its dates.
+  - **Class names:** `.suggestions` was already the entity picker's dropdown (fixed height, scrolling), which clipped the new cards. They're now `sugg-`.
+  - **Opening a made trip:** Planning cleared the `?trip=` it was told to open before its trip list had the new trip. It now refetches the list first.
+  - **The stand-in** now reads a photo's date and GPS on upload and names the place, like Immich's metadata extraction.
+- **Note** — Planning 2.7: place names come from Immich's own reverse geocoding (now kept on each photo), so Werejugo calls no geocoding service. A family's home is inferred for "trips found in your photos" (§7 Q9 added). Suggestions are computed on request, not stored; dismissing a photo suggestion lets newer photos bring it back.
+
+- **Done** — Phase 2.6 Trip ↔ Immich album sync (PR #2).
+  - **Every trip a family is on is also an album in its Immich account,** empty ones too, holding that family's photos of the trip.
+  - **Werejugo → Immich:** putting photos in a trip, moving or taking them out, renaming a trip and deleting it all reach the album within seconds. A deleted trip's album is deleted; its photos stay.
+  - **Immich → Werejugo:** adding photos to the album in Immich's app puts them in the trip, and removing them takes them out. This happens at the next sync (5 minutes) or at once with **Refresh from Immich**.
+  - **Conflicts:** a photo changed on both sides between two passes follows Werejugo. An album deleted in Immich is made again. The album's name follows the trip's.
+  - **A trip's Photos section** says "Also an album in Immich: *name*", or why the album couldn't be updated.
+  - **Verified:**
+    - Backend 436/436 (10 album-sync tests against the stand-in, including a conflict in either processing order; the isolation case) and frontend 246/246.
+    - The album contract passes against the real Immich: adding and removing change `updatedAt` and `assetCount`, which the sync watches.
+    - Playwright through nginx with the stand-in: 17 checks. Albums made for every trip, the Smiths' own album for the shared trip, photos added from the Photos page reaching the album, a photo added in "Immich" joining the trip after Refresh, a rename, a removal, phone layout.
+- **Note** — Found in 2.6:
+  - **Backups were missing `immich_people`** (2.5), so a restore would have lost every face match. At the next full sync that would have removed every face tag. Backups now include it and `trip_albums`, and a test fails if any table is neither backed up nor listed with a reason for leaving it out.
+  - **Conflicts need a time, not just the last pass's contents:** whether a photo was put in another trip in Werejugo can't be told from that album's base when both albums are handled in the same pass. The trigger records `media.trip_changed_at`, compared with the album's last pass.
+  - Removed a stale `TODO(phase-1b): re-home media on trip rename` in `routes/trips.ts`; the album now follows a rename.
+- **Note** — Planning 2.6: an album deleted in Immich is made again rather than taking its photos out of the trip, and album names follow the trip's. Each family's album holds its own photos of a shared trip. Other families' photos stay visible only in Werejugo, as §3.3 decided.
+
+- **Done** — Phase 2.5 Faces → people (PR #2).
+  - **Faces:** after every library sync, each family's Immich people come into Werejugo with their photo counts. Renames, hiding and removal in Immich follow.
+  - **People → Faces:** tabs To review / Matched / Ignored. To review lists faces in 2 or more photos that aren't hidden in Immich, most photos first. Its count shows on the People switch, on the rail, and on More on phones.
+  - **"Who is this?":**
+    - Our people first, then other families' people we share a trip with, each marked with their family.
+    - **New person**, with the name from Immich filled in, or **Not someone we keep**.
+    - A matched face can be changed or unmatched.
+    - A face with no name in Immich gets the person's name there too.
+  - **Tags:** matching a face tags every photo it's in (a media → person link with role `face`), straight away. New photos with that face are tagged at the next sync, and the nightly sync reconciles everyone. Only `face` links are ever removed this way; tags added by hand stay.
+  - **A person's page:** "See N photos" opens the library filtered to them, with their faces beside it.
+  - **Verified:**
+    - Backend 423/423 (faces sync, routes, isolation cases) and frontend 244/244.
+    - The people/faces contract passes against the real Immich in CI.
+    - Playwright through nginx with the stand-in: 34 checks. Four faces reviewed: one to our Grandma Rose, one to the Smiths' Rose, one new person, one ignored. Badges on desktop and phone; Grandma Rose's 7 photos, counting the linked person's; the Smiths seeing the Wanderers' 3 photos of Rose from the shared trip.
+- **Note** — Found in 2.5:
+  - **The person filter** (the library's, and "See N photos") now covers every photo the family may see: its own, plus other families' photos on shared trips. It also matches tags of the same person in another family (an accepted person link), so "our Grandma is your Grandma" carries face tags across too. Before, it only covered the family's own photos, so the Smiths never saw the Wanderers' tagged photos of their Rose.
+  - **Face tags stay out of a person's Related list** (there can be thousands); "See N photos" has them. On a photo, a face tag shows who's in it with no remove button, since the next sync would put it back. A person tagged by hand as well is listed once, removable.
+  - **Faster sync:** the 5-minute sync first checks whether there are new photos at all, before searching each matched face.
+- **Note** — Planning 2.5: Immich's **cluster groups** (shared face recognition between accounts) aren't used yet, although the fork research suggested them. Immich's API doesn't say which of another account's people is the same person, so there's nothing for Werejugo to read, and CI's Immich runs no machine learning to test them against. Cross-family faces work through Werejugo instead: a family can map a face to another family's person it can see, and person links carry the photos across.
+
+- **Done** — Phase 2.4 Library UI (PR #2).
+  - **Timeline:** the Photos page is one timeline, laid out from per-month counts and windowed. With 20,007 photos the first ones show in about 0.2 s, about 50 cells exist at a time, and scrolling fetches only the months that come into view. A year rail jumps anywhere.
+  - **Filters:** Photos/Videos, No trip, and Hidden join person, trip, place and dates.
+  - **Hide:** Werejugo's own flag; the photo stays in Immich and the sync never clears it.
+  - **Selection:** Shift+click for a range, or a long press on a phone. It can add to a trip, remove from a trip, hide or show, and delete.
+  - **Viewer:** full-screen with details beside the photo; ← → and swipes step across months; video plays.
+  - **Photos map:** every geotagged photo (not just the first page), clustered, with thumbnails for the biggest clusters on screen.
+  - **Add photos** on places, trips (a new Photos section), itinerary days and people opens on the photos taken then and there (matching both the dates and the place, those ticked for an item with none yet), or the whole library at that month. **Upload new** links there too (an upload can now go to a trip).
+  - **Verified:**
+    - Backend 399/399 and frontend 233/233.
+    - Playwright through nginx with 20,007 photos: 37 checks, including the timing and DOM-size checks, jumping to 2012, a range hidden and shown, the viewer across a month boundary with video, map clusters zooming, the picker from a place, trip, itinerary day and person, and phone layout.
+- **Note** — Found in 2.4:
+  - **Class names:** the library's `.tl-row` class collided with the planning timeline's, which gave every row a grey band. The library's classes are now `lib-`.
+  - **Map thumbnails:** a thumbnail that isn't in Immich yet shows a plain tile with the count instead of a broken image.
+  - **Offline map style:** the Photos map falls back to a plain background when the map style can't load, so the photos still show.
+  - **Tests:** the upload-cleanup test counted part files left over from earlier local runs; each test now clears the incoming folder.
+
+- **Done** — Phase 2.3 Uploads at scale (PR #2).
+  - **Uploads in pieces:** photos and videos go up in 8 MB pieces (Cloudflare-safe), three files at a time, up to `MAX_UPLOAD_GB` (20 by default). A dropped piece is retried on its own. After a reload, choosing the same file again sends only the rest.
+  - **Upload tray:** at the bottom of every page (above the tab bar on phones). It shows each file's progress and outcome, with Retry, Choose file and Cancel.
+  - **Background hand-off:** once the bytes are in, a job hands the file to Immich, so the person can leave. A photo added for a place or person is linked by the server when it arrives, and a new place's photos no longer hold its editor open.
+  - **Duplicates** say "Already in your library"; one that was in Immich's trash comes back out.
+  - **Immich trouble:** a file Immich refuses fails with Immich's reason. When Immich is unreachable, the job tries 3 more times, then keeps the bytes for Retry.
+  - **Formats:** HEIC, RAW and video go to Immich as they are. The 5-minute sync drops Live Photo clips once Immich pairs and hides them.
+  - **Cleanup:** a daily job removes abandoned uploads.
+  - **Verified:**
+    - Backend 372/372 and frontend 216/216.
+    - Playwright through the real nginx config, the backend's job queue and the stand-in: 21 checks, including a dropped piece, a reload mid-video that resumed from 16 MB, and phone layout.
+    - The contract test against a real Immich 3.2.2 in CI: trashed duplicates and restore, a video clip, an AVIF photo, and the hidden-asset search.
+- **Note** — Found in 2.3:
+  - **Memory:** Node's `fetch` (so the Immich SDK's upload) holds a whole request body in memory; a 600 MB video peaked at 720 MB. Uploads to Immich are now streamed with `node:http` (133 MB for the same file).
+  - **The locked folder:** the contract test against the real Immich showed a search for its locked folder is refused (it needs the PIN-unlocked session), which would have failed every 5-minute sync. The sync looks for hidden assets only; photos moved to the locked folder leave at the nightly full sync.
+  - **nginx:** a location ending in `/` made nginx answer `POST /api/media/uploads` with a 301. Running the browser checks through the real config found it.
+  - **iPhones:** Safari's picker usually sends a JPEG copy and only the still of a Live Photo. The README and the Unraid guide point iPhone users to Immich's app for full quality.
+
+- **Done** — Phase 2.2 Media references & seamless serving (PR #2). Photos and videos now live in each family's Immich account; a `media` row is a reference (`immich_asset_id`) plus a cache of date, place, size, caption and length.
+  - **Uploads:** they go to Immich (EXIF date and place are read at once for suggestions). Duplicates come back as "Already in your library"; no Immich connection is a clear message; Immich being down is a clear error.
+  - **Captions and deletes:** captions are Immich descriptions. Delete moves the photo to Immich's trash.
+  - **Serving:** everything is served at Werejugo's own signed links (`/api/m/:id/:size`), cacheable for hours, with Range for video seeking and ETag passed through; originals download as files.
+  - **Library sync:** pg-boss runs it every 5 minutes and a full reconcile nightly (and on a family's first connection). Photos added, edited, trashed or deleted in Immich follow; hidden Live Photo halves and the locked folder are skipped; one sync per family at a time. Admins see each family's photo count, last sync and errors, with "Sync now"; families get "Refresh from Immich".
+  - **Removed:** the on-disk photo pipeline (folders, file moves on trip changes, sharp thumbnails for photos).
+  - **Verified:**
+    - Backend 344/344 and frontend 198/198.
+    - The asset contract test against real Immich 3.2.2 in CI.
+    - Playwright against the stand-in, with the real pg-boss queue: 18 checks, including an Immich-side upload appearing after Refresh, a public album link showing a photo, a 206 video range, and "Download original" returning the exact file.
+- **Note** — Found in 2.2:
+  - The contract test against the real Immich found three differences from the stand-in, now fixed in the code and copied into the stand-in:
+    - Immich judges an upload by the file part's own name. The SDK sent a nameless blob, which Immich rejected as "Unsupported file type blob"; uploads now send a named File.
+    - Immich 3.2's structured search includes trashed photos unless the filter excludes them, so the sync kept photos trashed in Immich. It now asks for `trashedAt = null`.
+    - Immich sends an ETag for originals but answers a conditional request with the whole file (200, not 304). Werejugo passes either through; browsers cache by `Cache-Control`.
+  - Playwright found that picking the same file twice did nothing (the file input kept its value); fixed in both upload pickers.
+  - Thumbnails can be missing for a few seconds while Immich makes them, so images show a placeholder and retry instead of a broken icon.
+- **Done** — Phase 2.1 Immich connector & provisioning (PR #2).
+  - **Admin → Immich:** the admin enters Immich's address and an admin API key. Werejugo checks them live (Immich answers, the key belongs to an admin and has the needed permissions) and stores the key encrypted with the new `ENCRYPTION_KEY`. The page shows the version against the supported range (3.2 up to 4.0) and each family's state.
+  - **Family accounts:**
+    - Every family gets its own Immich account and key: one at a time, "Connect all", or automatically when a family is created.
+    - A half-finished setup resumes; a rejected or unreadable key is replaced.
+    - Existing accounts can be linked instead (never an Immich admin, never twice).
+    - Disconnecting revokes Werejugo's key and leaves the account and its photos in Immich.
+  - **Settings → Photos (Immich):** owners see their family's Immich login and can set its password to use Immich directly.
+  - **Adapter:** all Immich calls go through `lib/immich/client.ts` (the official SDK, pinned to 3.2.2), tested against a stand-in Immich.
+  - **Contract tests:** the same tests run in CI against a real Immich 3.2.2 (`immich-contract.yml`, which fails if it ever falls back to the stand-in).
+  - **Unraid guide:** `docs/immich-on-unraid.md`, with NVIDIA acceleration for the owner's RTX 5070.
+  - **Verified:**
+    - Backend 322/322, frontend 189/189.
+    - Contract tests 7/7 against real Immich 3.2.2 in CI.
+    - Playwright against the stand-in (desktop and phone): connect, wrong key, connect all, disconnect and reconnect, the audit log, and an owner setting the Immich password then signing in to Immich with it. No console errors or overflow.
+  - **Phone fix:** Admin's tab row now scrolls instead of clipping.
+- **Note** — The owner asked whether an enhanced Immich fork is worth using. Research (2026-09-27) recommends **stock Immich**:
+  - **Noodle Gallery** (open-noodle/gallery) is the only active, credible fork. It's API-compatible with 3.2.2 for Werejugo's calls.
+  - Its extras (shared spaces, pets, video trim, S3, trip recaps) live mostly in its own UI.
+  - It removes two upstream 3.2 features Werejugo can use: cross-user face "cluster groups" and the new structured search.
+  - It depends on one AI-assisted maintainer, and switching back deletes the fork's data.
+
+  The other forks are one-person experiments. For later phases: 2.5 should use upstream 3.2 **cluster groups** to match faces across families' accounts (linked people), and 2.8 should use 3.2's **structured search** (filters, AND/OR, search within albums).
+- **Changed** — Started Milestone 2 at Phase 2.1 ([plan](../plans/2026-09-27-phase-2.1-immich-connector.md)). The owner hasn't installed Immich yet, and this sandbox can't pull Immich's images. So development runs against a stand-in Immich built from Immich 3.2.2's published API spec, and CI runs the same tests against a real Immich 3.2.2. Supported range: Immich 3.2 up to (not including) 4.0. The Unraid guide comes first in 2.1 so the owner can install Immich while the rest is built.
+- **Changed** — Items added from the owner's answers: 2.1 a family can use Immich directly; 2.2 library sync of everything in the family's Immich account; 2.4 a photo picker on every item that browses the whole library; 2.7 suggestions for existing items (photos for places, missing places, people from faces). 3.3's document key becomes the shared `ENCRYPTION_KEY` introduced in 2.1.
+- **Decided** — Photos are uploaded through Werejugo, and Werejugo also reads everything in the family's Immich account (including photos added in Immich directly) and uses its people, places and dates to suggest trips, places and people, for existing items and new ones. The photo picker browses the whole Immich library (§2).
+- **Decided** — Immich hardware: an NVIDIA RTX 5070, so the guide uses CUDA for face recognition and NVENC for video (§7 Q8 → §2).
+- **Note** — Deleting `claude/confident-ramanujan-xDIFr` is approved. Its one commit (`d67ffc5`, a May styling refresh replaced by 1.2) isn't in `main`. The session's git access can't delete other branches, so the owner deletes it on GitHub, and 1.1 stays In review until then.
+- **Done** — Milestone 1 merged into `main` (PR #1), after the owner tested the preview on Unraid with a fresh database.
 
 ### 2026-09-26
 
@@ -561,10 +738,10 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 - Planning: trips can't be edited/deleted from Planning; status select shows stale value; "schedule" sets today's date; itinerary items not editable; "→ visit" creates a location-less visit on no map; bookings not clickable; timeline axis hard-coded to 2025.
 - Packing: custom template edits never refresh (`PackingPage.tsx:44`); save-as-template doesn't refresh or confirm; no rename/delete/qty/label edit.
 - Documents: search input unmounts each keystroke; empty filter shows "No documents yet" with no way back; banner computed from the filtered list; no delete confirm.
-- Photos: map view limited to the first 60 photos; stale click handler; video/audio render as `<img>`; editing caption/trip closes the modal; album share ignores non-trip filters.
+- Photos: map view limited to the first 60 photos; stale click handler; ✅ video/audio render as `<img>` (videos play, 2.2); editing caption/trip closes the modal; album share ignores non-trip filters.
 - People: delete without confirm; cancelled avatar upload leaves an orphan photo.
 - Settings: backup/restore only; no cache reset after restore; JSON "Export" and backup both toast "Backup downloaded".
-- Share view: itinerary never rendered, pins do nothing, fixed world view, waypoints dropped, image URLs skip `API_URL`.
+- Share view: itinerary never rendered, pins do nothing, fixed world view, waypoints dropped, ✅ image URLs skip `API_URL` (2.2).
 - Auth: logout doesn't clear cached data (another user on the same tab can briefly see the previous family's data); a 401 clears the token but leaves the UI signed in.
 - Missing try/catch or confirmations in: ManagePanel, SettingsPanel save, StylePicker upload, FlightForm, useCruiseLookup, PhotoDetail, UploadReview, ShareButton, PeoplePage, DocumentForm, TripForm, PlanningPage status change, VisitPhotos delete, itinerary delete, BlackoutManager.
 - ✅ Inconsistent trip query keys (`["trips", mapSetId]` vs `["trips"]`) — one `["trips"]` key since 1.6; the due-count badge refreshes only from the Documents page.

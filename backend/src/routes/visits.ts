@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { signFileUrl } from "../lib/filesign.js";
+import { mediaUrls } from "../lib/media/urls.js";
 import { assertRefs, editableWhere, loadEditable, loadReadable, readableWhere, scopeOf } from "../lib/access.js";
 import { recordActivity } from "../lib/activity.js";
 import { badRequest, notFound } from "../lib/errors.js";
@@ -66,7 +66,7 @@ export async function loadVisits(familyId: string, filter: { ids?: string[] } = 
      FROM visit_waypoints WHERE visit_id = ANY($1::uuid[]) ORDER BY seq ASC`, [ids])).rows, (w) => w.visit_id);
   const photos = group((await query<any>(
     `SELECT CASE WHEN l.from_type = 'visit' THEN l.from_id ELSE l.to_id END AS visit_id,
-            m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
+            m.id, m.kind, m.caption, m.created_at
      FROM links l JOIN media m ON m.id = CASE WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
      WHERE ((l.from_type = 'media' AND l.to_type = 'visit' AND l.to_id = ANY($2::uuid[]))
          OR (l.to_type = 'media' AND l.from_type = 'visit' AND l.from_id = ANY($2::uuid[])))
@@ -93,8 +93,7 @@ export async function loadVisits(familyId: string, filter: { ids?: string[] } = 
     })),
     photos: (photos.get(r.id) ?? []).map((p, i) => ({
       id: p.id,
-      url: signFileUrl(p.rel_path),
-      thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
+      ...mediaUrls(p),
       mediaType: p.kind,
       caption: p.caption,
       seq: i,

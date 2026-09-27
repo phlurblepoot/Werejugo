@@ -101,7 +101,7 @@ test("packing, bookings and documents stay private to each family", async () => 
 });
 
 test("another family's trip photos show in the trip album only, and stay theirs", async () => {
-  const photo = await one("INSERT INTO media (family_id, trip_id, rel_path, caption) VALUES ($1, $2, 'families/b/x-1.jpg', 'Smiths at the lake') RETURNING id", [b.familyId, trip]);
+  const photo = await one("INSERT INTO media (family_id, trip_id, immich_asset_id, caption) VALUES ($1, $2, gen_random_uuid(), 'Smiths at the lake') RETURNING id", [b.familyId, trip]);
   const album = (await req(ctx.token, "GET", `/api/media?trip=${trip}`)).json().items;
   expect(album.map((m: { caption: string; familyName: string }) => [m.caption, m.familyName])).toEqual([["Smiths at the lake", "The Smiths"]]);
   expect((await req(ctx.token, "GET", "/api/media")).json().items).toEqual([]); // not in A's library

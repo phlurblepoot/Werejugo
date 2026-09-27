@@ -5,6 +5,8 @@ import { KIND_LABELS } from "../lib/style";
 import { renderMarkdown } from "../lib/markdown";
 import { MediaThumb } from "./MediaThumb";
 import { formatDate } from "../lib/dates";
+import { PhotoPicker } from "./photos/PhotoPicker";
+import { Suggestions } from "./suggestions/Suggestions";
 
 interface Props {
   item: Item;
@@ -20,6 +22,7 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
   const qc = useQueryClient();
   const [draft, setDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [picking, setPicking] = useState(false);
   const trip = trips.find((t) => t.id === item.tripId);
   const p = (item.properties ?? {}) as Record<string, string>;
   const cruiseMeta = [p.cruiseLine, p.ship].filter(Boolean).join(" · ") || null;
@@ -69,6 +72,11 @@ export function ItemDetail({ item, trips, user, onEdit, onDelete, onClose, onOpe
             ))}
           </div>
         )}
+        {item.canEdit !== false && (
+          <button type="button" className="add-photos-btn" onClick={() => setPicking(true)}>📷 Add photos</button>
+        )}
+        <Suggestions target={`visit:${item.id}`} onReview={() => setPicking(true)} />
+        {picking && <PhotoPicker entity={`visit:${item.id}`} uploadLinkTo={`visit:${item.id}`} onClose={() => setPicking(false)} />}
 
         {item.notes && (
           <div

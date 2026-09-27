@@ -13,7 +13,7 @@ beforeAll(async () => {
   );
   visitId = v.rows[0].id;
   const m = await query<{ id: string }>(
-    "INSERT INTO media (family_id, kind, rel_path) VALUES ($1,'image','loose/2024/a.jpg') RETURNING id",
+    "INSERT INTO media (family_id, kind, immich_asset_id) VALUES ($1,'image',gen_random_uuid()) RETURNING id",
     [ctx.familyId],
   );
   mediaId = m.rows[0].id;

@@ -9,6 +9,7 @@ const TEST_ENV: Record<string, string> = {
     process.env.TEST_DATABASE_URL ??
     "postgres://werejugo:change-me-in-production@localhost:5432/werejugo_test",
   JWT_SECRET: "test-secret",
+  ENCRYPTION_KEY: "test-encryption-key-0123456789abcdef0123456789",
   STORAGE_DIR: "/tmp/werejugo-test-storage",
   UPLOADS_DIR: "/tmp/werejugo-test-uploads",
 };

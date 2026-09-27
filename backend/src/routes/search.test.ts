@@ -11,7 +11,7 @@ beforeAll(async () => {
   await query("INSERT INTO visits (family_id, kind, title, created_by) VALUES ($1,'place','Venice Visit',$2)", [fam, ctx.userId]);
   await query("INSERT INTO people (family_id, display_name) VALUES ($1,'Venice Person')", [fam]);
   await query(
-    "INSERT INTO media (family_id, kind, rel_path, original_name, caption, created_by) VALUES ($1,'image','loose/2024/venice.jpg','venice.jpg','Venice photo',$2)",
+    "INSERT INTO media (family_id, kind, immich_asset_id, original_name, caption, created_by) VALUES ($1,'image',gen_random_uuid(),'venice.jpg','Venice photo',$2)",
     [fam, ctx.userId]);
   await query("INSERT INTO documents (family_id, title, doc_type) VALUES ($1,'Venice Passport','passport')", [fam]);
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type ItineraryItem, type Trip } from "../../api/client";
 import { RelatedPanel } from "../shared/RelatedPanel";
@@ -6,10 +7,12 @@ import { DocumentList } from "../documents/DocumentList";
 import { TripPacking } from "../packing/TripPacking";
 import { ShareButton } from "../shared/ShareButton";
 import { ByFamily, otherFamily } from "../shared/ByFamily";
-import { formatDate, formatDateRange } from "../../lib/dates";
+import { formatDate, formatDateRange, formatRelative } from "../../lib/dates";
 import { useAuth } from "../../lib/auth";
 import { TripFamilies, ROLE_LABEL } from "./TripFamilies";
 import { TripActivity } from "./TripActivity";
+import { PhotoPicker } from "../photos/PhotoPicker";
+import { Suggestions } from "../suggestions/Suggestions";
 
 type Status = "idea" | "planning" | "booked" | "done";
 const STATUSES: Status[] = ["idea", "planning", "booked", "done"];
@@ -22,6 +25,10 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
   const isHost = role === "host";
   const shared = trip.shared ?? false;
   const [newTitle, setNewTitle] = useState("");
+  const [picking, setPicking] = useState<{ entity: string; uploadLinkTo: string } | null>(null);
+  const photos = useQuery({ queryKey: ["media", "timeline", { trip: trip.id }], queryFn: () => api.mediaTimeline({ trip: trip.id }) });
+  // The trip is also an album in the family's Immich (kept the same both ways).
+  const album = useQuery({ queryKey: ["trip-album", trip.id], queryFn: () => api.tripAlbum(trip.id) });
   const itinKey = ["itinerary", trip.id];
   const { data: items = [] } = useQuery({ queryKey: itinKey, queryFn: () => api.listItinerary(trip.id) });
   const { data: docs = [] } = useQuery({ queryKey: ["documents", { owner: `trip:${trip.id}` }], queryFn: () => api.listDocuments({ owner: `trip:${trip.id}` }) });
@@ -47,6 +54,10 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
           : !canEdit ? null
           : scheduledView ? <button aria-label={`Convert ${i.title} to a visit`} onClick={() => convert.mutate(i.id)}>→ visit</button>
           : <button onClick={() => schedule.mutate(i.id)}>schedule</button>}
+        {scheduledView && (
+          <button className="ghost" aria-label={`Add photos to ${i.title}`} title="Add photos"
+            onClick={() => setPicking({ entity: `itinerary:${i.id}`, uploadLinkTo: i.convertedVisitId ? `visit:${i.convertedVisitId}` : `trip:${trip.id}` })}>📷</button>
+        )}
         {canEdit && <button className="ghost" aria-label={`Delete ${i.title}`} onClick={() => del.mutate(i.id)}>✕</button>}
       </div>
     );
@@ -72,6 +83,23 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
             <ByFamily prefix={`${ROLE_LABEL[role]} · hosted by `} name={trip.hostFamilyName} title={`Hosted by ${trip.hostFamilyName}`} />
           )}
         </div>
+
+        <div className="section-title"><span>📷 Photos</span></div>
+        <div className="row trip-photos">
+          <span className="er-sub">
+            {photos.data ? (photos.data.total ? `${photos.data.total} ${photos.data.total === 1 ? "photo" : "photos"}` : "No photos yet") : "…"}
+          </span>
+          {!!photos.data?.total && <Link className="btn-link" to={`/photos?trip=${trip.id}`}>Open album</Link>}
+          <button type="button" onClick={() => setPicking({ entity: `trip:${trip.id}`, uploadLinkTo: `trip:${trip.id}` })}>Add photos</button>
+        </div>
+        <Suggestions target={`trip:${trip.id}`} onReview={() => setPicking({ entity: `trip:${trip.id}`, uploadLinkTo: `trip:${trip.id}` })} />
+        {album.data && (
+          <div className="er-sub trip-album">
+            {album.data.error
+              ? <>Its album in Immich, “{album.data.name}”, couldn't be updated: {album.data.error}. It's tried again every few minutes.</>
+              : <>Also an album in Immich: <strong>{album.data.name}</strong>{album.data.syncedAt && <> · up to date {formatRelative(album.data.syncedAt)}</>}</>}
+          </div>
+        )}
 
         <div className="section-title"><span>🗺️ Itinerary</span></div>
         {scheduled.map((i) => itinRow(i, true))}
@@ -105,6 +133,7 @@ export function TripDetail({ trip, onClose, onChanged }: { trip: Trip; onClose: 
         <RelatedPanel entity={`trip:${trip.id}`} addTypes={["person"]} />
 
         <div className="modal-actions"><button className="primary" onClick={onClose}>Done</button></div>
+        {picking && <PhotoPicker entity={picking.entity} uploadLinkTo={picking.uploadLinkTo} onClose={() => setPicking(null)} />}
       </div>
     </div>
   );

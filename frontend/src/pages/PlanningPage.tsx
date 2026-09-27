@@ -1,3 +1,4 @@
+import { Suggestions } from "../components/suggestions/Suggestions";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +36,13 @@ export function PlanningPage() {
     setParams({}, { replace: true });
   }, [wanted, trips, setParams]);
 
+  // A trip made from a suggestion opens once the list has it.
+  async function openMadeTrip(r: { tripId?: string }) {
+    if (!r.tripId) return;
+    const t = (await refetch()).data?.find((x) => x.id === r.tripId);
+    if (t) setSelected(t);
+  }
+
   async function changeStatus(trip: Trip, status: Status) {
     await api.updateTrip(trip.id, { status });
     refresh();
@@ -62,6 +70,7 @@ export function PlanningPage() {
       />
 
       <div className="page-body">
+        <Suggestions target="library" title="Trips in your photos" onApplied={openMadeTrip} />
         {isError ? (
           <ErrorState hint="Couldn't load trips." onRetry={() => refetch()} />
         ) : isLoading ? (

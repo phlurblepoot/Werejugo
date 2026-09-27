@@ -56,7 +56,12 @@ export function Lightbox({ photos, index, onIndex, onClose }: Props) {
       )}
       <figure className="lightbox-figure" onClick={(e) => e.stopPropagation()}>
         {photo.mediaType === "video" ? (
-          <video src={`${API_URL}${photo.url}`} controls autoPlay style={{ maxWidth: "92vw", maxHeight: "84vh" }} />
+          <video
+            src={`${API_URL}${photo.videoUrl ?? photo.url}`}
+            poster={photo.videoUrl ? `${API_URL}${photo.url}` : undefined}
+            controls autoPlay playsInline preload="metadata"
+            style={{ maxWidth: "92vw", maxHeight: "84vh" }}
+          />
         ) : photo.mediaType === "audio" ? (
           <div style={{ padding: 40 }}>
             <div style={{ fontSize: 64 }}>🎵</div>

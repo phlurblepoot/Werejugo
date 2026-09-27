@@ -2,9 +2,10 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { loadEditable, readableWhere, scopeOf } from "../lib/access.js";
+import { loadEditable, loadReadable, readableWhere, scopeOf } from "../lib/access.js";
 import { badRequest, notFound } from "../lib/errors.js";
 import { endsBeforeStart, optionalYmd } from "../lib/validate.js";
+import { enqueueAlbumSync } from "../lib/jobs.js";
 
 const upsertSchema = z.object({
   name: z.string().min(1).max(160),
@@ -65,11 +66,11 @@ export async function tripRoutes(app: FastifyInstance): Promise<void> {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [req.user.familyId, b.name, b.description ?? "", b.startDate ?? null, b.endDate ?? null,
        b.coverPhotoUrl ?? null, b.color ?? "#2563eb", b.status ?? "idea", req.user.id]);
+    enqueueAlbumSync(req.user.familyId); // its Immich album
     return reply.code(201).send(toDto(await loadTrip(req.user.familyId, rows[0].id)));
   });
 
   app.patch("/api/trips/:id", async (req) => {
-    // TODO(phase-1b): re-home media on trip rename
     const id = (req.params as { id: string }).id;
     const current = await loadEditable<{ start_date: string | null; end_date: string | null }>("trip", id, scopeOf(req));
     const b = upsertSchema.partial().parse(req.body);
@@ -90,13 +91,33 @@ export async function tripRoutes(app: FastifyInstance): Promise<void> {
        has("startDate"), b.startDate ?? null, has("endDate"), b.endDate ?? null,
        has("coverPhotoUrl"), b.coverPhotoUrl ?? null, b.color ?? null, b.status ?? null]);
     if (!rows[0]) throw notFound("Trip not found");
+    if (b.name) enqueueAlbumSync(...(await familiesOnTrip(id))); // every family's album is renamed
     return toDto(await loadTrip(req.user.familyId, id));
+  });
+
+  // My family's album for the trip in its Immich account (lib/immich/albums.ts), or null.
+  app.get("/api/trips/:id/album", async (req) => {
+    const id = (req.params as { id: string }).id;
+    await loadReadable("trip", id, scopeOf(req));
+    const row = (await query<{ name: string; immich_asset_count: number | null; synced_at: string | null; last_error: string | null }>(
+      `SELECT ta.name, ta.immich_asset_count, ta.synced_at, ta.last_error FROM trip_albums ta
+         JOIN family_immich fi ON fi.family_id = ta.family_id
+        WHERE ta.family_id = $1 AND ta.trip_id = $2 AND ta.immich_album_id IS NOT NULL`, [req.user.familyId, id])).rows[0];
+    return row ? { name: row.name, assetCount: row.immich_asset_count ?? 0, syncedAt: row.synced_at, error: row.last_error } : null;
   });
 
   app.delete("/api/trips/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
+    const families = await familiesOnTrip(id);
     const res = await query("DELETE FROM trips WHERE id = $1 AND family_id = $2", [id, req.user.familyId]);
     if (!res.rowCount) throw notFound("Trip not found");
+    enqueueAlbumSync(...families); // their albums for it are deleted in Immich
     return reply.code(204).send();
   });
+}
+
+/** The host family and every member family of a trip. */
+async function familiesOnTrip(tripId: string): Promise<string[]> {
+  return (await query<{ family_id: string }>(
+    "SELECT family_id FROM trips WHERE id = $1 UNION SELECT family_id FROM trip_members WHERE trip_id = $1", [tripId])).rows.map((r) => r.family_id);
 }

@@ -27,7 +27,7 @@ beforeAll(async () => {
   await query(`INSERT INTO visit_waypoints (visit_id, label, geom) VALUES ($1, '${CANARY} stop', ST_SetSRID(ST_MakePoint(1, 1), 4326))`, [A.visit]);
   A.comment = await one(`INSERT INTO comments (visit_id, user_id, body) VALUES ($1, $2, '${CANARY} comment') RETURNING id`, [A.visit, A.user]);
   A.person = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person') RETURNING id`, [fa]);
-  A.media = await one(`INSERT INTO media (family_id, trip_id, rel_path, caption, taken_at, geom) VALUES ($1, $2, 'families/${fa}/loose/2024/a-1234abcd.jpg', '${CANARY} photo', '2024-06-02', ST_SetSRID(ST_MakePoint(12.5, 41.9), 4326)) RETURNING id`, [fa, A.trip]);
+  A.media = await one(`INSERT INTO media (family_id, trip_id, immich_asset_id, caption, taken_at, geom) VALUES ($1, $2, gen_random_uuid(), '${CANARY} photo', '2024-06-02', ST_SetSRID(ST_MakePoint(12.5, 41.9), 4326)) RETURNING id`, [fa, A.trip]);
   A.document = await one(`INSERT INTO documents (family_id, title, owner_person_id, expires_on) VALUES ($1, '${CANARY} passport', $2, CURRENT_DATE + 5) RETURNING id`, [fa, A.person]);
   A.theme = await one(`INSERT INTO themes (family_id, name) VALUES ($1, '${CANARY} theme') RETURNING id`, [fa]);
   A.icon = await one(`INSERT INTO icons (family_id, name, url) VALUES ($1, '${CANARY} icon', '/uploads/a.png') RETURNING id`, [fa]);
@@ -43,10 +43,14 @@ beforeAll(async () => {
   A.person2 = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person 2') RETURNING id`, [fa]);
   A.personLink = await one("INSERT INTO person_links (person_a, person_b) VALUES ($1, $2) RETURNING id", [A.person, A.person2]);
   await query(`INSERT INTO activity (trip_id, family_id, kind, summary) VALUES ($1, $2, 'visit.added', '${CANARY} activity')`, [A.trip, fa]);
+  await query("INSERT INTO trip_albums (family_id, trip_id, immich_album_id, name) VALUES ($1, $2, gen_random_uuid(), 'A album') ON CONFLICT (family_id, trip_id) DO UPDATE SET immich_album_id = EXCLUDED.immich_album_id, name = EXCLUDED.name", [fa, A.trip]);
+  A.smartAlbum = await one(`INSERT INTO smart_albums (family_id, name, filters) VALUES ($1, '${CANARY} album', '{"q": "beach"}') RETURNING id`, [fa]);
+  A.face = await one(`INSERT INTO immich_people (family_id, immich_person_id, name, photo_count) VALUES ($1, gen_random_uuid(), '${CANARY} face', 5) RETURNING id`, [fa]);
+  A.upload = await one(`INSERT INTO media_uploads (family_id, user_id, filename, size, state, error) VALUES ($1, $2, '${CANARY}.jpg', 100, 'failed', 'x') RETURNING id`, [fa, A.user]);
 
   const fb = b.familyId;
   B.trip = await one("INSERT INTO trips (family_id, name) VALUES ($1, 'B trip') RETURNING id", [fb]);
-  B.media = await one(`INSERT INTO media (family_id, rel_path) VALUES ($1, 'families/${fb}/loose/2024/b.jpg') RETURNING id`, [fb]);
+  B.media = await one(`INSERT INTO media (family_id, immich_asset_id) VALUES ($1, gen_random_uuid()) RETURNING id`, [fb]);
   B.person = await one("INSERT INTO people (family_id, display_name) VALUES ($1, 'B person') RETURNING id", [fb]);
   B.visit = await one("INSERT INTO visits (family_id, title) VALUES ($1, 'B visit') RETURNING id", [fb]);
 
@@ -79,6 +83,12 @@ async function snapshotA(): Promise<string> {
     trip_invites: "SELECT i.* FROM trip_invites i JOIN trips t ON t.id = i.trip_id WHERE t.family_id = $1",
     person_links: "SELECT l.* FROM person_links l JOIN people p ON p.id = l.person_a WHERE p.family_id = $1",
     activity: "SELECT a.* FROM activity a JOIN trips t ON t.id = a.trip_id WHERE t.family_id = $1",
+    family_immich: "SELECT * FROM family_immich WHERE family_id = $1",
+    media_uploads: "SELECT * FROM media_uploads WHERE family_id = $1",
+    immich_people: "SELECT * FROM immich_people WHERE family_id = $1",
+    trip_albums: "SELECT * FROM trip_albums WHERE family_id = $1",
+    suggestion_dismissals: "SELECT * FROM suggestion_dismissals WHERE family_id = $1",
+    smart_albums: "SELECT * FROM smart_albums WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -88,14 +98,14 @@ async function snapshotA(): Promise<string> {
 }
 let before = "";
 
-type Outcome = 400 | 403 | 404 | "clean";
+type Outcome = 400 | 403 | 404 | 503 | "clean";
 interface Case {
   /** The registered route this covers, e.g. "GET /api/visits/:id". */
   route: string;
   /** What family B sends. Ids are filled in lazily (the fixture runs first). */
   url: () => string;
   payload?: () => object;
-  /** 400/403/404 exactly, or "clean": any 2xx whose body mentions nothing of family A. */
+  /** 400/403/404/503 exactly, or "clean": any 2xx whose body mentions nothing of family A. */
   expect: Outcome;
   note?: string;
 }
@@ -116,11 +126,15 @@ const CASES: Case[] = [
   c("POST /api/visits/:id/comments", () => `/api/visits/${A.visit}/comments`, 404, () => ({ body: "hi" })),
   c("DELETE /api/comments/:id", () => `/api/comments/${A.comment}`, 404),
 
+  // Immich: B sees only its own connection state
+  c("GET /api/immich", () => "/api/immich", "clean"),
+
   // Trips, itinerary, blackouts
   c("GET /api/trips", () => "/api/trips", "clean"),
   c("POST /api/trips", () => "/api/trips", "clean", () => ({ name: "B's own trip" })),
   c("PATCH /api/trips/:id", () => `/api/trips/${A.trip}`, 404, () => ({ name: "hijacked" })),
   c("DELETE /api/trips/:id", () => `/api/trips/${A.trip}`, 404),
+  c("GET /api/trips/:id/album", () => `/api/trips/${A.trip}/album`, 404),
   c("GET /api/trips/:tripId/itinerary", () => `/api/trips/${A.trip}/itinerary`, 404),
   c("POST /api/trips/:tripId/itinerary", () => `/api/trips/${A.trip}/itinerary`, 404, () => ({ title: "x" })),
   c("PATCH /api/itinerary/:id", () => `/api/itinerary/${A.itinerary}`, 404, () => ({ title: "x" })),
@@ -170,9 +184,35 @@ const CASES: Case[] = [
   c("POST /api/links", () => "/api/links", 400, () => ({ from: `person:${B.person}`, to: `trip:${A.trip}` })),
   c("DELETE /api/links/:id", () => `/api/links/${A.link}`, 404),
 
+  // Smart search and smart albums
+  c("GET /api/media/search", () => `/api/media/search?q=${CANARY}&trip=${A.trip}`, 503, undefined, "B has no Immich; never A's library"),
+  c("GET /api/smart-albums", () => "/api/smart-albums", "clean"),
+  c("POST /api/smart-albums", () => "/api/smart-albums", 400, () => ({ name: "x", filters: { person: A.person } }), "their person"),
+  c("POST /api/smart-albums", () => "/api/smart-albums", 400, () => ({ name: "x", filters: { trip: A.trip } }), "their trip"),
+  c("PATCH /api/smart-albums/:id", () => `/api/smart-albums/${A.smartAlbum}`, 404, () => ({ name: "x" })),
+  c("DELETE /api/smart-albums/:id", () => `/api/smart-albums/${A.smartAlbum}`, 404),
+  c("POST /api/shares", () => "/api/shares", 404, () => ({ targetType: "smart_album", targetId: A.smartAlbum }), "their smart album"),
+
+  // Suggestions from photos
+  c("GET /api/suggestions", () => `/api/suggestions?for=trip:${A.trip}`, 404),
+  c("GET /api/suggestions", () => `/api/suggestions?for=visit:${A.visit}`, 404, undefined, "their place"),
+  c("GET /api/suggestions", () => "/api/suggestions?for=library", "clean"),
+  c("POST /api/suggestions/apply", () => "/api/suggestions/apply", 404, () => ({ key: `trip-photos:${A.trip}` })),
+  c("POST /api/suggestions/apply", () => "/api/suggestions/apply", 404, () => ({ key: `trip-person:${A.trip}:${A.person}` }), "their person on their trip"),
+  c("POST /api/suggestions/dismiss", () => "/api/suggestions/dismiss", 404, () => ({ key: `visit-photos:${A.visit}` })),
+
+  // Faces found in photos
+  c("GET /api/faces", () => "/api/faces?view=all", "clean"),
+  c("GET /api/faces/count", () => "/api/faces/count", "clean"),
+  c("PATCH /api/faces/:id", () => `/api/faces/${A.face}`, 404, () => ({ personId: B.person })),
+  c("PATCH /api/faces/:id", () => `/api/faces/${A.face}`, 404, () => ({ ignored: true }), "ignore their face"),
+  c("POST /api/faces/:id/person", () => `/api/faces/${A.face}/person`, 404, () => ({ displayName: "x" })),
+  c("GET /api/people/:id/faces", () => `/api/people/${A.person}/faces`, 404),
+
   // Photos & videos
   c("GET /api/media", () => "/api/media", "clean"),
   c("GET /api/media", () => `/api/media?trip=${A.trip}`, "clean", undefined, "filter by their trip"),
+  c("GET /api/media", () => `/api/media?person=${A.person}`, "clean", undefined, "filter by their person"),
   c("GET /api/media/:id", () => `/api/media/${A.media}`, 404),
   c("PATCH /api/media/:id", () => `/api/media/${A.media}`, 404, () => ({ caption: "x" })),
   c("PATCH /api/media/:id", () => `/api/media/${B.media}`, 400, () => ({ tripId: A.trip }), "put my photo in their trip"),
@@ -181,7 +221,32 @@ const CASES: Case[] = [
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [A.media], tripId: null })),
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [B.media], tripId: A.trip })),
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [B.media], visitId: A.visit })),
-  c("GET /api/files/*", () => `/api/files/families/${ctx.familyId}/loose/2024/a-1234abcd.jpg`, 403, undefined, "no signature"),
+  c("GET /api/files/*", () => `/api/files/families/${ctx.familyId}/documents/passport-1234abcd.pdf`, 403, undefined, "no signature"),
+  c("GET /api/media/timeline", () => "/api/media/timeline", "clean"),
+  c("GET /api/media/timeline", () => `/api/media/timeline?trip=${A.trip}`, "clean", undefined, "their trip's months"),
+  c("GET /api/media/geo", () => "/api/media/geo", "clean"),
+  c("GET /api/media/geo", () => `/api/media/geo?trip=${A.trip}`, "clean", undefined, "their trip's points"),
+  c("POST /api/media/links", () => "/api/media/links", "clean", () => ({ ids: [A.media, B.media] })),
+  c("POST /api/media/bulk", () => "/api/media/bulk", 400, () => ({ mediaIds: [A.media], hidden: true })),
+  c("POST /api/media/bulk", () => "/api/media/bulk", 400, () => ({ mediaIds: [B.media], tripId: A.trip }), "put my photos in their trip"),
+  c("GET /api/media/for", () => `/api/media/for?entity=visit:${A.visit}`, 404),
+  c("GET /api/media/for", () => `/api/media/for?entity=trip:${A.trip}`, 404),
+  c("GET /api/media/for", () => `/api/media/for?entity=person:${A.person}`, 404),
+  c("GET /api/media/for", () => `/api/media/for?entity=itinerary:${A.itinerary}`, 404),
+  c("POST /api/media/attach", () => "/api/media/attach", 400, () => ({ mediaIds: [A.media], to: `visit:${B.visit}` }), "their photo"),
+  c("POST /api/media/attach", () => "/api/media/attach", 400, () => ({ mediaIds: [B.media], to: `visit:${A.visit}` }), "their place"),
+  c("POST /api/media/attach", () => "/api/media/attach", 400, () => ({ mediaIds: [B.media], to: `trip:${A.trip}` }), "their trip"),
+  c("POST /api/media/attach", () => "/api/media/attach", 404, () => ({ mediaIds: [B.media], to: `itinerary:${A.itinerary}` }), "their plan"),
+  c("POST /api/media/uploads", () => "/api/media/uploads", 400, () => ({ filename: "a.jpg", size: 10, mime: "image/jpeg", linkTo: `visit:${A.visit}` }), "for their place"),
+  c("GET /api/media/uploads", () => "/api/media/uploads", "clean"),
+  c("GET /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}`, 404),
+  c("PUT /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}?offset=0`, 404, () => ({ bytes: "x" })),
+  c("POST /api/media/uploads/:id/retry", () => `/api/media/uploads/${A.upload}/retry`, 404),
+  c("DELETE /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}`, 404),
+  c("GET /api/m/:id/:size", () => `/api/m/${A.media}/thumbnail`, 403, undefined, "their photo, no signature"),
+  c("GET /api/f/:id", () => `/api/f/${A.face}`, 403, undefined, "their face, no signature"),
+  c("GET /api/f/:id", () => `/api/f/${A.face}?e=9999999999&s=forged`, 403, undefined, "their face, forged signature"),
+  c("GET /api/m/:id/:size", () => `/api/m/${A.media}/original?e=9999999999&s=forged`, 403, undefined, "their photo, forged signature"),
 
   // Map sets and map styling
   c("GET /api/themes", () => "/api/themes", "clean"),
@@ -257,7 +322,17 @@ const EXEMPT: Record<string, string> = {
   "POST /api/admin/view-family": "server admin only, audited (admin.test.ts)",
   "POST /api/admin/return": "server admin only (admin.test.ts)",
   "GET /api/admin/audit": "server admin only (admin.test.ts)",
-  "POST /api/media": "creates in the caller's family; the file goes in its own folder (media.test.ts)",
+  "GET /api/admin/immich": "server admin only (immich.test.ts)",
+  "PUT /api/admin/immich": "server admin only, audited (immich.test.ts)",
+  "POST /api/admin/immich/check": "server admin only (immich.test.ts)",
+  "POST /api/admin/immich/connect-all": "server admin only, audited (immich.test.ts)",
+  "POST /api/admin/immich/families/:id/connect": "server admin only, audited (immich.test.ts)",
+  "POST /api/admin/immich/families/:id/link": "server admin only, audited (immich.test.ts)",
+  "DELETE /api/admin/immich/families/:id": "server admin only, audited (immich.test.ts)",
+  "POST /api/immich/password": "acts on the caller's own family only; no id to aim at another (immich.test.ts)",
+  "POST /api/media": "creates in the caller's family's own Immich account (media.test.ts)",
+  "POST /api/immich/refresh": "syncs the caller's own family only; no id to aim at another (immich.test.ts)",
+  "POST /api/admin/immich/families/:id/sync": "server admin only (immich.test.ts)",
   "POST /api/import": "creates in the caller's family; onto another family's trip is 400 (import.test.ts)",
   "POST /api/icons": "creates in the caller's family",
   "POST /api/uploads/from-url": "no family data: a public map image",
