@@ -162,9 +162,36 @@ export const immich = {
   /** Making a person and a face by hand (what recognition does): for tests and the contract. */
   createPerson: (c: ImmichConn, name: string) => call("createPerson", c, (o) => sdk.createPerson({ personCreateDto: { name } }, o)),
   createFace: (c: ImmichConn, face: sdk.AssetFaceCreateDto) => call("createFace", c, (o) => sdk.createFace({ assetFaceCreateDto: face }, o)),
+
+  // ---- Albums (one per trip, lib/immich/albums.ts) ----
+
+  /** The albums the account owns (not ones shared with it). No assets: search by album for those. */
+  listAlbums: (c: ImmichConn) => call("listAlbums", c, (o) => sdk.getAllAlbums({ isOwned: true }, o)),
+  createAlbum: (c: ImmichConn, albumName: string, description: string, assetIds: string[] = []) =>
+    call("createAlbum", c, (o) => sdk.createAlbum({ createAlbumDto: { albumName, description, assetIds } }, o)),
+  renameAlbum: (c: ImmichConn, id: string, albumName: string) =>
+    call("updateAlbum", c, (o) => sdk.updateAlbumInfo({ id, updateAlbumDto: { albumName } }, o)),
+  /** The album only: its photos stay in the account. */
+  deleteAlbum: (c: ImmichConn, id: string) => call("deleteAlbum", c, (o) => sdk.deleteAlbum({ id }, o)),
+  addToAlbum: async (c: ImmichConn, id: string, assetIds: string[]) => {
+    for (let i = 0; i < assetIds.length; i += ALBUM_BATCH) {
+      const ids = assetIds.slice(i, i + ALBUM_BATCH);
+      await call("addToAlbum", c, (o) => sdk.addAssetsToAlbum({ id, bulkIdsDto: { ids } }, o));
+    }
+  },
+  removeFromAlbum: async (c: ImmichConn, id: string, assetIds: string[]) => {
+    for (let i = 0; i < assetIds.length; i += ALBUM_BATCH) {
+      const ids = assetIds.slice(i, i + ALBUM_BATCH);
+      await call("removeFromAlbum", c, (o) => sdk.removeAssetFromAlbum({ id, bulkIdsDto: { ids } }, o));
+    }
+  },
 };
 
+/** Assets added to or removed from an album per request. */
+const ALBUM_BATCH = 500;
+
 export type ImmichPerson = sdk.PersonResponseDto;
+export type ImmichAlbum = sdk.AlbumResponseDto;
 
 interface UploadMeta { filename: string; fileCreatedAt: string; fileModifiedAt: string }
 

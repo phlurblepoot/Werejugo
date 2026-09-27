@@ -46,6 +46,8 @@ export interface FakeAsset {
 export interface FakePerson { id: string; ownerId: string; name: string; birthDate: string | null; isHidden: boolean; updatedAt: string; featureAssetId: string | null }
 /** A face: which person is in which photo. */
 export interface FakeFace { id: string; assetId: string; personId: string }
+/** An album and the assets in it (in the order they were added). */
+export interface FakeAlbum { id: string; ownerId: string; name: string; description: string; assetIds: string[]; createdAt: string; updatedAt: string }
 type Caller = { user: User; key: ApiKey | null };
 
 export interface FakeImmich {
@@ -72,6 +74,9 @@ export interface FakeImmich {
   /** A person Immich recognised, and the photos their face is in. */
   addPerson(ownerId: string, p?: Partial<FakePerson>, assetIds?: string[]): FakePerson;
   addFace(assetId: string, personId: string): void;
+  albums: Map<string, FakeAlbum>;
+  /** An album made in Immich directly. */
+  addAlbum(ownerId: string, name: string, assetIds?: string[]): FakeAlbum;
   close(): Promise<void>;
 }
 
@@ -157,6 +162,24 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
   const assets = new Map<string, FakeAsset>();
   const people = new Map<string, FakePerson>();
   const faces: FakeFace[] = [];
+  const albums = new Map<string, FakeAlbum>();
+  const bump = (al: FakeAlbum) => { al.updatedAt = new Date(Math.max(Date.now(), Date.parse(al.updatedAt) + 1)).toISOString(); };
+  const mkAlbum = (ownerId: string, name: string, description = "", assetIds: string[] = []): FakeAlbum => {
+    const al: FakeAlbum = { id: randomUUID(), ownerId, name, description, assetIds: [...new Set(assetIds)], createdAt: now(), updatedAt: now() };
+    albums.set(al.id, al);
+    return al;
+  };
+  // Like Immich: the count leaves out trashed assets.
+  const albumDto = (al: FakeAlbum) => {
+    const live = al.assetIds.filter((id) => assets.get(id) && !assets.get(id)!.trashedAt);
+    const u = users.get(al.ownerId)!;
+    return {
+      id: al.id, albumName: al.name, description: al.description, albumThumbnailAssetId: live[0] ?? null,
+      albumUsers: [{ role: "owner", user: userDto(u) }], assetCount: live.length, createdAt: al.createdAt, updatedAt: al.updatedAt,
+      hasSharedLink: false, isActivityEnabled: true, shared: false, order: "desc",
+      ...(live.length ? { lastModifiedAssetTimestamp: al.updatedAt } : {}),
+    };
+  };
   const mkPerson = (ownerId: string, p: Partial<FakePerson> = {}): FakePerson => {
     const person: FakePerson = { id: randomUUID(), ownerId, name: "", birthDate: null, isHidden: false, updatedAt: now(), featureAssetId: null, ...p };
     people.set(person.id, person);
@@ -483,7 +506,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const c = auth(req, reply, "asset.read");
     if (!c) return reply;
     const b = (req.body ?? {}) as { filter?: Record<string, unknown>; cursor?: string; size?: number; withExif?: boolean };
-    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] }; personIds?: { any?: string[] }; createdAt?: DateOp };
+    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] }; personIds?: { any?: string[] }; albumIds?: { any?: string[] }; createdAt?: DateOp };
     // Like Immich: the locked folder is only for a PIN-unlocked session, never an API key.
     if (f.visibility?.eq === "locked" || f.visibility?.in?.includes("locked")) return fail(reply, 401, "Elevated permission is required");
     const size = Math.min(b.size ?? 250, 1000);
@@ -497,6 +520,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       .filter((a) => dateMatches(a.createdAt, f.createdAt))
       .filter((a) => !f.id?.eq || a.id === f.id.eq)
       .filter((a) => !f.personIds?.any || faces.some((x) => x.assetId === a.id && f.personIds!.any!.includes(x.personId)))
+      .filter((a) => !f.albumIds?.any || f.albumIds.any.some((id) => albums.get(id)?.assetIds.includes(a.id)))
       .filter((a) => (f.visibility?.eq ? a.visibility === f.visibility.eq : f.visibility?.in ? f.visibility.in.includes(a.visibility) : a.visibility !== "hidden" && a.visibility !== "locked"))
       .sort((x, y) => (y.fileCreatedAt.localeCompare(x.fileCreatedAt)) || x.id.localeCompare(y.id));
     const page = matching.slice(offset, offset + size);
@@ -505,6 +529,87 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       assets: { items: page.map((a) => assetDto(a, b.withExif ?? false)), count: page.length, nextCursor: next, nextPage: null, total: matching.length, facets: [] },
       albums: { items: [], count: 0, total: 0, facets: [] },
     };
+  });
+
+  // ---- Albums ----
+  const ownAlbum = (c: Caller, id: string) => {
+    const al = albums.get(id);
+    return al && al.ownerId === c.user.id ? al : null;
+  };
+  app.get("/api/albums", async (req, reply) => {
+    if (!enter("listAlbums", reply)) return reply;
+    const c = auth(req, reply, "album.read");
+    if (!c) return reply;
+    return [...albums.values()].filter((al) => al.ownerId === c.user.id).map(albumDto);
+  });
+  app.post("/api/albums", async (req, reply) => {
+    if (!enter("createAlbum", reply)) return reply;
+    const c = auth(req, reply, "album.create");
+    if (!c) return reply;
+    const b = (req.body ?? {}) as { albumName?: string; description?: string; assetIds?: string[] };
+    if (typeof b.albumName !== "string") return fail(reply, 400, "albumName must be a string");
+    const mine = (b.assetIds ?? []).filter((id) => ownAsset(c, id));
+    return reply.code(201).send(albumDto(mkAlbum(c.user.id, b.albumName, b.description ?? "", mine)));
+  });
+  app.get("/api/albums/:id", async (req, reply) => {
+    if (!enter("getAlbum", reply)) return reply;
+    const c = auth(req, reply, "album.read");
+    if (!c) return reply;
+    const al = ownAlbum(c, (req.params as { id: string }).id);
+    if (!al) return fail(reply, 400, "Not found or no album.read access");
+    return albumDto(al);
+  });
+  app.patch("/api/albums/:id", async (req, reply) => {
+    if (!enter("updateAlbum", reply)) return reply;
+    const c = auth(req, reply, "album.update");
+    if (!c) return reply;
+    const al = ownAlbum(c, (req.params as { id: string }).id);
+    if (!al) return fail(reply, 400, "Not found or no album.update access");
+    const b = (req.body ?? {}) as { albumName?: string; description?: string };
+    if (b.albumName !== undefined) al.name = b.albumName;
+    if (b.description !== undefined) al.description = b.description;
+    bump(al);
+    return albumDto(al);
+  });
+  app.delete("/api/albums/:id", async (req, reply) => {
+    if (!enter("deleteAlbum", reply)) return reply;
+    const c = auth(req, reply, "album.delete");
+    if (!c) return reply;
+    const al = ownAlbum(c, (req.params as { id: string }).id);
+    if (!al) return fail(reply, 400, "Not found or no album.delete access");
+    albums.delete(al.id);
+    return reply.code(204).send();
+  });
+  app.put("/api/albums/:id/assets", async (req, reply) => {
+    if (!enter("addToAlbum", reply)) return reply;
+    const c = auth(req, reply, "albumAsset.create");
+    if (!c) return reply;
+    const al = ownAlbum(c, (req.params as { id: string }).id);
+    if (!al) return fail(reply, 400, "Not found or no albumAsset.create access");
+    const ids = ((req.body ?? {}) as { ids?: string[] }).ids ?? [];
+    const out = ids.map((id) => {
+      if (!ownAsset(c, id)) return { id, success: false, error: "no_permission" };
+      if (al.assetIds.includes(id)) return { id, success: false, error: "duplicate" };
+      al.assetIds.push(id);
+      return { id, success: true };
+    });
+    if (out.some((r) => r.success)) bump(al);
+    return out;
+  });
+  app.delete("/api/albums/:id/assets", async (req, reply) => {
+    if (!enter("removeFromAlbum", reply)) return reply;
+    const c = auth(req, reply, "albumAsset.delete");
+    if (!c) return reply;
+    const al = ownAlbum(c, (req.params as { id: string }).id);
+    if (!al) return fail(reply, 400, "Not found or no albumAsset.delete access");
+    const ids = ((req.body ?? {}) as { ids?: string[] }).ids ?? [];
+    const out = ids.map((id) => {
+      if (!al.assetIds.includes(id)) return { id, success: false, error: "not_found" };
+      al.assetIds = al.assetIds.filter((x) => x !== id);
+      return { id, success: true };
+    });
+    if (out.some((r) => r.success)) bump(al);
+    return out;
   });
 
   const serve = (op: string, mimeOf: (a: FakeAsset) => string, attachment = false) => async (req: FastifyRequest, reply: FastifyReply) => {
@@ -540,6 +645,8 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       return person;
     },
     addFace,
+    albums,
+    addAlbum: (ownerId, name, assetIds = []) => mkAlbum(ownerId, name, "", assetIds),
     version: opts.version ?? { major: 3, minor: 2, patch: 2, prerelease: null },
     failNext: (op, status) => { failures.set(op, status); },
     addAdminKey: (permissions) => mkKey(admin.id, "limited", permissions).secret,

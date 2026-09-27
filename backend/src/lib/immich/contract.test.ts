@@ -243,6 +243,44 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(thumb!.headers.get("content-type")).toMatch(/^image\//);
   }, 60_000);
 
+  test("albums: made with a photo, found by search, added to, removed from, renamed and deleted (the photo stays)", async () => {
+    const fam = await newFamily("Contract Albums");
+    const photo = async (n: number) => {
+      const jpeg = await sharp({ create: { width: 64, height: 48, channels: 3, background: { r: n * 40, g: Math.floor(Math.random() * 255), b: 90 } } }).jpeg().toBuffer();
+      return immich.uploadAsset(fam, new Blob([jpeg], { type: "image/jpeg" }), { filename: `trip-${n}.jpg`, fileCreatedAt: `2024-06-0${n}T10:00:00.000Z`, fileModifiedAt: `2024-06-0${n}T10:00:00.000Z` });
+    };
+    const [a, b] = [await photo(1), await photo(2)];
+    const album = await immich.createAlbum(fam, "Italy 2024", "Synced with Werejugo", [a.id]);
+    expect(album).toMatchObject({ albumName: "Italy 2024", assetCount: 1 });
+    const inAlbum = async () => (await immich.searchAssets(fam, { filter: { albumIds: { any: [album.id] }, trashedAt: { eq: null } }, size: 100 })).items.map((x) => x.id).sort();
+    const listed = async () => (await immich.listAlbums(fam)).find((x) => x.id === album.id);
+    expect(await inAlbum()).toEqual([a.id]);
+    expect(await listed()).toMatchObject({ albumName: "Italy 2024", assetCount: 1 });
+
+    // What the sync watches to notice a change made in Immich: updatedAt and assetCount.
+    const wait = () => new Promise((r) => setTimeout(r, 20));
+    let before = (await listed())!.updatedAt;
+    await wait();
+    await immich.addToAlbum(fam, album.id, [b.id, a.id]); // a is already in: not an error
+    expect(await inAlbum()).toEqual([a.id, b.id].sort());
+    const afterAdd = (await listed())!;
+    expect(afterAdd.assetCount).toBe(2);
+    expect(afterAdd.updatedAt).not.toBe(before);
+    before = afterAdd.updatedAt;
+    await wait();
+    await immich.removeFromAlbum(fam, album.id, [a.id]);
+    expect(await inAlbum()).toEqual([b.id]);
+    const afterRemove = (await listed())!;
+    expect(afterRemove.assetCount).toBe(1);
+    expect(afterRemove.updatedAt).not.toBe(before);
+
+    await immich.renameAlbum(fam, album.id, "Italy, summer 2024");
+    expect((await listed())!.albumName).toBe("Italy, summer 2024");
+    await immich.deleteAlbum(fam, album.id);
+    expect(await listed()).toBeUndefined();
+    expect((await immich.getAsset(fam, b.id)).id).toBe(b.id);
+  }, 60_000);
+
   test("a file Immich can't take is refused with its reason", async () => {
     const e = email();
     await immich.createUser({ url, key: adminKey }, { email: e, name: "Contract Types", password: "types-password-1" });
