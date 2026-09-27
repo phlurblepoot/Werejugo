@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { expect, test, vi } from "vitest";
 import { withQC } from "../test/qc";
 const h = vi.hoisted(() => ({
@@ -9,7 +10,7 @@ vi.mock("../api/client", () => ({ API_URL: "", api: h }));
 import { PlanningPage } from "./PlanningPage";
 
 test("renders the board and toggles to the timeline", async () => {
-  render(withQC(<PlanningPage />));
+  render(withQC(<MemoryRouter><PlanningPage /></MemoryRouter>));
   expect(await screen.findByText("Italy 2025")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /Timeline/ }));
   // Still shows the trip (now as a bar) after toggling:

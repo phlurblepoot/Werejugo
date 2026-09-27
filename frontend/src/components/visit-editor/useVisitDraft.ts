@@ -7,7 +7,7 @@ import { defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "..
 import type { PinShapeVals } from "../PinStyleControls";
 import type { PathVals } from "../PathStyleControls";
 
-export const POINT_KINDS: ItemKind[] = ["place", "food", "custom"];
+export const POINT_KINDS: ItemKind[] = ["place", "food", "stay", "custom"];
 
 export interface VisitDraft {
   kind: ItemKind;

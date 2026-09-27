@@ -8,7 +8,8 @@ import { config } from "../config.js";
 
 const fileId = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
 
-export const ALLOWED_IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp"]);
+// No SVG: served from our own origin it could run script (stored XSS).
+export const ALLOWED_IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 const VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".m4v"]);
 const AUDIO_EXT = new Set([".mp3", ".m4a", ".ogg", ".wav", ".aac"]);
 const ALLOWED_MEDIA_EXT = new Set([...ALLOWED_IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT]);
@@ -34,7 +35,7 @@ async function writePart(
   return { name, url: `/uploads/${name}`, path, ext };
 }
 
-/** Stream an image upload (icons, overlays). Returns its public `/uploads/...` URL. */
+/** Stream an image upload (custom pin icons). Returns its public `/uploads/...` URL. */
 export async function saveUpload(part: {
   filename: string;
   file: NodeJS.ReadableStream;
@@ -51,7 +52,7 @@ export async function savePhoto(part: {
   const { url, path, ext } = await writePart(part, ALLOWED_MEDIA_EXT);
   const mediaType = mediaTypeFor(ext);
   let thumbUrl: string | null = null;
-  if (mediaType === "image" && ext !== ".svg" && ext !== ".gif") {
+  if (mediaType === "image" && ext !== ".gif") {
     try {
       const thumbName = `${basename(url).replace(ext, "")}_thumb.jpg`;
       await sharp(path)
@@ -63,8 +64,6 @@ export async function savePhoto(part: {
     } catch {
       thumbUrl = null; // fall back to the full image
     }
-  } else if (ext === ".svg") {
-    thumbUrl = url;
   }
   return { url, thumbUrl, mediaType };
 }
@@ -72,7 +71,6 @@ export async function savePhoto(part: {
 function extForContentType(ct: string): string | null {
   if (ct.includes("png")) return ".png";
   if (ct.includes("webp")) return ".webp";
-  if (ct.includes("svg")) return ".svg";
   if (ct.includes("gif")) return ".gif";
   if (ct.includes("jpeg") || ct.includes("jpg")) return ".jpg";
   return null;
@@ -99,7 +97,7 @@ export async function downloadImage(
   await writeFile(join(config.uploadsDir, name), buf);
 
   let thumbUrl: string | null = null;
-  if (ext !== ".svg" && ext !== ".gif") {
+  if (ext !== ".gif") {
     try {
       // Preserve transparency for PNG/WebP (logos); JPEG otherwise.
       const thumbExt = ext === ".png" ? ".png" : ext === ".webp" ? ".webp" : ".jpg";
@@ -111,8 +109,6 @@ export async function downloadImage(
     } catch {
       thumbUrl = null;
     }
-  } else if (ext === ".svg") {
-    thumbUrl = `/uploads/${name}`;
   }
   return { url: `/uploads/${name}`, thumbUrl, mediaType: "image" };
 }

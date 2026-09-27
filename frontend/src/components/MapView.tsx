@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
-import maplibregl, { type StyleSpecification } from "maplibre-gl";
-import type { Item, MapSet } from "../api/client";
+import maplibregl from "maplibre-gl";
+import type { Item } from "../api/client";
 import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
 import { buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
 import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
+import { formatDate } from "../lib/dates";
 
 export interface ItemStyle {
   color: string;
@@ -29,7 +30,8 @@ interface MarkerSpec {
 }
 
 interface Props {
-  mapSet: MapSet;
+  /** The base map (a MapLibre style URL); the default when empty. */
+  styleUrl?: string | null;
   items: Item[];
   selectedItemId: string | null;
   getStyle: (item: Item) => ItemStyle;
@@ -46,37 +48,22 @@ function absoluteUrl(url: string): string {
   return url.startsWith("/uploads/") ? `${API_URL}${url}` : url;
 }
 
-function customOverlayStyle(mapSet: MapSet): StyleSpecification {
-  const b = mapSet.overlayBounds ?? [-180, -85, 180, 85];
-  const [w, s, e, n] = b;
-  return {
-    version: 8,
-    sources: {
-      overlay: {
-        type: "image",
-        url: absoluteUrl(mapSet.overlayUrl ?? ""),
-        coordinates: [
-          [w, n],
-          [e, n],
-          [e, s],
-          [w, s],
-        ],
-      },
-    },
-    layers: [
-      { id: "bg", type: "background", paint: { "background-color": "#0b1020" } },
-      { id: "overlay", type: "raster", source: "overlay", paint: { "raster-opacity": 1 } },
-    ],
-  };
-}
+const styleFor = (styleUrl?: string | null) => styleUrl || MAP_STYLE_URL;
 
-function styleFor(mapSet: MapSet): string | StyleSpecification {
-  if (mapSet.baseKind === "custom" && mapSet.overlayUrl) return customOverlayStyle(mapSet);
-  return mapSet.styleUrl || MAP_STYLE_URL;
+/** Every coordinate of the given places (points, route vertices and stops). */
+function coordsOf(items: Item[]): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const i of items) {
+    const g = i.geometry;
+    if (g?.type === "Point") out.push(g.coordinates as [number, number]);
+    else if (g?.type === "LineString") out.push(...(g.coordinates as Array<[number, number]>));
+    for (const w of i.waypoints) out.push([w.lng, w.lat]);
+  }
+  return out;
 }
 
 export function MapView(props: Props) {
-  const { mapSet, items, selectedItemId, pickMode, editMode, visitedGeo } = props;
+  const { styleUrl, items, selectedItemId, pickMode, editMode, visitedGeo } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -92,9 +79,9 @@ export function MapView(props: Props) {
     if (!containerRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: styleFor(mapSet),
-      center: [mapSet.defaultLng, mapSet.defaultLat],
-      zoom: mapSet.defaultZoom,
+      style: styleFor(styleUrl),
+      center: [0, 20],
+      zoom: 1.5,
     });
     map.addControl(new maplibregl.NavigationControl({}), "top-right");
     mapRef.current = map;
@@ -119,13 +106,31 @@ export function MapView(props: Props) {
 
   const onPickRef = (lng: number, lat: number) => dataRef.current.onPick(lng, lat);
 
+  // Only when the family changes its base map — the constructor already loaded the first style.
+  const appliedStyle = useRef(styleFor(styleUrl));
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
-    map.setStyle(styleFor(mapSet));
+    const next = styleFor(styleUrl);
+    if (!map || next === appliedStyle.current) return;
+    appliedStyle.current = next;
+    map.setStyle(next);
     map.once("styledata", () => renderAll());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapSet.id, mapSet.baseKind, mapSet.overlayUrl, mapSet.styleUrl, JSON.stringify(mapSet.overlayBounds)]);
+  }, [styleUrl]);
+
+  // Frame the places once, when they first arrive (unless one is being opened).
+  const framed = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || framed.current || items.length === 0) return;
+    framed.current = true;
+    if (selectedItemId) return;
+    const cs = coordsOf(items);
+    if (!cs.length) return;
+    const b = cs.reduce((bb, c) => bb.extend(c), new maplibregl.LngLatBounds(cs[0], cs[0]));
+    map.fitBounds(b, { padding: 60, maxZoom: 9, duration: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -285,7 +290,7 @@ export function MapView(props: Props) {
       item.waypoints.forEach((wp, i) => specs.push({ lng: wp.lng, lat: wp.lat, item, wpIndex: i }));
     }
 
-    // Edit mode: show every marker individually so each can be dragged.
+    // Edit mode: show every marker individually so each can be dragged (makeMarker only lets editable ones move).
     if (editMode) {
       for (const s of specs) {
         markersRef.current.push(makeMarker(map, s.item, getStyle(s.item), [s.lng, s.lat], s.wpIndex, handlers));
@@ -371,7 +376,7 @@ export function MapView(props: Props) {
     const el = buildBadge(style);
     const wp = waypointIndex !== null ? item.waypoints[waypointIndex] : null;
     const wpDate = wp ? formatWaypointTime(wp) || undefined : undefined;
-    const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode })
+    const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode && item.canEdit !== false })
       .setLngLat(lngLat)
       .setPopup(buildPopup(item, wp?.label, wpDate))
       .addTo(map);
@@ -410,7 +415,7 @@ export function MapView(props: Props) {
         : "") +
       `<div class="title">${escapeHtml(item.title)}</div>` +
       (label ? `<div class="sub">${escapeHtml(label)}</div>` : "") +
-      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(item.occurredOn)}</div>` : "") +
+      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(formatDate(item.occurredOn))}</div>` : "") +
       (item.photos.length > 1 ? `<div class="sub">${item.photos.length} photos</div>` : "");
     return new maplibregl.Popup({ offset: 18, maxWidth: "260px" }).setHTML(html);
   }

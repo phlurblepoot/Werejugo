@@ -9,7 +9,7 @@
   <Overview>Werejugo web app (nginx). Serves the UI and proxies /api + /uploads to the backend. This is the only container you expose. Open the WebUI to use the app. Start it last. Must share the custom "werejugo" network.</Overview>
   <Category>Other:</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/claude/laughing-edison-sTVtG/frontend/public/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/main/frontend/public/icon.svg</Icon>
   <ExtraParams/>
   <Description>Werejugo web app. The single container you expose; proxies the API internally.</Description>
   <Networking>

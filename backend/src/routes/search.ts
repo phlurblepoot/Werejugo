@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { signFileUrl } from "../lib/filesign.js";
+import { likeEscape } from "../lib/validate.js";
 
 interface Hit { type: string; id: string; label: string; thumbUrl: string | null; to: string }
 
@@ -15,7 +16,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     const term = ((req.query as { q?: string }).q ?? "").trim();
     const empty = { people: [], trips: [], visits: [], photos: [], documents: [] };
     if (term.length === 0) return empty;
-    const like = `%${term}%`;
+    const like = `%${likeEscape(term)}%`;
 
     const trips = (await query<any>(
       "SELECT id, name FROM trips WHERE family_id = $1 AND name ILIKE $2 ORDER BY name ASC LIMIT $3",
@@ -27,7 +28,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
     const people = (await query<any>(
       `SELECT p.id, p.display_name, m.rel_path, m.thumb_rel_path
-       FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id
+       FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id AND m.family_id = p.family_id
        WHERE p.family_id = $1 AND p.display_name ILIKE $2 ORDER BY p.display_name ASC LIMIT $3`,
       [fam, like, PER_GROUP])).rows.map<Hit>((r) => {
         const rel = r.thumb_rel_path ?? r.rel_path;

@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type DocumentItem, type DocumentFilters, type DocType } from "../api/client";
 import { DocumentList } from "../components/documents/DocumentList";
 import { DocumentForm } from "../components/documents/DocumentForm";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { Button, PageHeader } from "../components/kit";
+import { IdCard, Plus } from "lucide-react";
 
 const DOC_TYPES: DocType[] = ["passport", "visa", "booking", "insurance", "other"];
 
@@ -11,6 +14,14 @@ export function DocumentsPage() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [editing, setEditing] = useState<DocumentItem | null>(null);
+  // /documents?doc=<id> (e.g. from search) opens that document.
+  const [params, setParams] = useSearchParams();
+  const wantedDoc = params.get("doc");
+  useEffect(() => {
+    if (!wantedDoc) return;
+    api.getDocument(wantedDoc).then(setEditing).catch(() => {});
+    setParams({}, { replace: true });
+  }, [wantedDoc, setParams]);
   const [adding, setAdding] = useState(false);
 
   const { data: documents, isLoading, isError, refetch } = useQuery({
@@ -28,11 +39,11 @@ export function DocumentsPage() {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">🛂 Documents</span>
-        <span className="spacer" />
-        <button className="primary" onClick={() => setAdding(true)}>+ Add</button>
-      </header>
+      <PageHeader
+        icon={IdCard}
+        title="Documents"
+        actions={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add</Button>}
+      />
 
       <div className="page-body">
         {isError ? (

@@ -23,7 +23,7 @@ async function uploadPng(filename = "trip pic.png"): Promise<string> {
 test("uploads media to loose/<year> by default and returns a signed url", async () => {
   const id = await uploadPng();
   const row = await query<{ rel_path: string }>("SELECT rel_path FROM media WHERE id = $1", [id]);
-  expect(row.rows[0].rel_path).toMatch(/^loose\/\d{4}\/trip-pic\.png$/);
+  expect(row.rows[0].rel_path).toMatch(new RegExp(`^families/${ctx.familyId}/loose/\\d{4}/trip-pic-[0-9a-f]{8}\\.png$`));
   const dto = await ctx.app.inject({ method: "GET", url: `/api/media/${id}`, headers: auth() });
   expect(dto.json().url).toContain("/api/files/");
   expect(dto.json().url).toContain("sig=");
@@ -41,7 +41,7 @@ test("setting a media's trip moves the file into the trip folder", async () => {
   });
   expect(res.statusCode).toBe(200);
   const row = await query<{ rel_path: string }>("SELECT rel_path FROM media WHERE id = $1", [id]);
-  expect(row.rows[0].rel_path).toBe("trips/2024-italy/photos/italy-pic.png");
+  expect(row.rows[0].rel_path).toMatch(new RegExp(`^families/${ctx.familyId}/trips/2024-italy/photos/italy-pic-[0-9a-f]{8}\\.png$`));
 });
 
 test("upload stores null taken_at/geom for a photo with no EXIF", async () => {

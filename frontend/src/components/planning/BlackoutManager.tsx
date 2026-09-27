@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
+import { formatDateRange } from "../../lib/dates";
 
 export function BlackoutManager({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -31,7 +32,7 @@ export function BlackoutManager({ onClose }: { onClose: () => void }) {
         {blackouts.map((b) => (
           <div key={b.id} className="itin-item">
             <span className="t">{b.label}</span>
-            <span className="er-sub">{b.startDate} – {b.endDate}</span>
+            <span className="er-sub">{formatDateRange(b.startDate, b.endDate)}</span>
             <button className="ghost" aria-label={`Delete ${b.label}`} onClick={() => del.mutate(b.id)}>✕</button>
           </div>
         ))}

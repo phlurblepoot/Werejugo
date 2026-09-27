@@ -9,7 +9,7 @@
   <Overview>PostgreSQL + PostGIS database for Werejugo. Start this container first. It must share the custom "werejugo" Docker network with the backend and frontend.</Overview>
   <Category>Other:</Category>
   <WebUI/>
-  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/claude/laughing-edison-sTVtG/frontend/public/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/phlurblepoot/werejugo/main/frontend/public/icon.svg</Icon>
   <ExtraParams/>
   <Description>PostgreSQL + PostGIS database for Werejugo. Share the custom "werejugo" network with the other two containers.</Description>
   <Networking>

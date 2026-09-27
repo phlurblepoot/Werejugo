@@ -18,6 +18,24 @@ async function waitForDb(retries = 30): Promise<void> {
   throw new Error("Database did not become available in time");
 }
 
+/**
+ * The database was built by migrations this version doesn't have — in practice,
+ * the pre-baseline 0001_init … 0012_accounts. It can't be upgraded in place.
+ */
+export class LegacyDatabaseError extends Error {
+  constructor(public readonly unknown: string[]) {
+    super(
+      "This database was created by an older version of Werejugo (before the 2026-09 schema baseline) " +
+      `and can't be upgraded in place (unknown migrations: ${unknown.join(", ")}). ` +
+      "To keep the data, run the previous version once more and download a backup (Admin → Backup). " +
+      "Then reset the database: stop Werejugo, delete the PostgreSQL data folder (or volume), start this version, " +
+      "complete the setup screen and restore the backup from Admin → Backup. " +
+      "See README → \"Resetting the database\".",
+    );
+    this.name = "LegacyDatabaseError";
+  }
+}
+
 export async function migrate(): Promise<void> {
   await waitForDb();
   await pool.query(`
@@ -36,6 +54,8 @@ export async function migrate(): Promise<void> {
       (r) => r.filename,
     ),
   );
+  const unknown = [...applied].filter((f) => !files.includes(f)).sort();
+  if (unknown.length) throw new LegacyDatabaseError(unknown);
 
   for (const file of files) {
     if (applied.has(file)) continue;

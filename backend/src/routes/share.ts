@@ -38,9 +38,8 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ id: r.id, token: r.token, targetType: r.target_type, targetId: r.target_id, createdAt: r.created_at });
   });
 
-  app.get("/api/shares", { preHandler: requireAuth }, async (req, reply) => {
-    const { targetType, targetId } = req.query as { targetType?: string; targetId?: string };
-    if (!targetType || !targetId) return reply.code(400).send({ error: "targetType and targetId are required" });
+  app.get("/api/shares", { preHandler: requireAuth }, async (req) => {
+    const { targetType, targetId } = z.object({ targetType: z.enum(["trip", "album"]), targetId: z.string().uuid() }).parse(req.query);
     const { rows } = await query<any>(
       `SELECT id, token, target_type, target_id, created_at FROM share_links
        WHERE family_id = $1 AND target_type = $2 AND target_id = $3 ORDER BY created_at DESC`,
@@ -94,6 +93,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
               COALESCE((SELECT json_agg(json_build_object('id', m.id, 'rel_path', m.rel_path,
                          'thumb_rel_path', m.thumb_rel_path, 'mediaType', m.kind, 'caption', m.caption) ORDER BY m.created_at)
                        FROM links l JOIN media m ON m.id = CASE WHEN l.from_type='media' THEN l.from_id ELSE l.to_id END
+                                   AND m.family_id = l.family_id
                        WHERE l.family_id = v.family_id
                          AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=v.id)
                            OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=v.id))), '[]') AS photos

@@ -1,7 +1,9 @@
 import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
-import { parseRef, TABLE_FOR, type CoreType, type EntityRef } from "./refs.js";
+import { parseRef, type CoreType, type EntityRef } from "./refs.js";
 import { reconcileMediaTrip } from "./reconcile.js";
+import { assertRefs, loadReadable, type Scope } from "./access.js";
+import { badRequest, conflict } from "./errors.js";
 
 // Canonical unordered allow-list. media↔trip is intentionally excluded:
 // a photo's trip is the media.trip_id FK (Task 12), not a link.
@@ -15,14 +17,6 @@ export function isAllowedPair(a: CoreType, b: CoreType): boolean {
   return ALLOWED.has(pairKey(a, b));
 }
 
-async function belongsToFamily(familyId: string, ref: EntityRef): Promise<boolean> {
-  const { rowCount } = await query(
-    `SELECT 1 FROM ${TABLE_FOR[ref.type]} WHERE id = $1 AND family_id = $2`,
-    [ref.id, familyId],
-  );
-  return Boolean(rowCount);
-}
-
 export interface LinkDto {
   id: string;
   from: string;
@@ -30,33 +24,27 @@ export interface LinkDto {
   role: string;
 }
 
-export type LinkResult =
-  | { ok: true; link: LinkDto }
-  | { ok: false; code: number; error: string };
-
-/** Create a link after validating types, family ownership, and trip inheritance. */
-export async function createLink(
-  familyId: string,
-  userId: string,
-  fromRaw: string,
-  toRaw: string,
-  role: string,
-): Promise<LinkResult> {
-  const from = parseRef(fromRaw);
-  const to = parseRef(toRaw);
-  if (!from || !to) return { ok: false, code: 400, error: "Invalid entity reference" };
-  if (!isAllowedPair(from.type, to.type)) {
-    return { ok: false, code: 400, error: "That link type is not allowed" };
-  }
-  if (!(await belongsToFamily(familyId, from)) || !(await belongsToFamily(familyId, to))) {
-    return { ok: false, code: 404, error: "Entity not found" };
-  }
+/**
+ * Create a link after validating types, that both ends are usable by this
+ * family, and trip inheritance. Pairs are stored in one canonical direction
+ * (by type name), so "photo → place" and "place → photo" are the same link.
+ */
+export async function createLink(scope: Scope, fromRaw: string, toRaw: string, role: string): Promise<LinkDto> {
+  const a = parseRef(fromRaw);
+  const b = parseRef(toRaw);
+  if (!a || !b) throw badRequest("Invalid entity reference");
+  if (!isAllowedPair(a.type, b.type)) throw badRequest("That link type is not allowed");
+  await assertRefs(scope, { [a.type]: a.id });
+  await assertRefs(scope, { [b.type]: b.id });
+  const [from, to] = a.type <= b.type ? [a, b] : [b, a];
+  const familyId = scope.familyId;
+  const userId = scope.userId;
 
   // media↔visit: a photo inherits the visit's trip (move-on-link). Reject conflicts.
   const mediaVisit = pickMediaVisit(from, to);
   if (mediaVisit) {
-    const conflict = await applyTripInheritance(familyId, mediaVisit.mediaId, mediaVisit.visitId);
-    if (conflict) return { ok: false, code: 409, error: conflict };
+    const problem = await applyTripInheritance(familyId, mediaVisit.mediaId, mediaVisit.visitId);
+    if (problem) throw conflict(problem);
   }
 
   const { rows } = await query<{ id: string }>(
@@ -66,7 +54,7 @@ export async function createLink(
      RETURNING id`,
     [familyId, from.type, from.id, to.type, to.id, role, userId],
   );
-  return { ok: true, link: { id: rows[0].id, from: fromRaw, to: toRaw, role } };
+  return { id: rows[0].id, from: fromRaw, to: toRaw, role };
 }
 
 function pickMediaVisit(a: EntityRef, b: EntityRef): { mediaId: string; visitId: string } | null {
@@ -98,16 +86,18 @@ async function applyTripInheritance(
   }
   if (!mediaTrip) {
     await tx(async (client: PoolClient) => {
-      await client.query("UPDATE media SET trip_id = $1 WHERE id = $2", [visitTrip, mediaId]);
+      await client.query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [visitTrip, mediaId, familyId]);
       await reconcileMediaTrip(client, mediaId);
     });
   }
   return null;
 }
 
-export async function listLinks(familyId: string, entityRaw: string): Promise<LinkDto[] | null> {
+export async function listLinks(scope: Scope, entityRaw: string): Promise<LinkDto[]> {
   const ref = parseRef(entityRaw);
-  if (!ref) return null;
+  if (!ref) throw badRequest("Invalid entity reference");
+  await loadReadable(ref.type, ref.id, scope);
+  const familyId = scope.familyId;
   const { rows } = await query<{ id: string; from_type: string; from_id: string; to_type: string; to_id: string; role: string }>(
     `SELECT id, from_type, from_id, to_type, to_id, role FROM links
      WHERE family_id = $1 AND ((from_type = $2 AND from_id = $3) OR (to_type = $2 AND to_id = $3))

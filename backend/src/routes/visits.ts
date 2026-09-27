@@ -4,12 +4,17 @@ import type { PoolClient } from "pg";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { signFileUrl } from "../lib/filesign.js";
+import { assertRefs, editableWhere, loadEditable, loadReadable, readableWhere, scopeOf } from "../lib/access.js";
+import { recordActivity } from "../lib/activity.js";
+import { badRequest, notFound } from "../lib/errors.js";
+import { endsBeforeStart, optionalYmd } from "../lib/validate.js";
+import { lat, lng, visitGeometry } from "../lib/geojson.js";
 
-const geometrySchema = z.object({ type: z.enum(["Point", "LineString"]), coordinates: z.any() }).nullable();
+const geometrySchema = visitGeometry.nullable();
 const waypointSchema = z.object({
   label: z.string().min(1).max(200),
   kind: z.enum(["origin", "stop", "destination", "port"]).default("stop"),
-  lng: z.number(), lat: z.number(), seq: z.number().int().optional(),
+  lng, lat, seq: z.number().int().min(0).max(100000).optional(),
   arriveAt: z.string().datetime().nullish(), departAt: z.string().datetime().nullish(),
 });
 const visitSchema = z.object({
@@ -20,54 +25,73 @@ const visitSchema = z.object({
   tripId: z.string().uuid().nullish(),
   color: z.string().max(40).nullish(),
   icon: z.string().max(200).nullish(),
-  occurredOn: z.string().nullish(),
-  occurredEnd: z.string().nullish(),
+  occurredOn: optionalYmd,
+  occurredEnd: optionalYmd,
   properties: z.record(z.unknown()).optional(),
   geometry: geometrySchema.optional(),
-  waypoints: z.array(waypointSchema).optional(),
+  waypoints: z.array(waypointSchema).max(500).optional(),
 });
 
-async function ownsVisit(familyId: string, id: string): Promise<boolean> {
-  const { rowCount } = await query("SELECT 1 FROM visits WHERE id = $1 AND family_id = $2", [id, familyId]);
-  return Boolean(rowCount);
-}
+const DATE_ORDER = "The end date can't be before the start date";
 
-export async function loadVisit(familyId: string, id: string) {
+/**
+ * Places with everything the map needs, in four queries however many there
+ * are: the places ($1 = my family), their waypoints, their photos and the
+ * people tagged on them — only what my family may see.
+ */
+export async function loadVisits(familyId: string, filter: { ids?: string[] } = {}) {
   const { rows } = await query<any>(
     `SELECT v.id, v.trip_id, v.kind, v.title, v.notes, v.theme_id, v.color, v.icon,
             v.occurred_on, v.occurred_end, v.properties, v.created_by, v.created_at,
-            u.display_name AS created_by_name, ST_AsGeoJSON(v.geom) AS geom
-     FROM visits v LEFT JOIN users u ON u.id = v.created_by
-     WHERE v.id = $1 AND v.family_id = $2`,
-    [id, familyId],
+            u.display_name AS created_by_name, ST_AsGeoJSON(v.geom) AS geom,
+            v.family_id, f.name AS family_name, ${editableWhere("visit", "v", "$1")} AS can_edit
+     FROM visits v LEFT JOIN users u ON u.id = v.created_by JOIN families f ON f.id = v.family_id
+     WHERE ${readableWhere("visit", "v", "$1")} ${filter.ids ? "AND v.id = ANY($2::uuid[])" : ""}
+     ORDER BY v.occurred_on NULLS LAST, v.created_at ASC`,
+    filter.ids ? [familyId, filter.ids] : [familyId],
   );
-  if (!rows[0]) return null;
-  const r = rows[0];
-  const wps = await query<any>(
-    `SELECT id, label, kind, seq, arrive_at, depart_at, ST_X(geom) AS lng, ST_Y(geom) AS lat
-     FROM visit_waypoints WHERE visit_id = $1 ORDER BY seq ASC`, [id],
-  );
-  const photoRows = await query<any>(
-    `SELECT m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
-     FROM links l JOIN media m ON m.id = CASE
-        WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
-     WHERE l.family_id = $2
-       AND ((l.from_type='media' AND l.to_type='visit' AND l.to_id=$1)
-         OR (l.to_type='media' AND l.from_type='visit' AND l.from_id=$1))
-     ORDER BY m.created_at ASC`,
-    [id, familyId],
-  );
-  return {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const group = <T,>(list: T[], key: (x: T) => string) => {
+    const m = new Map<string, T[]>();
+    for (const x of list) {
+      const k = key(x);
+      const bucket = m.get(k);
+      if (bucket) bucket.push(x); else m.set(k, [x]);
+    }
+    return m;
+  };
+  const wps = group((await query<any>(
+    `SELECT visit_id, id, label, kind, seq, arrive_at, depart_at, ST_X(geom) AS lng, ST_Y(geom) AS lat
+     FROM visit_waypoints WHERE visit_id = ANY($1::uuid[]) ORDER BY seq ASC`, [ids])).rows, (w) => w.visit_id);
+  const photos = group((await query<any>(
+    `SELECT CASE WHEN l.from_type = 'visit' THEN l.from_id ELSE l.to_id END AS visit_id,
+            m.id, m.rel_path, m.thumb_rel_path, m.kind, m.caption, m.created_at
+     FROM links l JOIN media m ON m.id = CASE WHEN l.from_type = 'media' THEN l.from_id ELSE l.to_id END
+     WHERE ((l.from_type = 'media' AND l.to_type = 'visit' AND l.to_id = ANY($2::uuid[]))
+         OR (l.to_type = 'media' AND l.from_type = 'visit' AND l.from_id = ANY($2::uuid[])))
+       AND ${readableWhere("media", "m", "$1")}
+     ORDER BY m.created_at ASC`, [familyId, ids])).rows, (p) => p.visit_id);
+  const people = group((await query<any>(
+    `SELECT DISTINCT CASE WHEN l.from_type = 'visit' THEN l.from_id ELSE l.to_id END AS visit_id, p.id
+     FROM links l JOIN people p ON p.id = CASE WHEN l.from_type = 'person' THEN l.from_id ELSE l.to_id END
+     WHERE ((l.from_type = 'person' AND l.to_type = 'visit' AND l.to_id = ANY($2::uuid[]))
+         OR (l.to_type = 'person' AND l.from_type = 'visit' AND l.from_id = ANY($2::uuid[])))
+       AND ${readableWhere("person", "p", "$1")}`, [familyId, ids])).rows, (p) => p.visit_id);
+
+  return rows.map((r) => ({
     id: r.id, tripId: r.trip_id, kind: r.kind, title: r.title, notes: r.notes,
     themeId: r.theme_id, color: r.color, icon: r.icon,
     occurredOn: r.occurred_on, occurredEnd: r.occurred_end, properties: r.properties,
     createdBy: r.created_by, createdByName: r.created_by_name, createdAt: r.created_at,
+    // Who added it (another family's, on a shared trip, when familyId isn't mine), and whether I may change it.
+    familyId: r.family_id, familyName: r.family_name, canEdit: r.can_edit,
     geometry: r.geom ? JSON.parse(r.geom) : null,
-    waypoints: wps.rows.map((w) => ({
+    waypoints: (wps.get(r.id) ?? []).map((w) => ({
       id: w.id, label: w.label, kind: w.kind, seq: w.seq, lng: w.lng, lat: w.lat,
       arriveAt: w.arrive_at, departAt: w.depart_at,
     })),
-    photos: photoRows.rows.map((p, i) => ({
+    photos: (photos.get(r.id) ?? []).map((p, i) => ({
       id: p.id,
       url: signFileUrl(p.rel_path),
       thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
@@ -75,7 +99,12 @@ export async function loadVisit(familyId: string, id: string) {
       caption: p.caption,
       seq: i,
     })),
-  };
+    personIds: (people.get(r.id) ?? []).map((p) => p.id),
+  }));
+}
+
+export async function loadVisit(familyId: string, id: string) {
+  return (await loadVisits(familyId, { ids: [id] }))[0] ?? null;
 }
 
 async function insertWaypoints(client: PoolClient, visitId: string, waypoints: z.infer<typeof waypointSchema>[]): Promise<void> {
@@ -92,18 +121,14 @@ async function insertWaypoints(client: PoolClient, visitId: string, waypoints: z
 export async function visitRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
-  app.get("/api/visits", async (req) => {
-    const { rows } = await query<{ id: string }>(
-      "SELECT id FROM visits WHERE family_id = $1 ORDER BY occurred_on NULLS LAST, created_at ASC",
-      [req.user.familyId],
-    );
-    return Promise.all(rows.map((r) => loadVisit(req.user.familyId, r.id)));
-  });
+  // Everything on my family's map: its own places and those on trips shared with it.
+  app.get("/api/visits", async (req) => loadVisits(req.user.familyId));
 
   app.post("/api/visits", async (req, reply) => {
-    const parsed = visitSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const b = visitSchema.parse(req.body);
+    const scope = scopeOf(req);
+    if (endsBeforeStart(b.occurredOn, b.occurredEnd)) throw badRequest(DATE_ORDER);
+    await assertRefs(scope, { trip: b.tripId, theme: b.themeId });
     const id = await tx(async (client) => {
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
       const res = await client.query<{ id: string }>(
@@ -118,27 +143,31 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
       );
       const vid = res.rows[0].id;
       if (b.waypoints?.length) await insertWaypoints(client, vid, b.waypoints);
+      await recordActivity({ tripId: b.tripId, familyId: scope.familyId, userId: scope.userId, kind: "visit.added", targetType: "visit", targetId: vid, summary: b.title }, client);
       return vid;
     });
     return reply.code(201).send(await loadVisit(req.user.familyId, id));
   });
 
-  app.get("/api/visits/:id", async (req, reply) => {
+  app.get("/api/visits/:id", async (req) => {
     const v = await loadVisit(req.user.familyId, (req.params as { id: string }).id);
-    if (!v) return reply.code(404).send({ error: "Not found" });
+    if (!v) throw notFound("Place not found");
     return v;
   });
 
-  app.patch("/api/visits/:id", async (req, reply) => {
+  app.patch("/api/visits/:id", async (req) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    const parsed = visitSchema.partial().safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
+    const scope = scopeOf(req);
+    const current = await loadEditable<{ occurred_on: string | null; occurred_end: string | null }>("visit", id, scope);
+    const b = visitSchema.partial().parse(req.body);
+    const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+    const start = has("occurredOn") ? b.occurredOn : current.occurred_on;
+    const end = has("occurredEnd") ? b.occurredEnd : current.occurred_end;
+    if (endsBeforeStart(start, end)) throw badRequest(DATE_ORDER);
+    await assertRefs(scope, { trip: b.tripId, theme: b.themeId });
     await tx(async (client) => {
       const geomProvided = Object.prototype.hasOwnProperty.call(b, "geometry");
       const geomJson = b.geometry ? JSON.stringify(b.geometry) : null;
-      const has = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
       await client.query(
         `UPDATE visits SET
            kind = COALESCE($2, kind), title = COALESCE($3, title), notes = COALESCE($4, notes),
@@ -153,12 +182,13 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
              ELSE geom END,
            properties = CASE WHEN $19::boolean THEN COALESCE($20::jsonb,'{}'::jsonb) ELSE properties END,
            updated_at = now()
-         WHERE id = $1`,
+         WHERE id = $1 AND ${editableWhere("visit", "visits", "$21")}`,
         [id, b.kind ?? null, b.title ?? null, b.notes ?? null,
          has("themeId"), b.themeId ?? null, has("color"), b.color ?? null,
          has("icon"), b.icon ?? null, has("occurredOn"), b.occurredOn ?? null,
          has("occurredEnd"), b.occurredEnd ?? null, has("tripId"), b.tripId ?? null,
-         geomProvided, geomJson, has("properties"), b.properties ? JSON.stringify(b.properties) : null],
+         geomProvided, geomJson, has("properties"), b.properties ? JSON.stringify(b.properties) : null,
+         scope.familyId],
       );
       if (b.waypoints) {
         await client.query("DELETE FROM visit_waypoints WHERE visit_id = $1", [id]);
@@ -170,33 +200,34 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete("/api/visits/:id", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    await query("DELETE FROM visits WHERE id = $1", [id]);
+    await loadEditable("visit", id, scopeOf(req));
+    await query(`DELETE FROM visits WHERE id = $1 AND ${editableWhere("visit", "visits", "$2")}`, [id, req.user.familyId]);
     return reply.code(204).send();
   });
 
   // --- Comments (now on visits) ---
-  app.get("/api/visits/:id/comments", async (req, reply) => {
+  app.get("/api/visits/:id/comments", async (req) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
+    await loadReadable("visit", id, scopeOf(req));
     const { rows } = await query<any>(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name AS author
-       FROM comments c LEFT JOIN users u ON u.id = c.user_id
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.display_name AS author, f.name AS family_name
+       FROM comments c LEFT JOIN users u ON u.id = c.user_id LEFT JOIN families f ON f.id = u.family_id
        WHERE c.visit_id = $1 ORDER BY c.created_at ASC`, [id],
     );
-    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, author: r.author }));
+    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id, author: r.author, familyName: r.family_name }));
   });
 
   app.post("/api/visits/:id/comments", async (req, reply) => {
     const id = (req.params as { id: string }).id;
-    if (!(await ownsVisit(req.user.familyId, id))) return reply.code(404).send({ error: "Not found" });
-    const parsed = z.object({ body: z.string().min(1).max(4000) }).safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+    const scope = scopeOf(req);
+    const visit = await loadReadable<{ trip_id: string | null; title: string }>("visit", id, scope);
+    const { body } = z.object({ body: z.string().min(1).max(4000) }).parse(req.body);
     const { rows } = await query<any>(
       `INSERT INTO comments (visit_id, user_id, body) VALUES ($1,$2,$3)
-       RETURNING id, body, created_at, user_id`, [id, req.user.id, parsed.data.body],
+       RETURNING id, body, created_at, user_id`, [id, req.user.id, body],
     );
     const r = rows[0];
+    await recordActivity({ tripId: visit.trip_id, familyId: scope.familyId, userId: scope.userId, kind: "comment.added", targetType: "visit", targetId: id, summary: visit.title });
     return reply.code(201).send({ id: r.id, body: r.body, createdAt: r.created_at, userId: r.user_id });
   });
 
@@ -204,10 +235,10 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const id = (req.params as { id: string }).id;
     const res = await query(
       `DELETE FROM comments c USING visits v
-       WHERE c.id = $1 AND c.visit_id = v.id AND v.family_id = $2 AND c.user_id = $3`,
+       WHERE c.id = $1 AND c.visit_id = v.id AND c.user_id = $3 AND ${readableWhere("visit", "v", "$2")}`,
       [id, req.user.familyId, req.user.id],
     );
-    if (!res.rowCount) return reply.code(404).send({ error: "Not found" });
+    if (!res.rowCount) throw notFound("Comment not found");
     return reply.code(204).send();
   });
 }

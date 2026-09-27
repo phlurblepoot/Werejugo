@@ -39,3 +39,13 @@ test("saves a list as a template (items copied, unchecked)", async () => {
   const items = await query<{ checked: boolean }>("SELECT checked FROM packing_items WHERE list_id = $1", [tplId]);
   expect(items.rows.every((r) => r.checked === false)).toBe(true);
 });
+
+test("a trip gets exactly one list even when several are created at once", async () => {
+  const trip = (await query<{ id: string }>("INSERT INTO trips (family_id, name) VALUES ($1,'Racy') RETURNING id", [ctx.familyId])).rows[0].id;
+  const results = await Promise.all([1, 2, 3].map(() =>
+    ctx.app.inject({ method: "POST", url: `/api/trips/${trip}/packing`, headers: auth(), payload: {} })));
+  expect(results.map((r) => r.statusCode).sort()).toEqual([200, 200, 201]);
+  expect(new Set(results.map((r) => r.json().id)).size).toBe(1);
+  const count = await query("SELECT 1 FROM packing_lists WHERE trip_id = $1", [trip]);
+  expect(count.rowCount).toBe(1);
+});

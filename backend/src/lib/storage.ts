@@ -1,5 +1,5 @@
-import { createWriteStream } from "node:fs";
-import { mkdir, rename, unlink, access } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { link, mkdir, open, rm, unlink, access } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import sharp from "sharp";
@@ -29,21 +29,25 @@ export interface TripFolderInfo {
   startDate: string | null;
 }
 
+/** Every family's files live in their own folder, so no path is ever shared. */
+export const familyDir = (familyId: string): string => `families/${familyId}`;
+
 /** Relative directory (under storageDir) where a media file belongs. */
-export function mediaDirFor(trip: TripFolderInfo | null, takenAt: Date | null): string {
-  if (trip) return `trips/${tripSlug(trip.name, trip.startDate)}/photos`;
+export function mediaDirFor(familyId: string, trip: TripFolderInfo | null, takenAt: Date | null): string {
+  if (trip) return `${familyDir(familyId)}/trips/${tripSlug(trip.name, trip.startDate)}/photos`;
   const year = takenAt && !isNaN(takenAt.getTime()) ? String(takenAt.getFullYear()) : "unknown";
-  return `loose/${year}`;
+  return `${familyDir(familyId)}/loose/${year}`;
 }
 
 /** Relative directory where a document file belongs. */
 export function documentDirFor(
+  familyId: string,
   trip: { tripName: string; tripStart: string | null } | null,
   person: { personName: string } | null,
 ): string {
-  if (trip) return `trips/${tripSlug(trip.tripName, trip.tripStart)}/documents`;
-  if (person) return `people/${slugify(person.personName)}`;
-  return "loose/documents";
+  if (trip) return `${familyDir(familyId)}/trips/${tripSlug(trip.tripName, trip.tripStart)}/documents`;
+  if (person) return `${familyDir(familyId)}/people/${slugify(person.personName)}`;
+  return `${familyDir(familyId)}/loose/documents`;
 }
 
 /** Absolute path for a relative storage path. */
@@ -60,26 +64,66 @@ async function exists(absPath: string): Promise<boolean> {
   }
 }
 
-/** A collision-free filename within relDir, derived from the original name. */
-export async function uniqueName(relDir: string, originalName: string): Promise<string> {
+/**
+ * A stored file's name: the original name, readable, plus a random suffix so a
+ * path is never reused — not even after the file is deleted — and an old signed
+ * URL can never show a newer file. "Sunset Photo.PNG" → "sunset-photo-3f9a1c2e.png".
+ */
+function storedName(originalName: string, stem?: string): string {
   const ext = extname(originalName).toLowerCase();
-  const stem = slugify(basename(originalName, ext)) || "file";
-  let candidate = `${stem}${ext}`;
-  let n = 2;
-  while (await exists(absStoragePath(join(relDir, candidate)))) {
-    candidate = `${stem}-${n}${ext}`;
-    n += 1;
-  }
-  return candidate;
+  return `${stem ?? slugify(basename(originalName, extname(originalName)))}-${randomBytes(4).toString("hex")}${ext}`;
 }
 
-/** Move a stored file into relDir (de-duping its name); returns the new rel path. */
-export async function moveStored(relPath: string, relDir: string): Promise<string> {
-  const name = await uniqueName(relDir, basename(relPath));
-  const destRel = join(relDir, name);
+const isExists = (err: unknown) => (err as NodeJS.ErrnoException)?.code === "EEXIST";
+
+/** Create a brand-new file in relDir (exclusively: never overwrites). */
+async function createStored(relDir: string, originalName: string) {
   await mkdir(absStoragePath(relDir), { recursive: true });
-  await rename(absStoragePath(relPath), absStoragePath(destRel));
+  for (let attempt = 0; ; attempt++) {
+    const relPath = join(relDir, storedName(originalName));
+    try {
+      return { relPath, handle: await open(absStoragePath(relPath), "wx") };
+    } catch (err) {
+      if (!isExists(err) || attempt >= 5) throw err;
+    }
+  }
+}
+
+/** Stream into a new stored file; a failed upload leaves nothing behind. */
+async function writeStored(relDir: string, originalName: string, data: NodeJS.ReadableStream): Promise<string> {
+  const { relPath, handle } = await createStored(relDir, originalName);
+  try {
+    await pipeline(data, handle.createWriteStream());
+  } catch (err) {
+    await rm(absStoragePath(relPath), { force: true });
+    throw err;
+  } finally {
+    await handle.close().catch(() => {});
+  }
+  return relPath;
+}
+
+/** Move a stored file into relDir (never overwriting); returns the new rel path. */
+export async function moveStored(relPath: string, relDir: string): Promise<string> {
+  await mkdir(absStoragePath(relDir), { recursive: true });
+  let destRel = join(relDir, basename(relPath));
+  for (let attempt = 0; ; attempt++) {
+    try {
+      // link + unlink instead of rename: link refuses to replace an existing file.
+      await link(absStoragePath(relPath), absStoragePath(destRel));
+      break;
+    } catch (err) {
+      if (!isExists(err) || attempt >= 5) throw err;
+      destRel = join(relDir, storedName(relPath, slugify(basename(relPath, extname(relPath)))));
+    }
+  }
+  await unlink(absStoragePath(relPath));
   return destRel;
+}
+
+/** Remove a family's whole storage folder (after the family is deleted). */
+export async function deleteFamilyFiles(familyId: string): Promise<void> {
+  await rm(absStoragePath(familyDir(familyId)), { recursive: true, force: true });
 }
 
 /** Best-effort delete of a stored file. */
@@ -123,10 +167,8 @@ export async function saveMediaUpload(
   if (!IMAGE_EXT.has(ext) && !VIDEO_EXT.has(ext) && !AUDIO_EXT.has(ext)) {
     throw new Error("UNSUPPORTED_TYPE");
   }
-  const name = await uniqueName(relDir, part.filename);
-  const relPath = join(relDir, name);
-  await mkdir(absStoragePath(relDir), { recursive: true });
-  await pipeline(part.file, createWriteStream(absStoragePath(relPath)));
+  const relPath = await writeStored(relDir, part.filename, part.file);
+  const name = basename(relPath);
 
   const kind = kindForExt(ext);
   let thumbRelPath: string | null = null;
@@ -162,9 +204,6 @@ export async function saveDocumentUpload(
 ): Promise<{ relPath: string; originalName: string }> {
   const ext = extname(part.filename).toLowerCase();
   if (!DOC_EXT.has(ext)) throw new Error("UNSUPPORTED_TYPE");
-  const name = await uniqueName(relDir, part.filename);
-  const relPath = join(relDir, name);
-  await mkdir(absStoragePath(relDir), { recursive: true });
-  await pipeline(part.file, createWriteStream(absStoragePath(relPath)));
+  const relPath = await writeStored(relDir, part.filename, part.file);
   return { relPath, originalName: part.filename };
 }

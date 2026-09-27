@@ -5,10 +5,15 @@ name: Publish container images
 # menu. After the first successful run, make both packages public:
 #   GitHub → your profile → Packages → werejugo-backend / werejugo-frontend
 #   → Package settings → Change visibility → Public.
+#
+# Tags:
+#   main          → latest, sha-<commit>
+#   v1.2.3 tag    → 1.2.3, 1.2, sha-<commit>
+#   claude/<name> → claude-<name> (a preview of an unmerged milestone; never `latest`)
 
 on:
   push:
-    branches: ["claude/laughing-edison-sTVtG", "main"]
+    branches: ["main", "claude/**"]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -44,7 +49,10 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/werejugo-${{ matrix.name }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha
 
       - name: Build and push

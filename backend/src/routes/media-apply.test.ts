@@ -34,5 +34,6 @@ test("applies a trip (sets trip_id) and a visit (links) to media", async () => {
 test("rejects media from another family", async () => {
   const res = await ctx.app.inject({ method: "POST", url: "/api/media/apply-suggestion", headers: auth(),
     payload: { mediaIds: ["11111111-1111-1111-1111-111111111111"], tripId: null } });
-  expect(res.statusCode).toBe(404);
+  expect(res.statusCode).toBe(400);
+  expect(res.json().error).toBe("Unknown photo or video");
 });

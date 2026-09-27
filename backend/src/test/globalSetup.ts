@@ -14,8 +14,15 @@ export async function setup(): Promise<void> {
   await admin.end();
 
   // Import after env is set so pool.ts picks up the test DATABASE_URL.
-  const { migrate } = await import("../db/migrate.js");
+  const { migrate, LegacyDatabaseError } = await import("../db/migrate.js");
   const { pool } = await import("../db/pool.js");
-  await migrate();
+  try {
+    await migrate();
+  } catch (err) {
+    // A test database from before the schema baseline: it's disposable, so rebuild it.
+    if (!(err instanceof LegacyDatabaseError)) throw err;
+    await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+    await migrate();
+  }
   await pool.end();
 }

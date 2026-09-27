@@ -1,3 +1,7 @@
+import { resolveSecrets } from "./lib/secrets.js";
+
+const secrets = resolveSecrets(process.env);
+
 function required(name: string, fallback?: string): string {
   const v = process.env[name] ?? fallback;
   if (v === undefined) {
@@ -8,7 +12,10 @@ function required(name: string, fallback?: string): string {
 
 export const config = {
   databaseUrl: required("DATABASE_URL", "postgres://werejugo:change-me-in-production@localhost:5432/werejugo"),
-  jwtSecret: required("JWT_SECRET", "please-change-this-to-a-long-random-secret"),
+  jwtSecret: secrets.jwtSecret,
+  fileSigningSecret: secrets.fileSigningSecret,
+  /** Problems worth logging at startup (e.g. a weak secret outside production). */
+  startupWarnings: secrets.warnings,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "30d",
   port: Number(process.env.BACKEND_PORT ?? 4000),
   corsOrigin: (process.env.CORS_ORIGIN ?? "http://localhost:8080")

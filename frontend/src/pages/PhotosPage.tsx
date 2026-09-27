@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type MediaFilters, type MediaItem } from "../api/client";
 import { MediaUploader } from "../components/shared/MediaUploader";
@@ -9,15 +10,27 @@ import { PhotoDetail } from "../components/photos/PhotoDetail";
 import { UploadReview } from "../components/photos/UploadReview";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { ShareButton } from "../components/shared/ShareButton";
+import { PageHeader, SegmentedControl } from "../components/kit";
+import { Images, LayoutGrid, Map as MapIcon } from "lucide-react";
+import { useAuth } from "../lib/auth";
 
 export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<MediaFilters>(initialTrip ? { trip: initialTrip } : {});
   const [view, setView] = useState<"grid" | "map">("grid");
   const [selected, setSelected] = useState<MediaItem | null>(null);
+  // /photos?photo=<id> (e.g. from search) opens that photo.
+  const [params, setParams] = useSearchParams();
+  const wantedPhoto = params.get("photo");
+  useEffect(() => {
+    if (!wantedPhoto) return;
+    api.getMedia(wantedPhoto).then(setSelected).catch(() => {});
+    setParams({}, { replace: true });
+  }, [wantedPhoto, setParams]);
   const [uploadedIds, setUploadedIds] = useState<string[] | null>(null);
 
-  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
+  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
 
   const mediaQuery = useInfiniteQuery({
     queryKey: ["media", filters],
@@ -31,20 +44,26 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">🖼️ Photos</span>
-        <span className="spacer" />
-        <div className="tabs">
-          <button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>▦ Grid</button>
-          <button className={view === "map" ? "active" : ""} onClick={() => setView("map")}>🗺️ Map</button>
-        </div>
-        <MediaUploader multiple label="⬆ Upload" onUploaded={() => {}} onAllUploaded={(media) => setUploadedIds(media.map((m) => m.id))} />
-        {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
-      </header>
+      <PageHeader
+        icon={Images}
+        title="Photos"
+        views={
+          <SegmentedControl
+            label="View"
+            value={view}
+            onChange={setView}
+            options={[{ value: "grid", label: "Grid", icon: LayoutGrid }, { value: "map", label: "Map", icon: MapIcon }]}
+          />
+        }
+        actions={
+          <>
+            {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
+            <MediaUploader multiple label="Upload" onUploaded={() => {}} onAllUploaded={(media) => setUploadedIds(media.map((m) => m.id))} />
+          </>
+        }
+      />
 
-      <div style={{ padding: "0 16px" }}>
-        <PhotoFilters value={filters} onChange={setFilters} trips={trips} />
-      </div>
+      <PhotoFilters value={filters} onChange={setFilters} trips={trips} />
 
       <div className="page-fill" style={{ overflow: view === "grid" ? "auto" : "hidden" }}>
         {mediaQuery.isError ? (
@@ -55,7 +74,7 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
           <EmptyState emoji="🖼️" title="No photos yet" hint="Upload photos to start your family library." />
         ) : view === "grid" ? (
           <div style={{ padding: 16 }}>
-            <PhotoGrid items={items} onOpen={setSelected} hasMore={mediaQuery.hasNextPage} onLoadMore={() => mediaQuery.fetchNextPage()} />
+            <PhotoGrid items={items} onOpen={setSelected} hasMore={mediaQuery.hasNextPage} onLoadMore={() => mediaQuery.fetchNextPage()} myFamilyId={user?.familyId} />
           </div>
         ) : (
           <PhotoMap items={items} onOpen={setSelected} />
@@ -63,7 +82,7 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
       </div>
 
       {selected && (
-        <PhotoDetail item={selected} trips={trips} onClose={() => setSelected(null)} onChanged={() => { refresh(); setSelected(null); }} />
+        <PhotoDetail item={selected} trips={trips} myFamilyId={user?.familyId} onClose={() => setSelected(null)} onChanged={() => { refresh(); setSelected(null); }} />
       )}
 
       {uploadedIds && (

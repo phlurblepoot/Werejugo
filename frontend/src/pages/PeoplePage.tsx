@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Person } from "../api/client";
 import { EntityList } from "../components/shared/EntityList";
@@ -6,12 +7,23 @@ import { EntityDetail } from "../components/shared/EntityDetail";
 import { EntityThumb } from "../components/shared/EntityThumb";
 import { RelatedPanel } from "../components/shared/RelatedPanel";
 import { PersonForm } from "../components/people/PersonForm";
+import { PersonLinkRequests, PersonLinks } from "../components/people/PersonLinks";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
+import { Button, PageHeader } from "../components/kit";
+import { Plus, Users } from "lucide-react";
 
 export function PeoplePage() {
   const qc = useQueryClient();
   const { data: people, isLoading, isError, refetch } = useQuery({ queryKey: ["people"], queryFn: api.listPeople });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(params.get("person"));
+  // /people?person=<id> (e.g. from search) opens that person.
+  useEffect(() => {
+    const wanted = params.get("person");
+    if (!wanted) return;
+    setSelectedId(wanted);
+    setParams({}, { replace: true });
+  }, [params, setParams]);
   const [editing, setEditing] = useState<Person | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -26,13 +38,14 @@ export function PeoplePage() {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <span className="brand">👤 People</span>
-        <span className="spacer" />
-        <button className="primary" onClick={() => setAdding(true)}>+ Add person</button>
-      </header>
+      <PageHeader
+        icon={Users}
+        title="People"
+        actions={<Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>Add person</Button>}
+      />
 
       <div className="page-body">
+        <PersonLinkRequests />
         {isError ? (
           <ErrorState hint="Couldn't load people." onRetry={() => refetch()} />
         ) : isLoading ? (
@@ -78,6 +91,7 @@ export function PeoplePage() {
           </div>
           {selected.notes && <p>{selected.notes}</p>}
           <RelatedPanel entity={`person:${selected.id}`} addTypes={["visit", "trip", "media"]} />
+          <PersonLinks personId={selected.id} personName={selected.displayName} />
         </EntityDetail>
       )}
 

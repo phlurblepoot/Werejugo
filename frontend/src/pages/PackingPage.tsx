@@ -4,17 +4,19 @@ import { api, type PackingList, type Trip } from "../api/client";
 import { PackingChecklist } from "../components/packing/PackingChecklist";
 import { TripPacking } from "../components/packing/TripPacking";
 import { ErrorState, Spinner } from "../components/ui";
+import { PageHeader } from "../components/kit";
+import { Backpack } from "lucide-react";
 
 type Sel = { kind: "template"; id: string } | { kind: "trip"; trip: Trip } | null;
 
 export function PackingPage() {
   const { data: templates = [], isLoading, isError, refetch } = useQuery({ queryKey: ["packing-templates"], queryFn: api.listPackingTemplates });
-  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips("") });
+  const { data: trips = [] } = useQuery({ queryKey: ["trips"], queryFn: () => api.listTrips() });
   const [sel, setSel] = useState<Sel>(null);
 
   return (
     <div className="page">
-      <header className="app-header"><span className="brand">🎒 Packing</span></header>
+      <PageHeader icon={Backpack} title="Packing" />
       <div className="packing-cols">
         <div className="packing-side">
           <div className="cat-hdr">Templates</div>

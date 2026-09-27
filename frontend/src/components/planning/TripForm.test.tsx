@@ -11,6 +11,6 @@ test("requires a name then creates a trip", async () => {
   expect(await screen.findByText(/please enter a name/i)).toBeInTheDocument();
   fireEvent.change(screen.getByPlaceholderText(/e.g. Italy/), { target: { value: "Italy 2025" } });
   fireEvent.click(screen.getByText("Save"));
-  await waitFor(() => expect(createTrip).toHaveBeenCalledWith("", expect.objectContaining({ name: "Italy 2025" })));
+  await waitFor(() => expect(createTrip).toHaveBeenCalledWith(expect.objectContaining({ name: "Italy 2025" })));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
 });

@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { KIND_LABELS } from "../lib/style";
+import { formatDateRange } from "../lib/dates";
 
 interface Props {
-  mapSetId: string;
   onClose: () => void;
 }
 
@@ -14,13 +14,13 @@ function mi(m: number) {
   return (m / 1609.344).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
-export function StatsPanel({ mapSetId, onClose }: Props) {
-  const { data, isLoading } = useQuery({ queryKey: ["stats", mapSetId], queryFn: () => api.getStats(mapSetId) });
+export function StatsPanel({ onClose }: Props) {
+  const { data, isLoading } = useQuery({ queryKey: ["stats"], queryFn: () => api.getStats() });
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Map stats</h2>
+        <h2>Travel stats</h2>
         {isLoading || !data ? (
           <div className="empty">Crunching numbers…</div>
         ) : (
@@ -55,7 +55,7 @@ export function StatsPanel({ mapSetId, onClose }: Props) {
             ))}
 
             {data.firstDate && (
-              <p className="hint">Spanning {data.firstDate} → {data.lastDate}</p>
+              <p className="hint">Spanning {formatDateRange(data.firstDate, data.lastDate)}</p>
             )}
           </>
         )}

@@ -42,7 +42,7 @@ test("rejects an avatar that isn't the family's media", async () => {
   const res = await ctx.app.inject({
     method: "POST", url: "/api/people", headers: auth(),
     payload: { displayName: "X", avatarMediaId: "11111111-1111-1111-1111-111111111111" } });
-  expect(res.statusCode).toBe(404);
+  expect(res.statusCode).toBe(400);
 });
 
 test("lists family members for account linking", async () => {

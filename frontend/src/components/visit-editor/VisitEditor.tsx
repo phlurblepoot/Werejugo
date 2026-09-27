@@ -1,9 +1,9 @@
 import { useState } from "react";
 import {
-  api, type CustomIcon, type Item, type ItemKind, type LookupResult, type MapSet,
+  api, type CustomIcon, type Item, type LookupResult,
   type PathSettings, type PinSettings, type Theme,
 } from "../../api/client";
-import { KIND_LABELS } from "../../lib/style";
+import { ITEM_KINDS, KIND_LABELS } from "../../lib/style";
 import { useVisitDraft, POINT_KINDS } from "./useVisitDraft";
 import { PlaceForm } from "./PlaceForm";
 import { FlightForm } from "./FlightForm";
@@ -13,7 +13,6 @@ import { AppearanceTab } from "./AppearanceTab";
 import { VisitPhotos, type StagedPhoto } from "./VisitPhotos";
 
 interface Props {
-  mapSet: MapSet;
   item: Item | null;
   themes: Theme[];
   trips: { id: string; name: string }[];
@@ -26,10 +25,8 @@ interface Props {
   pathSettings?: PathSettings;
 }
 
-const KINDS: ItemKind[] = ["place", "food", "flight", "cruise", "drive", "custom"];
-
 export function VisitEditor(props: Props) {
-  const { mapSet, item, themes, trips, customIcons, onRequestPick, onClose, onSaved } = props;
+  const { item, themes, trips, customIcons, onRequestPick, onClose, onSaved } = props;
   const editing = Boolean(item);
   const { draft, set, setKind, applyTheme, validate, buildPayload } = useVisitDraft(item, props.pinSettings, props.pathSettings);
   const [tab, setTab] = useState<"details" | "appearance">("details");
@@ -62,7 +59,7 @@ export function VisitEditor(props: Props) {
     setBusy(true);
     try {
       const payload = buildPayload();
-      const saved = editing && item ? await api.updateItem(item.id, payload) : await api.createItem(mapSet.id, payload);
+      const saved = editing && item ? await api.updateItem(item.id, payload) : await api.createItem(payload);
       // Upload any staged photos in parallel, then link each to the saved visit.
       await Promise.all(staged.map(async (p) => {
         const m = await api.uploadMedia(p.file, p.caption);
@@ -92,7 +89,7 @@ export function VisitEditor(props: Props) {
         <div className="field">
           <label>Type</label>
           <div className="add-buttons">
-            {KINDS.map((k) => (
+            {ITEM_KINDS.map((k) => (
               <button key={k} className={k === draft.kind ? "primary" : ""} onClick={() => setKind(k)}>{KIND_LABELS[k]}</button>
             ))}
           </div>

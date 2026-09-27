@@ -35,3 +35,6 @@ backend/src/data/airports.full.csv
 .claude/*
 !.claude/settings.json
 .omc/
+
+# local development data
+.data/

@@ -23,17 +23,24 @@ function jsonRes(data: unknown) {
   return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
 }
 
-test("listItems reads the map's visits and stamps mapSetId", async () => {
-  await api.listItems("ms1");
-  expect(calls[0].url).toContain("/api/map-sets/ms1/visits");
+test("the map reads every visible place in one request", async () => {
+  await api.listVisits();
+  expect(calls[0].url).toContain("/api/visits");
+  expect(calls).toHaveLength(1);
 });
 
-test("createItem creates a visit then adds map membership", async () => {
-  const item = await api.createItem("ms1", { kind: "place", title: "X" });
+test("createItem creates a visit — no map membership any more", async () => {
+  await api.createItem({ kind: "place", title: "X" });
   expect(calls[0].url).toContain("/api/visits");
   expect(calls[0].method).toBe("POST");
-  expect(calls[1].url).toContain("/api/map-sets/ms1/visits");
-  expect(item.mapSetId).toBe("ms1");
+  expect(calls).toHaveLength(1);
+});
+
+test("importFile sends the file and an optional trip", async () => {
+  await api.importFile(new File(["x"], "t.gpx"), "trip-1");
+  expect(calls[0].url).toContain("/api/import");
+  const fd = calls[0].body as FormData;
+  expect(fd.get("tripId")).toBe("trip-1");
 });
 
 test("uploadItemPhoto uploads media then links it to the visit", async () => {
@@ -46,7 +53,7 @@ test("uploadItemPhoto uploads media then links it to the visit", async () => {
 });
 
 test("listTrips uses the family-scoped endpoint", async () => {
-  await api.listTrips("ms1");
+  await api.listTrips();
   expect(calls[0].url).toContain("/api/trips");
   expect(calls[0].url).not.toContain("map-sets");
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, type Item, type MapSet, type SharePayload, type SharedPhoto, type Theme } from "../api/client";
+import { api, type Item, type SharePayload, type SharedPhoto, type Theme } from "../api/client";
 import { resolveItemStyle } from "../lib/style";
 import { MapView } from "../components/MapView";
 import { EmptyState, Spinner } from "../components/ui";
@@ -52,12 +52,8 @@ export function ShareView() {
   }
 
   // trip share — render the visits on a map
-  const mapSet: MapSet = {
-    id: "shared", name: data.trip.name, description: data.trip.description, baseKind: "vector",
-    styleUrl: null, overlayUrl: null, overlayBounds: null, defaultLng: 0, defaultLat: 20, defaultZoom: 2, createdAt: "",
-  };
   const items: Item[] = data.visits.map((v) => ({
-    id: v.id, mapSetId: "shared", kind: v.kind, title: v.title, notes: v.notes, themeId: null, tripId: data.trip.id,
+    id: v.id, kind: v.kind, title: v.title, notes: v.notes, themeId: null, tripId: data.trip.id,
     color: v.color, icon: v.icon, occurredOn: v.occurredOn, geometry: v.geometry, waypoints: [], photos: v.photos,
     createdBy: null, createdByName: null, createdAt: "",
   }));
@@ -67,7 +63,6 @@ export function ShareView() {
       {header}
       <div style={{ position: "relative", flex: 1 }}>
         <MapView
-          mapSet={mapSet}
           items={items}
           selectedItemId={null}
           getStyle={(item) => resolveItemStyle(item, NO_THEMES)}

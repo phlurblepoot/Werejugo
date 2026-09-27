@@ -9,15 +9,120 @@ export interface User {
   displayName: string;
   role: "owner" | "member";
   color: string;
+  /** Server admin: manages every family, backups and the audit log. */
+  isAdmin: boolean;
+}
+
+export interface AuthConfig {
+  /** No account exists yet: the sign-in page shows the setup form. */
+  firstRun: boolean;
 }
 
 export interface Family {
   id: string;
   name: string;
-  inviteCode: string;
 }
 
-export type ItemKind = "place" | "food" | "flight" | "cruise" | "drive" | "custom";
+/** Present while a server admin is looking at another family. */
+export interface AdminView {
+  homeFamilyId: string;
+  homeFamilyName: string;
+}
+
+export interface Session {
+  user: User;
+  family: Family;
+  adminView: AdminView | null;
+}
+
+/** A one-time link (invite or password reset). The token is only ever shown once. */
+export interface IssuedLink {
+  id: string;
+  token: string;
+  path: string;
+  expiresAt: string;
+}
+
+export interface InvitePreview {
+  kind: "family" | "member";
+  familyName: string | null;
+  role: "owner" | "member";
+  invitedBy: string | null;
+  expiresAt: string;
+  adminName: string | null;
+}
+
+export interface FamilyMemberInfo {
+  id: string;
+  displayName: string;
+  email: string;
+  role: "owner" | "member";
+  color: string;
+  isAdmin: boolean;
+  lastLoginAt: string | null;
+  joinedAt: string;
+  isYou: boolean;
+}
+
+export interface PendingInvite {
+  id: string;
+  role: "owner" | "member";
+  note: string;
+  createdAt: string;
+  expiresAt: string;
+  createdByName: string | null;
+}
+
+export interface FamilyDetails {
+  family: { id: string; name: string; createdAt: string };
+  members: FamilyMemberInfo[];
+  invites: PendingInvite[];
+}
+
+export interface AdminFamily {
+  id: string;
+  name: string;
+  createdAt: string;
+  disabled: boolean;
+  memberCount: number;
+  owners: string[];
+}
+
+export interface AdminOverview {
+  families: AdminFamily[];
+  userCount: number;
+  adminCount: number;
+  pendingFamilyInvites: number;
+}
+
+export interface AdminUser {
+  id: string;
+  displayName: string;
+  email: string;
+  familyId: string;
+  familyName: string;
+  role: "owner" | "member";
+  isAdmin: boolean;
+  disabled: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  isYou: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  actorName: string;
+  action: string;
+  familyId: string | null;
+  familyName: string | null;
+  target: string;
+  details: Record<string, unknown>;
+}
+
+export type DownloadPurpose = "backup" | "family-export";
+
+export type ItemKind = "place" | "food" | "flight" | "cruise" | "drive" | "stay" | "custom";
 
 export interface Waypoint {
   id?: string;
@@ -88,6 +193,8 @@ export interface PathSettings {
 export interface FamilySettings {
   pin?: PinSettings;
   path?: PathSettings;
+  /** The map's base style (a MapLibre style URL); empty for the default. */
+  map?: { styleUrl?: string | null };
 }
 
 export type MediaType = "image" | "video" | "audio";
@@ -103,7 +210,6 @@ export interface Photo {
 
 export interface Item {
   id: string;
-  mapSetId?: string;
   kind: ItemKind;
   title: string;
   notes: string;
@@ -118,12 +224,18 @@ export interface Item {
   properties?: Record<string, unknown> | null;
   createdBy: string | null;
   createdByName: string | null;
+  /** The family that added it (another family's when it's on a shared trip). */
+  familyId?: string;
+  familyName?: string;
+  /** Whether my family may change it (trip roles on shared trips). */
+  canEdit?: boolean;
+  /** People tagged on it (for the map's person filter). */
+  personIds?: string[];
   createdAt: string;
 }
 
 export interface Trip {
   id: string;
-  mapSetId?: string;
   name: string;
   description: string;
   status: "idea" | "planning" | "booked" | "done";
@@ -132,13 +244,51 @@ export interface Trip {
   coverPhotoUrl: string | null;
   color: string;
   createdAt: string;
+  /** My family's role: the host, or a guest family invited as co-owner or contributor. */
+  role?: TripRole;
+  hostFamilyId?: string;
+  hostFamilyName?: string;
+  /** How many other families are on the trip. */
+  guestFamilies?: number;
+  shared?: boolean;
 }
+
+export type TripRole = "host" | "coowner" | "contributor";
+
+export interface TripMembers {
+  myRole: TripRole | null;
+  host: { familyId: string; familyName: string };
+  members: Array<{ familyId: string; familyName: string; role: "coowner" | "contributor"; joinedAt: string; isYou: boolean }>;
+  invites: Array<{ id: string; role: "coowner" | "contributor"; note: string; createdAt: string; expiresAt: string }>;
+}
+
+export interface TripInvitePreview {
+  tripId: string; tripName: string; startDate: string | null; endDate: string | null;
+  hostFamilyName: string; invitedBy: string | null; role: "coowner" | "contributor";
+  expiresAt: string; alreadyOnTrip: boolean; canAccept: boolean;
+}
+
+export interface ActivityEntry {
+  id: string; kind: string; targetType: string; targetId: string | null; summary: string; at: string;
+  familyId: string | null; familyName: string | null; userName: string | null;
+}
+
+export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
+
+export interface PersonLinkEntry {
+  id: string; status: "pending" | "accepted"; createdAt: string; incoming: boolean;
+  person: { id: string; displayName: string };
+  other: { id: string; displayName: string; familyName: string };
+}
+export interface PersonLinks { incoming: PersonLinkEntry[]; outgoing: PersonLinkEntry[]; linked: PersonLinkEntry[] }
 
 export interface ItineraryItem {
   id: string; tripId: string; title: string; notes: string;
   scheduledOn: string | null; seq: number;
   lat: number | null; lng: number | null; placeLabel: string;
   convertedVisitId: string | null; createdAt: string;
+  /** Who added it, and whether my family may change it (trip roles). */
+  familyId?: string; familyName?: string; createdByName?: string | null; canEdit?: boolean;
 }
 export interface ItineraryInput {
   title?: string; notes?: string; scheduledOn?: string | null; seq?: number;
@@ -153,6 +303,7 @@ export interface Comment {
   createdAt: string;
   userId: string | null;
   author?: string | null;
+  familyName?: string | null;
 }
 
 export interface SearchHit { type: string; id: string; label: string; thumbUrl: string | null; to: string; }
@@ -187,20 +338,6 @@ export interface Stats {
   countByKind: Record<string, number>;
   distanceMetersByKind: Record<string, number>;
   totalDistanceMeters: number;
-}
-
-export interface MapSet {
-  id: string;
-  name: string;
-  description: string;
-  baseKind: "vector" | "custom";
-  styleUrl: string | null;
-  overlayUrl: string | null;
-  overlayBounds: number[] | null;
-  defaultLng: number;
-  defaultLat: number;
-  defaultZoom: number;
-  createdAt: string;
 }
 
 export interface Theme {
@@ -280,6 +417,11 @@ export interface Person {
   avatarMediaId: string | null;
   avatarUrl: string | null;
   createdAt: string;
+  /** Set on a single person: another family's person is read-only (name + picture). */
+  familyId?: string;
+  familyName?: string;
+  readOnly?: boolean;
+  links?: Array<{ linkId: string; status: "pending" | "accepted"; personId: string; displayName: string; familyName: string; incoming: boolean }>;
 }
 
 export interface PersonInput {
@@ -294,9 +436,11 @@ export interface FamilyMember { id: string; displayName: string; email: string; 
 
 export interface EntitySummary {
   type: CoreType; id: string; label: string; subtitle?: string | null; thumbUrl: string | null;
+  /** Another family's (seen through a shared trip). */
+  familyName?: string | null;
 }
 
-export interface Relation { linkId: string; role: string; entity: EntitySummary; }
+export interface Relation { linkId: string; role: string; entity: EntitySummary; canRemove?: boolean; }
 
 export interface MediaDto { id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string; }
 
@@ -314,6 +458,9 @@ export interface MediaItem {
   lng: number | null;
   lat: number | null;
   cursor: string;
+  /** Another family's photo on a shared trip is shown with who added it, view-only. */
+  familyId?: string;
+  familyName?: string | null;
 }
 
 export interface MediaFilters {
@@ -372,6 +519,8 @@ export interface PackingItemInput { label?: string; category?: string; qty?: num
 // ---- Client ----
 
 const TOKEN_KEY = "werejugo.token";
+/** Fired on window when an authenticated request comes back 401. */
+export const UNAUTHORIZED_EVENT = "werejugo:unauthorized";
 
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
@@ -396,8 +545,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
+    // The session ended (revoked, password changed, account removed): let the
+    // app sign out instead of leaving every request failing.
     tokenStore.clear();
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   }
   if (!res.ok) {
     let message = res.statusText;
@@ -417,30 +569,84 @@ const body = (data: unknown) => JSON.stringify(data);
 
 export const api = {
   // auth
-  register: (data: Record<string, unknown>) =>
-    request<{ token: string; user: User }>("/api/auth/register", { method: "POST", body: body(data) }),
   login: (data: { email: string; password: string }) =>
     request<{ token: string; user: User }>("/api/auth/login", { method: "POST", body: body(data) }),
-  me: () => request<{ user: User; family: Family }>("/api/auth/me"),
+  setup: (data: { displayName: string; email: string; password: string; familyName: string }) =>
+    request<{ token: string; user: User }>("/api/auth/setup", { method: "POST", body: body(data) }),
+  me: () => request<Session>("/api/auth/me"),
+  authConfig: () => request<AuthConfig>("/api/auth/config"),
 
-  // map sets
-  listMapSets: () => request<MapSet[]>("/api/map-sets"),
-  createMapSet: (data: Partial<MapSet>) =>
-    request<MapSet>("/api/map-sets", { method: "POST", body: body(data) }),
-  updateMapSet: (id: string, data: Partial<MapSet>) =>
-    request<MapSet>(`/api/map-sets/${id}`, { method: "PATCH", body: body(data) }),
-  deleteMapSet: (id: string) => request<void>(`/api/map-sets/${id}`, { method: "DELETE" }),
+  // one-time links (public)
+  invitePreview: (token: string) => request<InvitePreview>(`/api/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string, data: { displayName: string; email: string; password: string; familyName?: string }) =>
+    request<{ token: string; user: User }>(`/api/invites/${encodeURIComponent(token)}/accept`, { method: "POST", body: body(data) }),
+  resetPreview: (token: string) => request<{ displayName: string; email: string }>(`/api/password-resets/${encodeURIComponent(token)}`),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: true }>(`/api/password-resets/${encodeURIComponent(token)}`, { method: "POST", body: body({ password }) }),
 
-  // visits (formerly items) — kept as `Item` shape; mapSetId is stamped client-side
-  listItems: async (mapSetId: string) => {
-    const visits = await request<Item[]>(`/api/map-sets/${mapSetId}/visits`);
-    return visits.map((v) => ({ ...v, mapSetId }));
-  },
-  createItem: async (mapSetId: string, data: Partial<Item>) => {
-    const visit = await request<Item>("/api/visits", { method: "POST", body: body(data) });
-    await request(`/api/map-sets/${mapSetId}/visits`, { method: "POST", body: body({ visitId: visit.id }) });
-    return { ...visit, mapSetId };
-  },
+  // own account
+  updateAccount: (data: { displayName?: string; color?: string }) =>
+    request<{ user: User }>("/api/account", { method: "PATCH", body: body(data) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ token: string }>("/api/account/password", { method: "POST", body: body({ currentPassword, newPassword }) }),
+  signOutEverywhere: () => request<{ ok: true }>("/api/account/sign-out-everywhere", { method: "POST" }),
+
+  // family
+  getFamily: () => request<FamilyDetails>("/api/family"),
+  renameFamily: (name: string) => request<{ ok: true }>("/api/family", { method: "PATCH", body: body({ name }) }),
+  createMemberInvite: (data: { role: "owner" | "member"; note?: string; expiresInDays?: number }) =>
+    request<IssuedLink>("/api/family/invites", { method: "POST", body: body(data) }),
+  revokeMemberInvite: (id: string) => request<void>(`/api/family/invites/${id}`, { method: "DELETE" }),
+  setMemberRole: (id: string, role: "owner" | "member") =>
+    request<{ ok: true }>(`/api/family/members/${id}`, { method: "PATCH", body: body({ role }) }),
+  removeMember: (id: string) => request<void>(`/api/family/members/${id}`, { method: "DELETE" }),
+  memberResetLink: (id: string) => request<IssuedLink>(`/api/family/members/${id}/reset-link`, { method: "POST" }),
+
+  // trips shared between families
+  tripMembers: (tripId: string) => request<TripMembers>(`/api/trips/${tripId}/members`),
+  createTripInvite: (tripId: string, data: { role: "coowner" | "contributor"; note?: string; expiresInDays?: number }) =>
+    request<IssuedLink>(`/api/trips/${tripId}/invites`, { method: "POST", body: body(data) }),
+  revokeTripInvite: (tripId: string, inviteId: string) => request<void>(`/api/trips/${tripId}/invites/${inviteId}`, { method: "DELETE" }),
+  tripInvitePreview: (token: string) => request<TripInvitePreview>(`/api/trip-invites/${encodeURIComponent(token)}`),
+  acceptTripInvite: (token: string) =>
+    request<{ tripId: string; role: string }>(`/api/trip-invites/${encodeURIComponent(token)}/accept`, { method: "POST" }),
+  setTripMemberRole: (tripId: string, familyId: string, role: "coowner" | "contributor") =>
+    request<{ ok: true }>(`/api/trips/${tripId}/members/${familyId}`, { method: "PATCH", body: body({ role }) }),
+  removeTripMember: (tripId: string, familyId: string) => request<void>(`/api/trips/${tripId}/members/${familyId}`, { method: "DELETE" }),
+  tripActivity: (tripId: string) => request<ActivityEntry[]>(`/api/trips/${tripId}/activity`),
+  tripPeople: (tripId: string) => request<TripPerson[]>(`/api/trips/${tripId}/people`),
+
+  // the same person in two families
+  personLinks: () => request<PersonLinks>("/api/person-links"),
+  proposePersonLink: (personId: string, otherPersonId: string) =>
+    request<{ id: string; status: string }>("/api/person-links", { method: "POST", body: body({ personId, otherPersonId }) }),
+  acceptPersonLink: (id: string) => request<{ ok: true }>(`/api/person-links/${id}/accept`, { method: "POST" }),
+  removePersonLink: (id: string) => request<void>(`/api/person-links/${id}`, { method: "DELETE" }),
+
+  // server admin
+  adminOverview: () => request<AdminOverview>("/api/admin/overview"),
+  adminFamilyInvites: () => request<Array<{ id: string; note: string; createdAt: string; expiresAt: string }>>("/api/admin/family-invites"),
+  createFamilyInvite: (data: { note?: string; expiresInDays?: number }) =>
+    request<IssuedLink>("/api/admin/family-invites", { method: "POST", body: body(data) }),
+  revokeFamilyInvite: (id: string) => request<void>(`/api/admin/family-invites/${id}`, { method: "DELETE" }),
+  adminUpdateFamily: (id: string, data: { name?: string; disabled?: boolean }) =>
+    request<{ ok: true }>(`/api/admin/families/${id}`, { method: "PATCH", body: body(data) }),
+  adminDeleteFamily: (id: string, confirmName: string) =>
+    request<void>(`/api/admin/families/${id}`, { method: "DELETE", body: body({ confirmName }) }),
+  adminUsers: (q = "") => request<AdminUser[]>(`/api/admin/users?q=${encodeURIComponent(q)}`),
+  adminUpdateUser: (id: string, data: { isAdmin?: boolean; disabled?: boolean; role?: "owner" | "member" }) =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, { method: "PATCH", body: body(data) }),
+  adminResetLink: (id: string) => request<IssuedLink>(`/api/admin/users/${id}/reset-link`, { method: "POST" }),
+  adminViewFamily: (familyId: string) =>
+    request<{ token: string }>("/api/admin/view-family", { method: "POST", body: body({ familyId }) }),
+  adminReturn: () => request<{ token: string }>("/api/admin/return", { method: "POST" }),
+  auditLog: (before?: string) =>
+    request<AuditEntry[]>(`/api/admin/audit${before ? `?before=${encodeURIComponent(before)}` : ""}`),
+
+  // visits ("places"; the client calls them items)
+  // The one map: every place my family may see (its own and on trips shared with it).
+  listVisits: () => request<Item[]>("/api/visits"),
+  createItem: (data: Partial<Item>) => request<Item>("/api/visits", { method: "POST", body: body(data) }),
   updateItem: (id: string, data: Partial<Item>) =>
     request<Item>(`/api/visits/${id}`, { method: "PATCH", body: body(data) }),
   deleteItem: (id: string) => request<void>(`/api/visits/${id}`, { method: "DELETE" }),
@@ -478,9 +684,9 @@ export const api = {
   applyMediaSuggestion: (data: { mediaIds: string[]; tripId?: string | null; visitId?: string }) =>
     request<{ applied: number }>("/api/media/apply-suggestion", { method: "POST", body: body(data) }),
 
-  // trips (family-scoped; mapSetId arg is ignored, kept for call-site compatibility)
-  listTrips: (_mapSetId: string) => request<Trip[]>("/api/trips"),
-  createTrip: (_mapSetId: string, data: Partial<Trip>) =>
+  // trips: my family's and those shared with it
+  listTrips: () => request<Trip[]>("/api/trips"),
+  createTrip: (data: Partial<Trip>) =>
     request<Trip>("/api/trips", { method: "POST", body: body(data) }),
   updateTrip: (id: string, data: Partial<Trip>) =>
     request<Trip>(`/api/trips/${id}`, { method: "PATCH", body: body(data) }),
@@ -509,11 +715,13 @@ export const api = {
   deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: "DELETE" }),
 
   // stats (family-scoped)
-  getStats: (_mapSetId: string) => request<Stats>("/api/stats"),
+  getStats: () => request<Stats>("/api/stats"),
 
   // people
   listPeople: () => request<Person[]>("/api/people"),
   getPerson: (id: string) => request<Person>(`/api/people/${id}`),
+  getDocument: (id: string) => request<DocumentItem>(`/api/documents/${id}`),
+  getMedia: (id: string) => request<MediaItem>(`/api/media/${id}`),
   createPerson: (data: PersonInput) => request<Person>("/api/people", { method: "POST", body: body(data) }),
   updatePerson: (id: string, data: PersonInput) =>
     request<Person>(`/api/people/${id}`, { method: "PATCH", body: body(data) }),
@@ -546,15 +754,13 @@ export const api = {
       body: fd,
     });
   },
-  importFile: (mapSetId: string, file: File) => {
+  /** GPX / KML / GeoJSON onto the map, optionally onto a trip. */
+  importFile: (file: File, tripId?: string | null) => {
     const fd = new FormData();
+    if (tripId) fd.append("tripId", tripId);
     fd.append("file", file);
-    return request<{ imported: number; skipped: number }>(`/api/map-sets/${mapSetId}/import`, {
-      method: "POST",
-      body: fd,
-    });
+    return request<{ imported: number; skipped: number; truncated: number }>("/api/import", { method: "POST", body: fd });
   },
-  exportData: () => request<unknown>("/api/export"),
 
   // family settings
   getSettings: () => request<FamilySettings>("/api/settings"),
@@ -572,12 +778,11 @@ export const api = {
   deleteShare: (id: string) => request<void>(`/api/shares/${id}`, { method: "DELETE" }),
   getShare: (token: string) => request<SharePayload>(`/api/share/${token}`),
 
-  // backup / restore
-  downloadBackup: async (): Promise<Blob> => {
-    const token = tokenStore.get();
-    const res = await fetch(`${API_URL}/api/backup`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) throw new ApiError(res.status, "Backup failed");
-    return res.blob();
+  // big downloads (server backup, a family's data): followed as a plain link
+  // carrying a short-lived ticket, so the browser streams them to disk
+  downloadLink: async (purpose: DownloadPurpose): Promise<string> => {
+    const { url } = await request<{ url: string }>("/api/downloads/ticket", { method: "POST", body: body({ purpose }) });
+    return `${API_URL}${url}`;
   },
   restoreBackup: (file: File) => {
     const fd = new FormData();
@@ -598,11 +803,6 @@ export const api = {
     fd.append("file", file);
     fd.append("name", name);
     return request<CustomIcon>("/api/icons", { method: "POST", body: fd });
-  },
-  uploadImage: (file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    return request<{ url: string }>("/api/uploads", { method: "POST", body: fd });
   },
   uploadFromUrl: (url: string) =>
     request<{ url: string; thumbUrl: string | null }>("/api/uploads/from-url", {

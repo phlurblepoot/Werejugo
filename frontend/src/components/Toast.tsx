@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, CheckCircle2, Info, type LucideIcon } from "lucide-react";
 
 type ToastKind = "success" | "error" | "info";
 interface Toast {
@@ -16,7 +17,7 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const ICON: Record<ToastKind, string> = { success: "✅", error: "⚠️", info: "💬" };
+const ICON: Record<ToastKind, LucideIcon> = { success: CheckCircle2, error: AlertTriangle, info: Info };
 const CONFETTI_COLORS = ["#2563eb", "#f59e0b", "#ec4899", "#10b981", "#a855f7", "#ef4444"];
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -39,12 +40,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ toast, celebrate }}>
       {children}
       <div className="toast-stack" role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.kind}`} onClick={() => dismiss(t.id)}>
-            <span className="toast-icon">{ICON[t.kind]}</span>
-            <span className="toast-msg">{t.message}</span>
-          </div>
-        ))}
+        {toasts.map((t) => {
+          const Icon = ICON[t.kind];
+          return (
+            <div key={t.id} className={`toast toast-${t.kind}`} onClick={() => dismiss(t.id)}>
+              <span className="toast-icon"><Icon size={18} aria-hidden="true" /></span>
+              <span className="toast-msg">{t.message}</span>
+            </div>
+          );
+        })}
       </div>
       {confettiKey > 0 && <Confetti key={confettiKey} />}
     </ToastContext.Provider>

@@ -10,24 +10,16 @@ test("tripSlug prefixes the start year when present", () => {
   expect(tripSlug("Italy Adventure", null)).toBe("italy-adventure");
 });
 
-test("mediaDirFor uses the trip folder when a trip is given", () => {
-  expect(mediaDirFor({ name: "Italy", startDate: "2024-06-01" }, new Date("2024-06-10"))).toBe(
-    "trips/2024-italy/photos",
-  );
-});
+const F = "f1111111-1111-4111-8111-111111111111";
 
-test("mediaDirFor falls back to loose/<year> with no trip", () => {
-  expect(mediaDirFor(null, new Date("2023-03-04"))).toBe("loose/2023");
-});
-
-test("mediaDirFor uses 'unknown' year when no date", () => {
-  expect(mediaDirFor(null, null)).toBe("loose/unknown");
+test("every path is inside the family's own folder", () => {
+  expect(mediaDirFor(F, { name: "Italy", startDate: "2024-06-01" }, new Date("2024-06-10"))).toBe(`families/${F}/trips/2024-italy/photos`);
+  expect(mediaDirFor(F, null, new Date("2023-03-04"))).toBe(`families/${F}/loose/2023`);
+  expect(mediaDirFor(F, null, null)).toBe(`families/${F}/loose/unknown`);
 });
 
 test("documentDirFor routes by owner", () => {
-  expect(documentDirFor({ tripName: "Italy", tripStart: "2024-06-01" }, null)).toBe(
-    "trips/2024-italy/documents",
-  );
-  expect(documentDirFor(null, { personName: "Dad" })).toBe("people/dad");
-  expect(documentDirFor(null, null)).toBe("loose/documents");
+  expect(documentDirFor(F, { tripName: "Italy", tripStart: "2024-06-01" }, null)).toBe(`families/${F}/trips/2024-italy/documents`);
+  expect(documentDirFor(F, null, { personName: "Dad" })).toBe(`families/${F}/people/dad`);
+  expect(documentDirFor(F, null, null)).toBe(`families/${F}/loose/documents`);
 });

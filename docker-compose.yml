@@ -23,7 +23,9 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://werejugo:change-me-in-production@db:5432/werejugo}
-      JWT_SECRET: ${JWT_SECRET:-please-change-this-to-a-long-random-secret}
+      # Required: compose refuses to start without it. Generate: openssl rand -hex 32
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env - generate one with openssl rand -hex 32}"
+      FILE_SIGNING_SECRET: ${FILE_SIGNING_SECRET:-}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       BACKEND_PORT: ${BACKEND_PORT:-4000}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
@@ -32,6 +34,10 @@ services:
       NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-Werejugo/0.1}
       CRUISE_LOOKUP_ENABLED: ${CRUISE_LOOKUP_ENABLED:-true}
     volumes:
+      # Photos, videos and documents. Without this volume they are lost when
+      # the container is recreated.
+      - storage:/app/storage
+      # Custom pin icons.
       - uploads:/app/uploads
     # The backend is reached through the frontend's nginx proxy, so it only needs
     # to be visible inside the compose network — not published to the host.
@@ -61,4 +67,5 @@ services:
 
 volumes:
   db-data:
+  storage:
   uploads:

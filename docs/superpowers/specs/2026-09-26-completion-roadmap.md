@@ -13,8 +13,8 @@
 |---|---|
 | **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
 | **Current phase** | 1.1 |
-| **Next step** | Write the Phase 1.1 implementation plan in `docs/superpowers/plans/`, then build it on a branch and open a PR |
-| **Blocked on** | Nothing |
+| **Next step** | Milestone 1 review: the owner tests the preview image `claude-cool-hopper-pku4ne` (reset the database first — README), merges PR #1 and approves deleting the old branch (the last 1.1 item). Then plan Phase 2.1. |
+| **Blocked on** | The owner's Milestone 1 review |
 | **Last updated** | 2026-09-26 |
 <!-- status:end -->
 
@@ -184,73 +184,76 @@ Introduce **pg-boss** (a job queue on the existing Postgres, so no Redis) for Im
 
 ## 4. Milestones
 
-Each phase gets its own detailed implementation plan in `docs/superpowers/plans/` at the start of the phase (same TDD, task-by-task format as Phases 1–8) and lands as one pull request to `main`. The owner reviews and tests on Unraid at the end of each **milestone**. Sizes are relative: S < M < L < XL.
+Each phase gets its own detailed implementation plan in `docs/superpowers/plans/` at the start of the phase (same TDD, task-by-task format as Phases 1–8). All phases of a milestone land on one branch and are reviewed as **one pull request per milestone** to `main`; a phase is `Done` when its work is complete and verified on that branch, and the milestone is finished when the owner merges the PR. The owner reviews and tests on Unraid at the end of each **milestone**. Sizes are relative: S < M < L < XL.
 
 ### Milestone 1 — Foundation: safe, multi-family, new design
 
 #### 1.1 Safety net & project hygiene — S
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In review · **Plan:** [phase-1.1](../plans/2026-09-26-phase-1.1-safety-net.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
 *(first PR; small, and needed before the app faces the internet)*
 
-- [ ] Create `main` from the current work; CI on every PR: backend + frontend typecheck, backend tests against a PostGIS service container, frontend tests, production builds; images publish only from `main` and `v*` tags; fix the jsdom `Blob` test.
-- [ ] B2: add a `/app/storage` volume to `docker-compose.yml` and the Unraid template; document `STORAGE_DIR`/`UPLOADS_DIR` in `.env.example`; fix README paths.
-- [ ] B4: refuse to boot in production with a missing, default or short `JWT_SECRET`; separate `FILE_SIGNING_SECRET`.
-- [ ] B3 (stopgap until 1.3): disable public registration after the first family (`ALLOW_SIGNUP=false` default); restrict backup/restore to the first family's owner; restore validates the archive's `storage/` before wiping anything.
-- [ ] B1: make the first-run welcome an inline, dismissible panel that refetches.
-- [ ] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
-- [ ] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
-- [ ] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
-- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`.
-- [ ] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
+- [x] Create `main` from the current work; CI on every PR: backend + frontend typecheck, backend tests against a PostGIS service container, frontend tests, production builds; images publish only from `main` and `v*` tags; fix the jsdom `Blob` test.
+- [x] Preview images: pushes to `claude/**` branches publish images tagged with the branch name (never `latest`), so a milestone can be tested on Unraid before it is merged. (added 2026-09-26)
+- [x] B2: add a `/app/storage` volume to `docker-compose.yml` and the Unraid template; document `STORAGE_DIR`/`UPLOADS_DIR` in `.env.example`; fix README paths.
+- [x] B4: refuse to boot in production with a missing, default or short `JWT_SECRET`; separate `FILE_SIGNING_SECRET`.
+- [x] B3 (stopgap until 1.3): disable public registration after the first family (`ALLOW_SIGNUP=false` default); restrict backup/restore to the first family's owner; restore validates the archive's `storage/` before wiping anything.
+- [x] Backups also include `UPLOADS_DIR` (icons, map overlays, ship images), and restore replaces the storage contents in place (the directory is a volume mount point in Docker). (added 2026-09-26)
+- [x] B1: make the first-run welcome an inline, dismissible panel that refetches.
+- [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
+- [x] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
+- [x] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
+- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`. *(Waiting on the owner's approval at the Milestone 1 review.)*
+- [x] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
 
 #### 1.2 Design system & responsive shell — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-1.2](../plans/2026-09-26-phase-1.2-design-system.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] Tokens (color, type scale, spacing, radius, elevation) with light, dark and "system" themes; an icon set (Lucide) replaces emoji icons.
-- [ ] Core components: PageHeader (with overflow menu), Button/IconButton, form fields (16px on mobile), Select, DatePicker, Modal ↔ bottom Sheet on phones, Tabs, Menu, ConfirmDialog, Toast, Card, Avatar, Chip, EmptyState/Spinner/ErrorState. Consider Radix primitives for accessible dialogs and menus.
-- [ ] Responsive shell: left rail on desktop, bottom tab bar + "More" on phones, safe-area insets, consistent header heights.
-- [ ] Restyle the login, settings and shell now; every later phase builds and restyles its screens on the new system (no module is styled twice).
+- [x] Tokens (color, type scale, spacing, radius, elevation) with light, dark and "system" themes; an icon set (Lucide) replaces emoji icons.
+- [x] Core components: PageHeader (with overflow menu), Button/IconButton, form fields (16px on mobile), Select, DatePicker, Modal ↔ bottom Sheet on phones, Tabs, Menu, ConfirmDialog, Toast, Card, Avatar, Chip, EmptyState/Spinner/ErrorState. Consider Radix primitives for accessible dialogs and menus.
+- [x] Responsive shell: left rail on desktop, bottom tab bar + "More" on phones, safe-area insets, consistent header heights.
+- [x] Restyle the login, settings and shell now; every later phase builds and restyles its screens on the new system (no module is styled twice).
 
 #### 1.3 Accounts, admin & onboarding — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-1.3](../plans/2026-09-26-phase-1.3-accounts-admin.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] Setup wizard on an empty server (admin + first family); remove open registration for good.
-- [ ] Admin console (§3.1): families, one-time family invites, users, password-reset links, server backup/restore (moved here, admin-only), audit log, "switch into family".
-- [ ] Family settings: members, one-time member invites, roles, remove member.
-- [ ] Account settings: profile, password change, sign out everywhere (`token_version`).
-- [ ] Frontend auth fixes: clear the React Query cache on logout/login; a 401 signs the user out cleanly.
+- [x] Setup wizard on an empty server (admin + first family); remove open registration for good.
+- [x] Admin console (§3.1): families, one-time family invites, users, password-reset links, server backup/restore (moved here, admin-only), audit log, "switch into family".
+- [x] Family settings: members, one-time member invites, roles, remove member.
+- [x] Account settings: profile, password change, sign out everywhere (`token_version`).
+- [x] Frontend auth fixes: clear the React Query cache on logout/login; a 401 signs the user out cleanly.
 
 #### 1.4 Tenancy & access layer — L
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-1.4](../plans/2026-09-26-phase-1.4-tenancy-access.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
-- [ ] Tenant-isolation test suite covering every endpoint.
-- [ ] Per-family "download our data" export vs admin full-server backup.
-- [ ] Squash migrations 0001–0011 into a new baseline (one-time reset of the test instance, documented in the release notes).
-- [ ] Fix integrity gaps found in the audit: visit `tripId`/`themeId` ownership checks, document single-owner rule, blackout date order, a unique trip packing list, dangling `links` and `share_links` cleanup on delete.
+- [x] `access.ts` (§3.2) and every route migrated onto it; UUID/date validation on all params and bodies; global error handler.
+- [x] Tenant-isolation test suite covering every endpoint.
+- [x] Per-family "download our data" export vs admin full-server backup.
+- [x] Squash migrations 0001–0012 into a new baseline (one-time reset of the test instance, documented in the release notes). *(0012 was added by 1.3, so the squash covers it too; old backups still restore.)*
+- [x] Fix integrity gaps found in the audit: visit `tripId`/`themeId` ownership checks, document single-owner rule, blackout date order, a unique trip packing list, dangling `links` and `share_links` cleanup on delete.
+- [x] Per-family storage folders and never-reused file names, so no family's file can be served, overwritten or deleted through another family's path. (added 2026-09-26 — found by the 1.4 audit)
 
 #### 1.5 Shared trips & cross-family people — L
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-1.5](../plans/2026-09-26-phase-1.5-shared-trips.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] `trip_members` + `trip_invites` (§3.3); invite dialog on a trip (role picker, link with expiry); accept page for the invited family's owner; member management; leave/remove.
-- [ ] Visibility and edit rules per role; per-family-private kinds; attribution chips in every trip view.
-- [ ] `person_links` (§3.4): propose/accept, merged person pages, cross-family tagging inside shared trips.
-- [ ] An `activity` events table (who added what to which shared trip) for the feed and later push notifications.
-- [ ] Dev seed: two families and a shared trip.
+- [x] `trip_members` + `trip_invites` (§3.3); invite dialog on a trip (role picker, link with expiry); accept page for the invited family's owner; member management; leave/remove.
+- [x] Visibility and edit rules per role; per-family-private kinds; attribution chips in every trip view.
+- [x] `person_links` (§3.4): propose/accept, merged person pages, cross-family tagging inside shared trips.
+- [x] An `activity` events table (who added what to which shared trip) for the feed and later push notifications.
+- [x] Dev seed: two families and a shared trip.
 
 #### 1.6 One map — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** Done · **Plan:** [phase-1.6](../plans/2026-09-26-phase-1.6-one-map.md) · **PR:** [#1](https://github.com/phlurblepoot/Werejugo/pull/1)
 
-- [ ] Drop map sets (§3.5); URL-driven filters (trip, person, year/date, kind, family); shared-trip visits badged.
-- [ ] Remove the legacy Trips/Photos/Stats/Export panels and link out; stats move to the Stats page (4.2).
-- [ ] Search deep links (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`) open the item — on every page.
+- [x] Drop map sets (§3.5); URL-driven filters (trip, person, year/date, kind, family); shared-trip visits badged.
+- [x] Remove the legacy Trips/Photos/Stats/Export panels and link out; stats move to the Stats page (4.2). *(Travel stats stays in the Map's ⋯ menu until 4.2.)*
+- [x] Search deep links (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`) open the item — on every page.
 
 **Milestone 1 exit:** the admin can invite families; two families can share a trip with the right roles and privacy; nothing leaks across families (test suite green); the app is safe on the public internet; the shell and account screens use the new design on phone and desktop.
 
@@ -365,9 +368,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 **Status:** Not started · **Plan:** — · **PR:** —
 
 - [ ] Error handling and confirmations for every mutation listed in Appendix A.3; consistent cache invalidation (one query-key scheme for trips etc.).
-- [ ] Performance: remove N+1 queries in visit loading; add the missing indexes (media geom/timeline, documents owners, itinerary, people refs).
+- [ ] Performance: ~~remove N+1 queries in visit loading~~ (done in 1.6 — the map list is four queries); add the missing indexes (media geom/timeline, documents owners, itinerary, people refs).
 - [ ] Trip rename re-homes documents (the `trips.ts:50` TODO).
 - [ ] Remove dead code and dependencies found in the audit.
+- [ ] Every legacy `.modal-backdrop` dialog (14 of them: item detail, visit editor, map settings, stats, document/person/trip forms…) moves to the kit `Modal`, so Esc closes it, focus stays inside and screen readers announce a dialog. (added 2026-09-26)
 
 **Milestone 3 exit:** every module is complete, consistent and comfortable on phone and desktop; cruise, flight and road routes draw correctly.
 
@@ -486,6 +490,40 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-26
 
+- **Note** — Milestone 1 is built and ready for the owner's review (PR #1). Exit criteria, checked:
+  - **The admin invites families:** 1.3; re-run on the Docker images.
+  - **Two families share a trip with the right roles and privacy:** the 1.5 suite, plus Playwright as host, contributor and co-owner in 1.5 and 1.6.
+  - **Nothing leaks across families:** the tenant-isolation suite (93 checks, covering every route) is green.
+  - **Safe on the public internet:** 1.1 hardening — required secrets, rate limits, security headers, CSP, SVG refusal.
+  - **New design on phone and desktop:** 1.2 and 1.3.
+
+  Last step: both images were built from this branch with their real Dockerfiles and run like the Unraid containers (nginx CSP in front, migrate → seed → serve). On an empty database, the setup wizard, family and member invites, and password reset all passed (the 1.3 walkthrough). On a seeded one, the one-map walkthrough passed: filters, shared chips, edit gating, import onto a shared trip, uploads to the storage volume and every deep link. Also removed in the wrap-up: the unused `POST /api/uploads` (it only served map overlays, which went with map sets). CLAUDE.md and the README (preview images, sharing between families) are updated. Still open: 1.1's last item, deleting the old branch, which waits on the owner's approval.
+- **Done** — Phase 1.6 One map (PR #1). Map sets are gone: the Map shows every place the family may see — its own and every place on a trip it shares — with filters for search, kind, trip, year, person and (when anything is shared) who added it, all kept in the URL so a view can be bookmarked or sent. Places from other families carry a "by <family>" chip and open read-only unless the viewer's family may edit them (host or co-owner). The map list loads in four queries instead of several per place. Migration `0003_one_map.sql` keeps a family's custom base-map style (now under Map appearance) and drops the map-set tables; restoring an older backup skips them. The Trips, Gallery, Stats and Export side panels are gone: the sidebar links to Planning and Photos; import (GPX/KML/GeoJSON, optionally onto a trip), pin styles, map appearance and Travel stats live in the Map's ⋯ menu. Search results open their item on every page (`/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`, `/photos?photo=`). Verified: backend 288/288 (with a data test for the 0003 migration), frontend 180/180, build; Playwright on the two-family seed database upgraded in place from 0002, as host, contributor and co-owner, at desktop and phone sizes: 36 checks, no console errors or overflow.
+- **Note** — Found by the 1.6 QA and fixed: a place of kind "stay" (valid on the server, used by the seed's "Lakeside cabin") blanked the whole Map page because the web app didn't know the kind — map sets had hidden it until now. The app now has one list of kinds (`ITEM_KINDS`) with "Stay" in the editor, filters and pin styles, and the legend falls back safely for any kind it doesn't know. Also seen, left for 3.6 (added there): the 14 older dialogs don't close on Esc.
+
+- **Done** — Phase 1.5 Shared trips & cross-family people (PR #1). A trip's host family invites another family with a one-time link and picks co-owner or contributor. Only family owners accept. Places, itinerary, photos and comments on the trip are visible to every family on it and say who added them. Contributors change only their own; co-owners change everything; the trip itself (details, status, sharing, members) stays the host's. Packing, bookings and documents stay private per family, including a guest family's own list and bookings for the shared trip. A family that leaves takes its contributions with it, and they return on re-invite. Other families' photos show only in the trip's album, never in your library. "Same person in another family" links people across families that share a trip; the person page merges what the viewer may see; tagging works across families. There's an activity feed and a two-family dev seed. Verified: backend 296/296 (a trip-sharing suite; the isolation suite now 102 cases), frontend 168/168; Playwright on a seeded database as host, contributor and a newly invited co-owner (phone), with no console errors or overflow.
+- **Note** — 1.5 decisions: public share links of a shared trip show only the host family's content, so nobody's photos are published without their consent. Global search, stats and the photo library stay per family. Shared-trip places show on the map once 1.6 replaces map sets. The dev seed is now safe to run on every start (it crash-looped before).
+
+- **Done** — Phase 1.4 Tenancy & access layer (PR #1): `lib/access.ts` decides who can see and change what (`loadReadable`/`loadEditable` → 404, `assertRefs` → 400), and every route uses it or a family-filtered statement. A global error handler turns bad input (zod, non-UUID ids, bad dates, out-of-range coordinates, Postgres input errors) into 400/404/409 instead of 500. The tenant-isolation suite runs 90 cross-family attempts over every registered route, fails on any new route it doesn't cover, and was shown to fail when a check is removed. Migrations 0001–0012 are squashed into `0001_baseline.sql` (pg_dump diff checked); a pre-baseline database is refused at start-up with reset steps. Owners can "Download our data" (the family's rows and files); big downloads stream through a two-minute ticket link. Verified: backend 275/275, frontend 156/156; Playwright on a fresh baseline database: the full 1.3 walkthrough, a family export containing only that family's rows and photo, the admin backup download, and a ticket refused as a login.
+- **Note** — Found by the 1.4 audit and fixed (added to 1.4): photos and documents from different families shared storage folders (`loose/<year>`, `people/<name>`…) and reused file names, so two families' uploads could collide and an old photo link could show another family's file. Files now live under `families/<familyId>/`, names carry a random suffix and are created exclusively, and moves never overwrite.
+- **Changed** — "Download our data" and the admin backup now download through a short-lived, single-purpose link instead of being loaded into browser memory (a 20k-photo library wouldn't fit). The old map-set JSON export (`GET /api/export`, the Map's "Export map data") is removed. Old backups still restore into the new schema.
+- **Note** — Left for later phases (not tenancy leaks): any family member (not only owners) can change family settings, delete trips and create share links; `/uploads/*` (pin icons, map overlays) is public; signed file URLs stay valid for 24 h after a share link is revoked; photos are filed under the upload year rather than the EXIF year. Listed in the 1.4 plan's "Outcome".
+
+- **Done** — Phase 1.3 Accounts, admin & onboarding (PR #1): a setup wizard on an empty server creates the admin and first family, and open registration and family invite codes are gone. New families join only through one-time admin invite links, which tell them the admin can see all data. Members join through one-time owner invite links with a chosen role. Password resets are one-time links issued by an owner or the admin. Settings covers profile, colour, password change, sign out everywhere, members and roles, invites and removal. The Admin page covers families (invite, rename, disable, delete by typed name, view as), people (search, admin, disable, reset link, role), backup and restore (moved here, admin only) and the audit log. While an admin views another family a banner shows "Return to my family". Sign-in and sign-out clear the React Query cache, and any 401 signs out cleanly. Verified: backend 164/164, frontend 155/155; a Playwright run on a fresh database under the nginx CSP covered setup → family invite → member invite → reset link (old session signed out) → admin view-as and return → people, audit and backup tabs, at desktop and phone sizes in light and dark, with no overflow or console errors.
+- **Note** — Found during 1.3: the backend crashed whenever Postgres dropped an idle connection (e.g. the database container restarting), because the pool had no `error` listener. It now logs and carries on (`backend/src/db/pool.ts`). Also fixed: new people get distinct avatar colours, joining through an invite counts as a first sign-in, and the map's "no pins yet" hint no longer squashes on phones.
+- **Note** — The database schema changed (migration `0012_accounts`): existing test instances keep working (the oldest family's owner becomes the admin), but a reset is simplest and 1.4 resets anyway when it squashes migrations.
+
+- **Done** — Phase 1.2 Design system & responsive shell (PR #1): tokens with light/dark/system themes, a Lucide + Radix component kit, a desktop rail with account menu, a phone tab bar with a "More" sheet, the same page header on every page, and rebuilt Login and Settings. Verified: frontend 129/129; Playwright screenshots of every page at 1440×900 and 390×844 in light and dark with no horizontal overflow, no off-screen header controls and no console errors; production build under the nginx CSP with no violations.
+- **Note** — Also in 1.2: the invite code moved from the Map header (hidden on phones) to Settings → Family; the Map's JSON export moved to its header menu until 1.6 removes it; the dead "coming soon" code and five one-line tests were removed; the dev-seed invite code is now upper-case (the old `wander-1` could never be joined).
+
+- **Note** — Phase 1.1 complete on the milestone branch except deleting `claude/confident-ramanujan-xDIFr`, which waits for the owner's approval (so 1.1 stays `In review`). Verified: backend 131/131 and frontend 112/112 locally; CI green on PR #1 (roadmap check, backend on PostGIS, frontend build); nginx config checked with `nginx -t`; the production build loaded in Chromium under the new CSP with no violations; signup gating, date formatting, backup visibility and search checked in the browser.
+- **Note** — Found during 1.1: restoring a backup into a Docker volume would have crashed half-way (it tried to delete the mount point); fixed by replacing the directory's contents in place.
+
+- **Changed** — Milestone 1 is built on one branch (`claude/cool-hopper-pku4ne`) and reviewed as one PR to `main`, instead of one PR per phase: the owner reviews per milestone, and this session may only push to its assigned branch. Each phase still gets its own plan, status line and log entries; a phase is `Done` when complete and verified on the branch. `CLAUDE.md` updated to match.
+- **Changed** — Phase 1.1: added preview images for `claude/**` branches (so the milestone can be tested on Unraid before merging) and uploads-in-backup / in-place restore.
+- **Note** — Created `main` at `7f9d3a7` (roadmap + tracking on top of `e1136dd`). GitHub's default branch is still `claude/laughing-edison-sTVtG`; the owner should switch it to `main` in the repo settings.
+- **Note** — Phase 1.1 started; plan at `docs/superpowers/plans/2026-09-26-phase-1.1-safety-net.md`. Found while planning: editing a trip or visit blanked its dates (date inputs received timestamps) — fixed by B6.
+
 - **Changed** — Added progress tracking: the Status block and per-phase status lines in this file, `CLAUDE.md` "Roadmap discipline" rules, `scripts/roadmap.mjs` (summary + `--check`), a `SessionStart` hook in `.claude/settings.json` that prints the status on startup/resume/clear/compact, `.github/pull_request_template.md`, and a README pointer. `.gitignore` now keeps `.claude/settings.json` tracked. Added a CI roadmap check to Phase 1.1.
 - **Decided** — Progress tracking lives in this roadmap (owner request, see §2).
 - **Note** — Roadmap written from the audit of `e1136dd` and the owner Q&A (commit `7f15f0d`). All phases are `Not started`.
@@ -519,7 +557,7 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 ### A.3 Frontend flows
 - ✅ First-run overlay locks out new families (`shell/FirstRunWelcome.tsx`, `global.css:572`).
 - Command palette: no debounce, no ↑/↓/Enter, Esc only from the input; ✅ deep links (`/map?visit=` etc., `routes/search.ts:22-47`) ignored by every page.
-- Map: photo upload in the editor closes it and discards edits (`VisitPhotos.tsx:61` → `onSaved`); duplicate visit on retry after a failed photo upload; pick-on-map has no cancel; popup + modal open together; style loads twice on mount; family/kind/cruise-line defaults never affect saved pins; legend uses kind defaults only; map sets' default view isn't editable; no UI to add an existing visit to another set; stats titled "Map stats" but family-wide.
+- Map: photo upload in the editor closes it and discards edits (`VisitPhotos.tsx:61` → `onSaved`); duplicate visit on retry after a failed photo upload; pick-on-map has no cancel; popup + modal open together; ✅ style loads twice on mount (1.6); family/kind/cruise-line defaults never affect saved pins; legend uses kind defaults only; ✅ map sets' default view isn't editable and no UI to add an existing visit to another set (map sets removed, 1.6); ✅ stats titled "Map stats" but family-wide (now "Travel stats", 1.6).
 - Planning: trips can't be edited/deleted from Planning; status select shows stale value; "schedule" sets today's date; itinerary items not editable; "→ visit" creates a location-less visit on no map; bookings not clickable; timeline axis hard-coded to 2025.
 - Packing: custom template edits never refresh (`PackingPage.tsx:44`); save-as-template doesn't refresh or confirm; no rename/delete/qty/label edit.
 - Documents: search input unmounts each keystroke; empty filter shows "No documents yet" with no way back; banner computed from the filtered list; no delete confirm.
@@ -529,7 +567,7 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 - Share view: itinerary never rendered, pins do nothing, fixed world view, waypoints dropped, image URLs skip `API_URL`.
 - Auth: logout doesn't clear cached data (another user on the same tab can briefly see the previous family's data); a 401 clears the token but leaves the UI signed in.
 - Missing try/catch or confirmations in: ManagePanel, SettingsPanel save, StylePicker upload, FlightForm, useCruiseLookup, PhotoDetail, UploadReview, ShareButton, PeoplePage, DocumentForm, TripForm, PlanningPage status change, VisitPhotos delete, itinerary delete, BlackoutManager.
-- Inconsistent trip query keys (`["trips", mapSetId]` vs `["trips"]`); the due-count badge refreshes only from the Documents page.
+- ✅ Inconsistent trip query keys (`["trips", mapSetId]` vs `["trips"]`) — one `["trips"]` key since 1.6; the due-count badge refreshes only from the Documents page.
 
 ### A.4 Mobile & PWA
 - ✅ Rail always visible on phones; ✅ header actions overflow off-screen (Planning, Photos); board and packing columns fixed-width; one breakpoint in the whole stylesheet; 14px inputs (iOS zoom); no safe-area insets with `black-translucent`; invite code hidden ≤720px.

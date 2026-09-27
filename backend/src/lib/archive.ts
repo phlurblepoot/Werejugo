@@ -7,10 +7,18 @@ import type pg from "pg";
  * intentionally excluded — they are recreated by migrations/seed, not restored.
  */
 export const BACKUP_TABLES = [
-  "families", "users", "themes", "trips", "map_sets", "visits", "media", "people",
-  "icons", "documents", "links", "map_set_visits", "visit_waypoints", "comments",
+  "families", "users", "themes", "trips", "visits", "media", "people",
+  "icons", "documents", "links", "visit_waypoints", "comments",
   "itinerary_items", "packing_lists", "packing_items", "blackout_periods", "share_links",
+  "invites", "password_resets", "audit_log",
+  "trip_members", "trip_invites", "person_links", "activity",
 ] as const;
+
+/** Tables older backups may contain that no longer exist; restore skips them. */
+export const RETIRED_TABLES = ["map_sets", "map_set_visits"] as const;
+
+/** Tables with a serial id whose sequence must follow the restored rows. */
+const SERIAL_TABLES = ["audit_log", "activity"] as const;
 
 /** Dump every table to a `{ [table]: rows[] }` object. Geometry is encoded as
  *  GeoJSON automatically by to_jsonb and round-trips via jsonb_populate_recordset. */
@@ -30,13 +38,30 @@ export async function restoreDatabase(client: pg.PoolClient, db: Record<string, 
   await client.query(`TRUNCATE ${tableList} RESTART IDENTITY CASCADE`);
   const counts: Record<string, number> = {};
   for (const table of BACKUP_TABLES) {
-    const rows = db[table] ?? [];
+    const rows = (db[table] ?? []) as Array<Record<string, unknown>>;
     if (rows.length > 0) {
+      // Only the columns the archive has: a backup from an older version lacks
+      // newer columns, which then get their defaults instead of NULL.
+      const { rows: cols } = await client.query<{ column_name: string }>(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1", [table]);
+      const inArchive = new Set(rows.flatMap((r) => Object.keys(r)));
+      const list = cols.map((c) => c.column_name).filter((c) => inArchive.has(c)).map((c) => `"${c}"`).join(", ");
       await client.query(
-        `INSERT INTO "${table}" SELECT * FROM jsonb_populate_recordset(NULL::"${table}", $1::jsonb)`,
+        `INSERT INTO "${table}" (${list}) SELECT ${list} FROM jsonb_populate_recordset(NULL::"${table}", $1::jsonb)`,
         [JSON.stringify(rows)]);
     }
     counts[table] = rows.length;
   }
+  for (const table of SERIAL_TABLES) {
+    await client.query(
+      `SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM "${table}"`);
+  }
+  // Archives from before server admins existed: the oldest family's first owner
+  // becomes the admin, so the server is never left without one.
+  await client.query(`
+    UPDATE users SET is_admin = true
+     WHERE NOT EXISTS (SELECT 1 FROM users WHERE is_admin)
+       AND id = (SELECT u.id FROM users u JOIN families f ON f.id = u.family_id
+                  WHERE u.role = 'owner' ORDER BY f.created_at, u.created_at LIMIT 1)`);
   return counts;
 }

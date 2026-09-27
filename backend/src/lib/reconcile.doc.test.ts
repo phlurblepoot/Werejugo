@@ -24,6 +24,6 @@ test("moves a document's file when it has a person owner", async () => {
   await tx(async (client) => { await reconcileDocument(client, doc.rows[0].id); });
 
   const row = await query<{ rel_path: string }>("SELECT rel_path FROM documents WHERE id = $1", [doc.rows[0].id]);
-  expect(row.rows[0].rel_path).toBe("people/dad/passport.pdf");
-  expect(existsSync(absStoragePath("people/dad/passport.pdf"))).toBe(true);
+  expect(row.rows[0].rel_path).toBe(`families/${ctx.familyId}/people/dad/passport.pdf`);
+  expect(existsSync(absStoragePath(row.rows[0].rel_path))).toBe(true);
 });

@@ -12,7 +12,7 @@ This is a multi-session project, and conversation context gets lost. The roadmap
 2. **Work from the roadmap.** Anything non-trivial that isn't already in it gets added first: a new checklist item in the right phase, ending `(added YYYY-MM-DD)`, plus a **Changed** log entry. Trivial fixes can go in without that, but they still get a **Note** log entry.
 3. **Starting a phase:** write its detailed implementation plan at `docs/superpowers/plans/YYYY-MM-DD-phase-X.Y-<slug>.md` (same TDD, task-by-task style as the existing plans). Set the phase's status line to `Planned` with the Plan link, then `In progress` when building starts. Update the Status block.
 4. **Tick items as they're finished,** `- [ ]` → `- [x]`, **in the same commit as the work.** Never tick something that isn't done and verified (tests run, behaviour checked).
-5. **PR opened:** status `In review` with the PR link. **PR merged:** status `Done` (every item ticked or dropped), a **Done** log entry naming the phase and linking the PR, and the Status block moved on to the next phase and next step.
+5. **Finishing a phase:** when its work is complete and verified on the milestone branch (tests green, behaviour checked), set it to `Done` with the milestone PR link (every item ticked or dropped), add a **Done** log entry, and move the Status block to the next phase. Use `In review` only for a phase waiting on the owner (for example an approval). The milestone is finished when the owner merges the milestone PR.
 6. **Changing the plan:** never diverge silently. Edit the roadmap in place:
    - New items end with `(added YYYY-MM-DD)`.
    - Dropped items are struck through, never deleted: `- [ ] ~~item~~ (dropped YYYY-MM-DD — reason)`.
@@ -33,8 +33,24 @@ Log entry format (newest date first, under a `### YYYY-MM-DD` heading):
 
 ## Branches and PRs
 
-- Until `main` exists (created in Phase 1.1), work on the branch the session was assigned. After that: a feature branch per phase, and a PR to `main`.
-- PRs follow `.github/pull_request_template.md`, including its Roadmap checklist. CI will run `node scripts/roadmap.mjs --check --changed-since origin/main` (added in Phase 1.1).
+- `main` is the integration branch. Each **milestone** is built on one branch (the session's assigned branch) and reviewed as **one PR to `main`**; the owner reviews, tests and merges at milestone boundaries.
+- Pushes to `claude/**` branches publish preview Docker images tagged with the branch name, so the owner can test a milestone on Unraid before merging.
+- PRs follow `.github/pull_request_template.md`, including its Roadmap checklist. CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` plus both test suites.
+
+## Backend conventions
+
+- **Tenancy goes through `backend/src/lib/access.ts`.** Load rows by id with `loadReadable`/`loadEditable` (404, never 403), check every id you store with `assertRefs` (400 "Unknown …"), and keep `family_id` in every `UPDATE`/`DELETE`. Shared trips (1.5) widen these helpers, not the routes.
+- **Every new route needs a case in `routes/tenant-isolation.test.ts`** (or an `EXEMPT` entry with a reason) — the suite fails on any registered route it doesn't know.
+- Throw `HttpError`s (`lib/errors.ts`) and parse bodies with zod `.parse()`; the global error handler turns them (and Postgres input errors) into 400/404/409. Dates use `ymd`/`optionalYmd` from `lib/validate.ts`; coordinates use `lib/geojson.ts`.
+- Files live under `families/<familyId>/…` in `STORAGE_DIR`, with never-reused names (`lib/storage.ts`).
+- Schema changes are new migrations after `0001_baseline.sql` (now up to `0003_one_map.sql`); never edit an applied migration. Data migrations get a test in `src/db/migrations.test.ts` (run the SQL on old-shape data in a rolled-back transaction).
+
+## Frontend conventions
+
+- New screens use the kit in `frontend/src/components/kit` (Modal, Button, Field, PageHeader…); the older `.modal-backdrop` dialogs are being moved over (roadmap 3.6).
+- Place kinds: `ITEM_KINDS` in `lib/style.ts` is the one list, and must match the backend's `visitSchema.kind` enum (`routes/visits.ts`).
+- Anything search can find opens from a URL: `/map?visit=`, `/planning?trip=`, `/people?person=`, `/documents?doc=`, `/photos?photo=`. The map's filters live in the URL too (`lib/mapFilters.ts`).
+- Other families' content (shared trips) carries a `ByFamily` chip and honours `canEdit` from the API; never infer edit rights on the client.
 
 ## Running things
 
@@ -59,12 +75,13 @@ To run the app locally with demo data:
 ```bash
 cd backend
 export STORAGE_DIR=/tmp/wj-storage UPLOADS_DIR=/tmp/wj-uploads SEED_DEV_DATA=true
-npx tsx src/db/migrate.ts && npx tsx src/db/seed.ts   # seed dev data once; the seed isn't idempotent yet
+npx tsx src/db/migrate.ts && npx tsx src/db/seed.ts   # safe to re-run; demo data is added once
 npx tsx src/index.ts                                  # API on :4000
 cd ../frontend && npx vite --port 5173                # UI on :5173, proxies /api
 ```
 
-- Log in as `demo@werejugo.dev` / `password123`.
+- Log in as `demo@werejugo.dev` (server admin, owner of The Wanderers) or `smith@werejugo.dev` (owner of The Smiths, a contributor on the Wanderers' "Lake Tahoe 2025"); password `password123` for both.
+- `npm start` / the server itself does not migrate: run `migrate.ts` (and `seed.ts`) first, as the Docker image does.
 - Chromium for Playwright is at `/opt/pw-browsers`. External map tiles may not load in the sandbox.
 
-Known baseline (2026-09-26): backend 102/102 tests pass; frontend 100/101, where `src/api/share-backup-client.test.ts` fails on a jsdom `Blob` quirk (fix scheduled in Phase 1.1).
+Known baseline (2026-09-26, end of Milestone 1): backend 288/288 tests pass, frontend 180/180; typecheck and build clean.

@@ -14,3 +14,11 @@ test("renders a date header and opens a photo on click", () => {
   fireEvent.click(screen.getByRole("img", { name: "Sunset" }));
   expect(onOpen).toHaveBeenCalledWith(items[0]);
 });
+
+test("another family's photos in a shared trip's album say who added them", () => {
+  const theirs = { id: "m9", kind: "image", tripId: "t1", url: "/u", thumbUrl: null, caption: "Lake", takenAt: "2025-07-12", createdAt: "2025-07-12", width: null, height: null, lng: null, lat: null, cursor: "c", familyId: "f2", familyName: "The Smiths" };
+  const mine = { ...theirs, id: "m10", familyId: "f1", familyName: "Us" };
+  render(<PhotoGrid items={[theirs, mine] as never} onOpen={() => {}} hasMore={false} onLoadMore={() => {}} myFamilyId="f1" />);
+  expect(screen.getByTitle("Added by The Smiths")).toBeInTheDocument();
+  expect(screen.queryByTitle("Added by Us")).toBeNull();
+});

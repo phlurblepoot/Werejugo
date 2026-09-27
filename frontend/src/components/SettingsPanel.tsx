@@ -9,7 +9,7 @@ import {
   type PinSettings,
   type PinStyle,
 } from "../api/client";
-import { KIND_LABELS, BASE_PIN, defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "../lib/style";
+import { ITEM_KINDS, KIND_LABELS, BASE_PIN, defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "../lib/style";
 import { StylePicker } from "./StylePicker";
 import { PinStyleControls } from "./PinStyleControls";
 import { PathStyleControls } from "./PathStyleControls";
@@ -18,12 +18,7 @@ type Target = string; // "default" | ItemKind | `line:<name>`
 
 const KIND_TARGETS: Array<{ key: string; label: string }> = [
   { key: "default", label: "All pins" },
-  { key: "place", label: "Place" },
-  { key: "food", label: "Food" },
-  { key: "flight", label: "Flight" },
-  { key: "cruise", label: "Cruise" },
-  { key: "drive", label: "Drive" },
-  { key: "custom", label: "Custom" },
+  ...ITEM_KINDS.map((k) => ({ key: k, label: KIND_LABELS[k] })),
 ];
 const ROUTE_KINDS = new Set(["default", "flight", "cruise", "drive"]);
 
@@ -38,6 +33,7 @@ interface Props {
 }
 
 export function SettingsPanel({ settings, customIcons, onClose, onSaved }: Props) {
+  const [styleUrl, setStyleUrl] = useState(settings.map?.styleUrl ?? "");
   const [pin, setPin] = useState<PinSettings>(settings.pin ?? {});
   const [path, setPath] = useState<PathSettings>(settings.path ?? {});
   const [target, setTarget] = useState<Target>("default");
@@ -132,7 +128,7 @@ export function SettingsPanel({ settings, customIcons, onClose, onSaved }: Props
   async function save() {
     setBusy(true);
     try {
-      await api.saveSettings({ ...settings, pin, path });
+      await api.saveSettings({ ...settings, pin, path, map: { ...settings.map, styleUrl: styleUrl.trim() || null } });
       onSaved();
     } finally {
       setBusy(false);
@@ -193,6 +189,13 @@ export function SettingsPanel({ settings, customIcons, onClose, onSaved }: Props
           <button className="ghost" style={{ marginTop: 4 }} onClick={resetTarget}>
             Reset {targetLabel} to built-in
           </button>
+        </div>
+
+        <div className="section-title"><span>Base map</span></div>
+        <div className="field">
+          <label htmlFor="map-style-url">Map style URL (optional)</label>
+          <input id="map-style-url" type="url" placeholder="Leave empty for the standard map" value={styleUrl} onChange={(e) => setStyleUrl(e.target.value)} />
+          <p className="hint" style={{ marginTop: 4 }}>A MapLibre style JSON, e.g. from MapTiler or your own tile server. Applies to your whole family.</p>
         </div>
 
         <div className="modal-actions">

@@ -21,7 +21,7 @@ export function TripForm({ trip, onClose, onSaved }: { trip: Trip | null; onClos
     const data = { name: name.trim(), status, startDate: startDate || null, endDate: endDate || null, color, description };
     try {
       if (editing && trip) await api.updateTrip(trip.id, data);
-      else await api.createTrip("", data);
+      else await api.createTrip(data);
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");

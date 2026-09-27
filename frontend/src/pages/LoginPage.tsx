@@ -1,16 +1,19 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/client";
 import { useAuth } from "../lib/auth";
+import { Button, Field } from "../components/kit";
+import { AuthCard, errorText } from "./AuthCard";
 
-type Mode = "login" | "create" | "join";
-
+/** Sign in — or, on a brand-new server, create the first family and admin. */
 export function LoginPage() {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState<Mode>("login");
+  const { login, setup } = useAuth();
+  const { data: cfg } = useQuery({ queryKey: ["auth-config"], queryFn: api.authConfig });
+  const firstRun = cfg?.firstRun === true;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [familyName, setFamilyName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -19,88 +22,59 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      if (mode === "login") {
-        await login(email, password);
-      } else if (mode === "create") {
-        await register({ mode: "create", email, password, displayName, familyName });
-      } else {
-        await register({ mode: "join", email, password, displayName, inviteCode });
-      }
+      if (firstRun) await setup({ displayName, email, password, familyName });
+      else await login(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(errorText(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>Werejugo</h1>
-        <p className="tagline">Your family's scrapbook of places &amp; journeys.</p>
-
-        <div className="tabs">
-          <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-            Sign in
-          </button>
-          <button className={mode === "create" ? "active" : ""} onClick={() => setMode("create")}>
-            New family
-          </button>
-          <button className={mode === "join" ? "active" : ""} onClick={() => setMode("join")}>
-            Join
-          </button>
-        </div>
-
-        <form onSubmit={submit}>
-          {mode !== "login" && (
-            <div className="field">
-              <label>Your name</label>
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-            </div>
-          )}
-          {mode === "create" && (
-            <div className="field">
-              <label>Family name</label>
-              <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} required />
-            </div>
-          )}
-          {mode === "join" && (
-            <div className="field">
-              <label>Invite code</label>
-              <input
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                required
-              />
-            </div>
-          )}
-          <div className="field">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="field">
-            <label>Password {mode !== "login" && <span>(min 8 chars)</span>}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-
-          {error && <div className="error-text">{error}</div>}
-
-          <button className="primary" style={{ width: "100%", marginTop: 8 }} disabled={busy}>
-            {busy ? "Please wait…" : mode === "login" ? "Sign in" : mode === "create" ? "Create family" : "Join family"}
-          </button>
-        </form>
-
-        {mode === "create" && (
-          <p className="hint">
-            You'll become the family owner and can invite others with a code afterwards.
-          </p>
+    <AuthCard
+      title={firstRun ? "Set up Werejugo" : "Werejugo"}
+      tagline={firstRun
+        ? "Create the first family on this server. You'll be its owner and the server admin, and can invite everyone else."
+        : "Your family's scrapbook of places & journeys."}
+    >
+      <form onSubmit={submit}>
+        {firstRun && (
+          <>
+            <Field label="Your name" htmlFor="login-name">
+              <input id="login-name" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+            </Field>
+            <Field label="Family name" htmlFor="login-family" hint="e.g. “The Wanderers”">
+              <input id="login-family" value={familyName} onChange={(e) => setFamilyName(e.target.value)} required />
+            </Field>
+          </>
         )}
-      </div>
-    </div>
+        <Field label="Email" htmlFor="login-email">
+          <input id="login-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </Field>
+        <Field label="Password" htmlFor="login-password" hint={firstRun ? "At least 8 characters." : undefined}>
+          <input
+            id="login-password"
+            type="password"
+            autoComplete={firstRun ? "new-password" : "current-password"}
+            minLength={firstRun ? 8 : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </Field>
+
+        {error && <div className="error-text" role="alert">{error}</div>}
+
+        <Button type="submit" variant="primary" loading={busy} className="auth-submit">
+          {firstRun ? "Create family & finish setup" : "Sign in"}
+        </Button>
+      </form>
+      {!firstRun && (
+        <p className="hint">
+          New here? Ask your family owner for an invite link. Forgot your password? Your family owner or the server admin can send you a reset link.
+        </p>
+      )}
+    </AuthCard>
   );
 }
