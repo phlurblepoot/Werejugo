@@ -3,6 +3,8 @@
  * under its own path with the real service's request and response shapes:
  *
  * - `/photon/api` — Photon place search (GeoJSON features).
+ * - `/osrm/route/v1/driving/{lng,lat;…}` — an OSRM server's road route: each leg
+ *   bends through a point beside the straight line, as roads do.
  *
  * Point `config` at `${url}/<service>` in a test. `calls` records every request
  * ("photon q=rome"); `down` makes a service answer 503.
@@ -75,6 +77,33 @@ export async function startFakeWeb(): Promise<FakeWeb> {
           name: p.name, city: p.city, state: p.state, country: p.country, countrycode: p.countrycode,
         },
       })),
+    };
+  });
+
+  // OSRM: /route/v1/driving/-122.4,37.8;-119.9,38.9?overview=full&geometries=geojson
+  app.get("/osrm/route/v1/driving/:coords", async (req, reply) => {
+    const { coords } = req.params as { coords: string };
+    calls.push(`osrm ${coords}`);
+    const pts = coords.split(";").map((p) => p.split(",").map(Number));
+    if (pts.length < 2 || pts.some((p) => p.length !== 2 || p.some((n) => !Number.isFinite(n)))) {
+      return reply.code(400).send({ code: "InvalidQuery", message: "Query string malformed close to position 0" });
+    }
+    if (pts.some(([lng, lat]) => Math.abs(lat) > 80 || (lng > -30 && lng < -20))) {
+      // Somewhere no road reaches (the mid-Atlantic stands in for that).
+      return reply.code(400).send({ code: "NoRoute", message: "Impossible route between points" });
+    }
+    const line: number[][] = [pts[0]];
+    let metres = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [a, b] = [pts[i - 1], pts[i]];
+      const bend = [(a[0] + b[0]) / 2 + (b[1] - a[1]) * 0.1, (a[1] + b[1]) / 2 - (b[0] - a[0]) * 0.1];
+      line.push(bend, b);
+      metres += 1.2 * 111_000 * Math.hypot(b[0] - a[0], b[1] - a[1]);
+    }
+    return {
+      code: "Ok",
+      routes: [{ geometry: { type: "LineString", coordinates: line }, distance: Math.round(metres), duration: Math.round(metres / 25), legs: [] }],
+      waypoints: pts.map((p) => ({ location: p, name: "" })),
     };
   });
 

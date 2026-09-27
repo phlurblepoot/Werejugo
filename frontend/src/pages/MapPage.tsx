@@ -5,7 +5,8 @@ import { BarChart3, FileUp, Map as MapIcon, Palette, SlidersHorizontal } from "l
 import { api, type Item, type Photo, type Theme } from "../api/client";
 import { useAuth } from "../lib/auth";
 import { resolveItemStyle } from "../lib/style";
-import { buildRoutePath, type LngLat } from "../lib/geo";
+import type { LngLat } from "../lib/geo";
+import { computeRoute } from "../lib/routing";
 import { loadCountries, visitedCountryIds, type CountryCollection } from "../lib/countries";
 import { applyFilters, isMine, readFilters, writeFilters, yearsOf, type MapFilters } from "../lib/mapFilters";
 import { MapView } from "../components/MapView";
@@ -154,8 +155,12 @@ export function MapPage() {
   async function moveItemWaypoint(item: Item, index: number, lng: number, lat: number) {
     const waypoints = item.waypoints.map((w, i) => (i === index ? { ...w, lng, lat } : w));
     const coords = waypoints.map((w) => [w.lng, w.lat] as LngLat);
-    const path = buildRoutePath(item.kind, coords);
-    await api.updateItem(item.id, { waypoints, geometry: { type: "LineString", coordinates: path } });
+    // Along roads for a drive, across water for a cruise (a moved port ends a CruiseMapper track).
+    const { path, route, note } = await computeRoute(item.kind, coords);
+    await api.updateItem(item.id, {
+      waypoints, geometry: { type: "LineString", coordinates: path }, properties: { ...item.properties, route },
+    });
+    if (note) toast(note, "info");
     refreshItems();
   }
 

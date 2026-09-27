@@ -95,7 +95,10 @@ Werejugo ships its own lists of places to pick from, loaded into the database at
 - **Ports:** about 15,000. They come from the World Port Index (NGA Pub. 150, public domain; via [tayljordan/ports](https://github.com/tayljordan/ports), MIT), UN/LOCODE ports (UNECE) and [searoute-ts](https://github.com/mayurrawte/searoute-ts)'s port list, merged with Werejugo's own list of cruise ports. Ports seen on CruiseMapper sailings (private islands and the like) are added as they're found.
 - **Airports:** every airport with an IATA code (about 9,000), from [OurAirports](https://ourairports.com/data/) (public domain).
 
-`cd backend && npx tsx scripts/build-reference-data.ts` rebuilds both files (`backend/src/data/`) from their pinned sources.
+- **Sea routes:** a cruise's line between ports follows water, worked out on Werejugo's own server. It's routed on a world map of land and water (0.05°, about 5 km) drawn from [Natural Earth](https://www.naturalearthdata.com)'s coastlines (public domain), with Eurostat's shipping-lane network (from [searoute-ts](https://github.com/mayurrawte/searoute-ts), EUPL-1.2 data) drawn in, so canals and narrow straits stay open and routes lean towards real lanes.
+- **Road routes** for road trips come from an OSRM server (`ROUTING_URL`), and are stored with the trip.
+
+`cd backend && npx tsx scripts/build-reference-data.ts` rebuilds the ports and airports, and `npx tsx scripts/build-sea-mask.ts` the land and water map (`backend/src/data/`), from their pinned sources.
 
 ## Modules
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type {
-  Geometry, Item, ItemKind, PathSettings, PathStyle, PinSettings, PinStyle, Waypoint,
+  Geometry, Item, ItemKind, PathSettings, PathStyle, PinSettings, PinStyle, RouteInfo, Waypoint,
 } from "../../api/client";
 import { buildRoutePath, type LngLat } from "../../lib/geo";
 import { defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "../../lib/style";
@@ -23,6 +23,8 @@ export interface VisitDraft {
   point: [number, number] | null;
   stops: Waypoint[];
   routePath: number[][] | null;
+  /** Where `routePath` came from (roads, water, CruiseMapper…) and its length. */
+  route: RouteInfo | null;
   cruiseLine: string;
   ship: string;
   baseProperties: Record<string, unknown>;
@@ -61,6 +63,7 @@ function makeInitial(item: Item | null, kind: ItemKind, pin?: PinSettings, path?
     point: pt ? [pt[0], pt[1]] : null,
     stops: item?.waypoints ?? [],
     routePath: item?.geometry?.type === "LineString" ? (item.geometry.coordinates as number[][]) : null,
+    route: (props.route as RouteInfo | undefined) ?? null,
     cruiseLine: (props.cruiseLine as string) ?? "",
     ship: (props.ship as string) ?? "",
     baseProperties: props,
@@ -80,6 +83,9 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
       icon: d.themeId ? d.icon : defaultIcon(kind, pin),
       pin: defaultPinStyle(kind, pin),
       path: defaultPathStyle(kind, path),
+      // Another kind's line (roads for a drive, water for a cruise) is worked out again.
+      routePath: kind === d.kind ? d.routePath : null,
+      route: kind === d.kind ? d.route : null,
     }));
   }
 
@@ -106,18 +112,23 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
     const isPoint = POINT_KINDS.includes(draft.kind);
     let geometry: Geometry | null = null;
     let waypoints: Waypoint[] = [];
+    let route: RouteInfo | null = null;
     if (isPoint) {
       geometry = draft.point ? { type: "Point", coordinates: draft.point } : null;
     } else {
       const coords = draft.stops.map((s) => [s.lng, s.lat] as LngLat);
-      const line = draft.routePath && draft.routePath.length >= 2 ? draft.routePath : buildRoutePath(draft.kind, coords);
+      const known = draft.routePath && draft.routePath.length >= 2;
+      const line = known ? draft.routePath! : buildRoutePath(draft.kind, coords);
       if (line.length >= 2) geometry = { type: "LineString", coordinates: line };
       waypoints = draft.stops;
+      // A line kept from before sources were recorded stays unknown.
+      route = known ? draft.route : { source: draft.kind === "drive" ? "straight" : "great-circle" };
     }
     const properties: Record<string, unknown> = { ...draft.baseProperties };
     properties.pin = draft.pin;
     if (isPoint) delete properties.path;
     else properties.path = draft.path;
+    if (route) properties.route = route; else delete properties.route;
     if (draft.kind === "cruise") {
       if (draft.cruiseLine) properties.cruiseLine = draft.cruiseLine; else delete properties.cruiseLine;
       if (draft.ship) properties.ship = draft.ship; else delete properties.ship;

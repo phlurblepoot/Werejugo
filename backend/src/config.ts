@@ -31,6 +31,8 @@ export const config = {
   aerodataboxKey: process.env.AERODATABOX_RAPIDAPI_KEY ?? "",
   /** Place search (Photon): the public server, or your own. */
   photonUrl: (process.env.PHOTON_URL || "https://photon.komoot.io").replace(/\/+$/, ""),
+  /** Road routes for road trips: any OSRM server. */
+  routingUrl: (process.env.ROUTING_URL || "https://routing.openstreetmap.de/routed-car").replace(/\/+$/, ""),
   /** How Werejugo introduces itself to the services it asks (Photon, road routing). */
   userAgent: process.env.WEREJUGO_USER_AGENT || "Werejugo (self-hosted family travel map; https://github.com/phlurblepoot/Werejugo)",
   cruiseLookupEnabled: (process.env.CRUISE_LOOKUP_ENABLED ?? "true") === "true",

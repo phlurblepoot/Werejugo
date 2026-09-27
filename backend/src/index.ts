@@ -24,6 +24,7 @@ import { visitRoutes } from "./routes/visits.js";
 import { themeRoutes } from "./routes/themes.js";
 import { uploadRoutes } from "./routes/uploads.js";
 import { lookupRoutes } from "./routes/lookup.js";
+import { routingRoutes } from "./routes/routing.js";
 import { tripRoutes } from "./routes/trips.js";
 import { tripSharingRoutes } from "./routes/trip-sharing.js";
 import { itineraryRoutes } from "./routes/itinerary.js";
@@ -143,6 +144,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(themeRoutes);
   await app.register(uploadRoutes);
   await app.register(lookupRoutes);
+  await app.register(routingRoutes);
   await app.register(tripRoutes);
   await app.register(tripSharingRoutes);
   await app.register(itineraryRoutes);

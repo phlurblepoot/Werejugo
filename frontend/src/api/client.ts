@@ -228,6 +228,11 @@ export interface PathSettings {
   byLine?: Record<string, PathStyle>;
 }
 
+/** Where a route's line came from, and how long it is (kept in `properties.route`). */
+export type RouteSource = "cruisemapper" | "sea" | "road" | "great-circle" | "photos" | "straight";
+export interface RouteInfo { source: RouteSource; distanceM?: number | null }
+export interface RouteLine { source: RouteSource; path: number[][]; distanceM: number }
+
 export interface FamilySettings {
   pin?: PinSettings;
   path?: PathSettings;
@@ -1003,6 +1008,12 @@ export const api = {
     ),
   getSailingDetail: (id: string) =>
     request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id }) }),
+  /** A line through the points along roads (503 with the reason when there's none). */
+  routeRoad: (points: [number, number][]) =>
+    request<RouteLine>("/api/routes/road", { method: "POST", body: body({ points }) }),
+  /** A line through the points across water. */
+  routeSea: (points: [number, number][]) =>
+    request<RouteLine>("/api/routes/sea", { method: "POST", body: body({ points }) }),
   resolvePort: (q: string) =>
     request<PlaceSuggestion>(`/api/geo/resolve?q=${encodeURIComponent(q)}`),
   searchAirports: (q: string) =>

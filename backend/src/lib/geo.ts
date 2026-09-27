@@ -39,7 +39,21 @@ export function greatCircle(a: LngLat, b: LngLat, segments = 64): LngLat[] {
   return points;
 }
 
-/** Chain great-circle arcs through an ordered list of waypoints. */
+/**
+ * Longitudes made continuous: each point within 180° of the one before, so a
+ * line across the antimeridian goes on past ±180 instead of jumping across the
+ * whole map (MapLibre draws it as one line).
+ */
+export function unwrapLngs(path: LngLat[]): LngLat[] {
+  let prev = path[0]?.[0] ?? 0;
+  return path.map(([lng, lat]) => {
+    const x = lng + Math.round((prev - lng) / 360) * 360;
+    prev = x;
+    return [x, lat];
+  });
+}
+
+/** Chain great-circle arcs through an ordered list of waypoints (longitudes continuous). */
 export function greatCirclePath(points: LngLat[], segmentsPerLeg = 48): LngLat[] {
   if (points.length < 2) return points;
   const out: LngLat[] = [];
@@ -48,7 +62,7 @@ export function greatCirclePath(points: LngLat[], segmentsPerLeg = 48): LngLat[]
     // Avoid duplicating the shared vertex between consecutive legs.
     out.push(...(i === 0 ? leg : leg.slice(1)));
   }
-  return out;
+  return unwrapLngs(out);
 }
 
 export function lineStringGeoJSON(coords: LngLat[]) {

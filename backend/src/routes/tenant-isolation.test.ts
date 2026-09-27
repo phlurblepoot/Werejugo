@@ -348,6 +348,8 @@ const EXEMPT: Record<string, string> = {
   "POST /api/lookup/cruise/find": "external lookup",
   "POST /api/lookup/cruise/sailing": "external lookup",
   "POST /api/lookup/flight": "external lookup",
+  "POST /api/routes/road": "a line through the points given, from a routing server (no family data)",
+  "POST /api/routes/sea": "a line through the points given, worked out locally (no family data)",
 };
 
 describe("family B can't reach family A's data", () => {

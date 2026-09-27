@@ -12,6 +12,8 @@ import { DriveForm } from "./DriveForm";
 import { AppearanceTab } from "./AppearanceTab";
 import { VisitPhotos, type StagedPhoto } from "./VisitPhotos";
 import { useUploads } from "../../lib/uploads/UploadsProvider";
+import { useAutoRoute } from "./useAutoRoute";
+import { formatDistance } from "../../lib/routing";
 
 interface Props {
   item: Item | null;
@@ -41,6 +43,8 @@ export function VisitEditor(props: Props) {
 
   const isPoint = POINT_KINDS.includes(draft.kind);
   const uploads = useUploads();
+  const { routing, note: routeNote } = useAutoRoute(draft, set);
+  const routeLabel = { road: "by road", sea: "by sea", cruisemapper: "as sailed", photos: "from your photos", "great-circle": "", straight: "in straight lines" };
 
   async function pickOnMap() {
     setPicking(true);
@@ -127,6 +131,13 @@ export function VisitEditor(props: Props) {
               <DriveForm stops={draft.stops} onChange={(stops) => set({ stops, routePath: null })} />
             )}
 
+            {!isPoint && (routing || routeNote || draft.route?.distanceM) && (
+              <div className="sub route-summary" role="status">
+                {routing ? "Finding the route…" : draft.route?.distanceM ? `${formatDistance(draft.route.distanceM)} ${routeLabel[draft.route.source]}`.trim() : null}
+                {!routing && routeNote && <div className="warnings">{routeNote}</div>}
+              </div>
+            )}
+
             {draft.kind === "flight" && flightResult && flightResult.warnings.length > 0 && (
               <div className="warnings">{flightResult.warnings.map((w, i) => <div key={i}>• {w}</div>)}</div>
             )}
@@ -167,7 +178,7 @@ export function VisitEditor(props: Props) {
 
         <div className="modal-actions">
           <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+          <button className="primary" onClick={save} disabled={busy || routing}>{busy ? "Saving…" : routing ? "Finding the route…" : "Save"}</button>
         </div>
       </div>
     </div>

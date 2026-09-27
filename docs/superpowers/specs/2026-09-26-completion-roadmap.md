@@ -500,6 +500,10 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Note** — 3.1 sea routes: `searoute-ts` alone wasn't good enough for cruises. Its shipping-lane network leaves small cruise ports far from any lane (Cozumel about 180 km, Costa Maya about 130 km), so a Cozumel → Roatán leg first went 180 km north. Sea routes are now worked out on a land/water grid of the world:
+  - The grid is 0.05°, from Natural Earth's coastlines, with the lane network drawn in so canals and narrow straits stay open.
+  - Routes are A* with lanes slightly preferred, then straightened. searoute is the fallback for legs too long for the grid.
+  - Checked: a Caribbean and an Alaska cruise (drawn and looked at), the Bosporus, and a Pacific crossing. A 5-port cruise takes well under a second.
 - **Note** — Planning 3.1 ([plan](../plans/2026-09-27-phase-3.1-map-routes.md)):
   - **Reference data is thin.** There are 46 ports and 69 airports, so most searches fall through to Nominatim, which also serves as-you-type search against its usage policy.
     - The new lists merge the World Port Index (via an MIT mirror), UN/LOCODE and `searoute-ts`'s ports. Airports come from OurAirports (9,054 with IATA codes).
