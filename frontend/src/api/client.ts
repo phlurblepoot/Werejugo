@@ -129,9 +129,11 @@ export interface ImmichAdmin {
     immichEmail: string | null;
     lastError: string | null;
     lastOkAt: string | null;
-  }>;
+  } & Partial<ImmichFamilySync>>;
   results?: Array<{ id: string; name: string; ok: boolean; error?: string }>;
 }
+// Per-family library sync state, on the admin page.
+export interface ImmichFamilySync { lastSyncAt: string | null; syncError: string | null; photoCount: number | null }
 
 /** Is Immich on for my family? Owners also get the login for using Immich directly. */
 export interface ImmichStatus {
@@ -141,6 +143,8 @@ export interface ImmichStatus {
   email?: string;
   mode?: "created" | "linked";
   canSetPassword?: boolean;
+  lastSyncAt?: string | null;
+  photoCount?: number | null;
 }
 
 export interface AuditEntry {
@@ -235,8 +239,13 @@ export type MediaType = "image" | "video" | "audio";
 
 export interface Photo {
   id: string;
+  /** A large preview (a still frame for videos). */
   url: string;
   thumbUrl: string | null;
+  /** Videos: the playable file (seekable). */
+  videoUrl?: string | null;
+  /** The original file, as a download. */
+  originalUrl?: string;
   mediaType: MediaType;
   caption: string;
   seq: number;
@@ -476,14 +485,26 @@ export interface EntitySummary {
 
 export interface Relation { linkId: string; role: string; entity: EntitySummary; canRemove?: boolean; }
 
-export interface MediaDto { id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string; }
+export interface MediaDto {
+  id: string; kind: MediaType; url: string; thumbUrl: string | null; caption: string;
+  videoUrl?: string | null; originalUrl?: string;
+  /** Upload result: the same file was already in the family's library. */
+  duplicate?: boolean;
+}
 
 export interface MediaItem {
   id: string;
   kind: MediaType;
   tripId: string | null;
+  /** A large preview (a still frame for videos). */
   url: string;
   thumbUrl: string | null;
+  /** Videos: the playable file (seekable). */
+  videoUrl?: string | null;
+  /** The original file, as a download. */
+  originalUrl?: string;
+  originalName?: string;
+  durationMs?: number | null;
   caption: string;
   takenAt: string | null;
   createdAt: string;
@@ -683,6 +704,8 @@ export const api = {
     request<ImmichAdmin>(`/api/admin/immich/families/${familyId}/link`, { method: "POST", body: body({ apiKey }) }),
   disconnectImmichFamily: (familyId: string) => request<ImmichAdmin>(`/api/admin/immich/families/${familyId}`, { method: "DELETE" }),
   connectAllImmich: () => request<ImmichAdmin>("/api/admin/immich/connect-all", { method: "POST" }),
+  syncImmichFamily: (familyId: string) => request<{ queued: true }>(`/api/admin/immich/families/${familyId}/sync`, { method: "POST" }),
+  refreshImmich: () => request<{ queued: true }>("/api/immich/refresh", { method: "POST" }),
   immichStatus: () => request<ImmichStatus>("/api/immich"),
   setImmichPassword: (password: string) => request<{ ok: true }>("/api/immich/password", { method: "POST", body: body({ password }) }),
   auditLog: (before?: string) =>

@@ -1,6 +1,7 @@
 import { API_URL, type MediaItem } from "../../api/client";
 import { groupByMonth } from "./groupByMonth";
 import { ByFamily, otherFamily } from "../shared/ByFamily";
+import { MediaImage } from "../shared/MediaImage";
 
 interface Props {
   items: MediaItem[];
@@ -21,10 +22,13 @@ export function PhotoGrid({ items, onOpen, hasMore, onLoadMore, myFamilyId }: Pr
           <div className="photo-grid-lib">
             {g.items.map((m) => (
               <button key={m.id} className="photo-cell" onClick={() => onOpen(m)} title={m.caption}>
-                {m.kind === "image" ? (
-                  <img src={`${API_URL}${m.thumbUrl ?? m.url}`} alt={m.caption || "Photo"} loading="lazy" />
+                {m.kind !== "audio" && m.thumbUrl ? (
+                  <MediaImage src={`${API_URL}${m.thumbUrl}`} alt={m.caption || (m.kind === "video" ? "Video" : "Photo")} loading="lazy" />
                 ) : (
                   <span className="media-placeholder">{m.kind === "video" ? "▶" : "🎵"}</span>
+                )}
+                {m.kind === "video" && m.thumbUrl && (
+                  <span className="play-badge" aria-label="Video">▶{m.durationMs ? ` ${formatDuration(m.durationMs)}` : ""}</span>
                 )}
                 <ByFamily name={otherFamily(m, myFamilyId)} />
               </button>
@@ -39,4 +43,13 @@ export function PhotoGrid({ items, onOpen, hasMore, onLoadMore, myFamilyId }: Pr
       )}
     </div>
   );
+}
+
+/** 75_000 → "1:15" */
+export function formatDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }

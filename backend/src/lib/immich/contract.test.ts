@@ -124,9 +124,15 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(part.status).toBe(206);
     expect(part.headers.get("content-range")).toBe(`bytes 0-9/${jpeg.length}`);
     expect((await part.arrayBuffer()).byteLength).toBe(10);
-    // A cached copy is answered with 304 when Immich sends an ETag.
+    // Immich sends an ETag but answers a conditional request for an original
+    // with the whole file again (200). Werejugo passes either answer through;
+    // browsers cache through Cache-Control, since a photo's link stays the same for hours.
     const etag = whole.headers.get("etag");
-    if (etag) expect((await fetchMedia(fam, up.id, "original", { ifNoneMatch: etag })).status).toBe(304);
+    if (etag) {
+      const cond = await fetchMedia(fam, up.id, "original", { ifNoneMatch: etag });
+      expect([200, 304]).toContain(cond.status);
+      await cond.arrayBuffer().catch(() => {});
+    }
     // Thumbnails are made in the background: wait for one.
     let thumb: Response | null = null;
     for (let i = 0; i < 40; i++) {

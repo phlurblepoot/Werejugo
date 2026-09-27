@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { MEDIA_ACCEPT } from "../shared/MediaUploader";
 import { api, type Photo } from "../../api/client";
 import { MediaThumb } from "../MediaThumb";
 import { MediaUploader } from "../shared/MediaUploader";
@@ -61,8 +62,8 @@ export function VisitPhotos({ visitId, existing, staged, onStaged, onExistingCha
         <MediaUploader multiple linkTo={`visit:${visitId}`} label="+ Add photos" onUploaded={onExistingChanged} />
       ) : (
         <>
-          <input data-testid="visit-photo-input" type="file" accept="image/*,video/*,audio/*" multiple style={{ marginTop: 8 }}
-            onChange={(e) => e.target.files && addFiles(e.target.files)} />
+          <input data-testid="visit-photo-input" type="file" accept={MEDIA_ACCEPT} multiple style={{ marginTop: 8 }}
+            onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} />
           {staged.length > 0 && (
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{staged.length} photo(s) will upload when you save.</div>
           )}

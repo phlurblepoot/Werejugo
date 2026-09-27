@@ -22,3 +22,13 @@ test("another family's photos in a shared trip's album say who added them", () =
   expect(screen.getByTitle("Added by The Smiths")).toBeInTheDocument();
   expect(screen.queryByTitle("Added by Us")).toBeNull();
 });
+
+test("videos show their frame with a play badge and length", async () => {
+  const { formatDuration } = await import("./PhotoGrid");
+  const video = { ...items[0], id: "v1", kind: "video", caption: "", thumbUrl: "/api/m/v1/thumbnail?e=1&s=x", videoUrl: "/api/m/v1/video?e=1&s=x", durationMs: 75_000 };
+  render(<PhotoGrid items={[video] as never} onOpen={() => {}} hasMore={false} onLoadMore={() => {}} />);
+  expect(screen.getByRole("img", { name: "Video" })).toHaveAttribute("src", "/api/m/v1/thumbnail?e=1&s=x");
+  expect(screen.getByLabelText("Video")).toHaveTextContent("▶ 1:15");
+  expect(formatDuration(3_725_000)).toBe("1:02:05");
+  expect(formatDuration(9_000)).toBe("0:09");
+});

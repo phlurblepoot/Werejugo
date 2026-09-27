@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   linkImmichFamily: vi.fn(),
   disconnectImmichFamily: vi.fn(),
   connectAllImmich: vi.fn(),
+  syncImmichFamily: vi.fn(async () => ({ queued: true })),
 }));
 vi.mock("../../api/client", () => ({ API_URL: "", api: h }));
 const toast = vi.hoisted(() => vi.fn());
@@ -112,4 +113,20 @@ test("families: state chips, connect, retry, connect all, link and disconnect", 
   expect(confirm).toHaveTextContent(/photos stay in Immich/);
   await userEvent.click(within(confirm).getByRole("button", { name: "Disconnect" }));
   expect(h.disconnectImmichFamily).toHaveBeenCalledWith("f1");
+});
+
+test("connected families show their photo count and last sync, and can be synced now", async () => {
+  const d = connected();
+  d.families[0] = { ...d.families[0], photoCount: 1234, lastSyncAt: new Date(Date.now() - 5 * 60_000).toISOString(), syncError: null };
+  d.families[2] = { ...d.families[2], state: "created", lastError: null, photoCount: 3, lastSyncAt: null, syncError: "Immich didn't answer" };
+  h.immichAdmin.mockResolvedValue(d);
+  renderTab();
+  const rows = await screen.findAllByRole("listitem");
+  const row = (name: string) => rows.find((r) => within(r).queryByText(name))!;
+  expect(within(row("The Wanderers")).getByText(/1234 photos · synced 5 min/)).toBeInTheDocument();
+  expect(within(row("The Does")).getByText(/Sync failed: Immich didn't answer/)).toBeInTheDocument();
+  await userEvent.click(within(row("The Wanderers")).getByRole("button", { name: "Immich options for The Wanderers" }));
+  await userEvent.click(await screen.findByRole("menuitem", { name: "Sync photos now" }));
+  expect(h.syncImmichFamily).toHaveBeenCalledWith("f1");
+  await waitFor(() => expect(toast).toHaveBeenCalledWith("Updating photos for The Wanderers from Immich", "success"));
 });

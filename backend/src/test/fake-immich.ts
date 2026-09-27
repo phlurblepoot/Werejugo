@@ -116,7 +116,8 @@ function sendBytes(req: FastifyRequest, reply: FastifyReply, a: FakeAsset, mime:
   const etag = `"${a.checksum}-${a.updatedAt.length}"`;
   reply.header("ETag", etag).header("Accept-Ranges", "bytes").header("Cache-Control", "private, max-age=86400, no-transform");
   if (attachment) reply.header("Content-Disposition", `attachment; filename="${a.originalFileName}"`);
-  if (req.headers["if-none-match"] === etag) return reply.code(304).send();
+  // Real Immich ignores If-None-Match for originals (200 with the file); thumbnails answer 304 here.
+  if (!attachment && req.headers["if-none-match"] === etag) return reply.code(304).send();
   const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
   if (m) {
     const size = a.bytes.length;
@@ -387,7 +388,8 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     if (!a) return fail(reply, 400, "Not found or no asset.view access");
     return sendBytes(req, reply, a, mimeOf(a), attachment);
   };
-  app.get("/api/assets/:id/thumbnail", serve("thumbnail", (a) => (a.type === "VIDEO" ? "image/jpeg" : "image/webp")));
+  // Real Immich sends a resized WebP/JPEG; the stand-in sends the original bytes, labelled truthfully.
+  app.get("/api/assets/:id/thumbnail", serve("thumbnail", (a) => (a.type === "VIDEO" ? "image/jpeg" : a.mime)));
   app.get("/api/assets/:id/original", serve("original", (a) => a.mime, true));
   app.get("/api/assets/:id/video/playback", serve("video", () => "video/mp4"));
 

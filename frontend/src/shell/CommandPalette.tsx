@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api, type SearchResults } from "../api/client";
+import { api, API_URL, type SearchResults } from "../api/client";
 
 const GROUPS: Array<{ key: keyof SearchResults; label: string }> = [
   { key: "people", label: "People" },
@@ -46,7 +46,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                 {data[g.key].map((hit) => (
                   <button key={hit.id} className="palette-hit" onClick={() => go(hit.to)}>
                     {hit.thumbUrl ? (
-                      <img src={hit.thumbUrl} alt="" className="palette-thumb" />
+                      <img src={`${API_URL}${hit.thumbUrl}`} alt="" className="palette-thumb" />
                     ) : (
                       <span className="palette-thumb placeholder" aria-hidden="true" />
                     )}

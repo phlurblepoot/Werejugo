@@ -1,5 +1,6 @@
 import { api, API_URL, type MediaItem } from "../../api/client";
 import { RelatedPanel } from "../shared/RelatedPanel";
+import { MediaImage } from "../shared/MediaImage";
 
 interface Props {
   item: MediaItem;
@@ -33,7 +34,14 @@ export function PhotoDetail({ item, trips, onChanged, onClose, myFamilyId }: Pro
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button className="ghost" aria-label="Close" onClick={onClose}>✕</button>
         </div>
-        <img className="photo-detail-img" src={`${API_URL}${item.url}`} alt={item.caption || "Photo"} />
+        {item.kind === "video" && item.videoUrl ? (
+          <video
+            className="photo-detail-img" src={`${API_URL}${item.videoUrl}`} poster={`${API_URL}${item.url}`}
+            controls playsInline preload="metadata" aria-label={item.caption || "Video"}
+          />
+        ) : (
+          <MediaImage className="photo-detail-img" src={`${API_URL}${item.url}`} alt={item.caption || "Photo"} />
+        )}
 
         {theirs ? (
           <p className="photo-theirs">
@@ -65,6 +73,9 @@ export function PhotoDetail({ item, trips, onChanged, onClose, myFamilyId }: Pro
 
         <div className="modal-actions">
           {!theirs && <button className="danger" style={{ marginRight: "auto" }} onClick={remove}>Delete</button>}
+          {item.originalUrl && (
+            <a className="btn-link" href={`${API_URL}${item.originalUrl}`} download={item.originalName || true}>Download original</a>
+          )}
           <button onClick={onClose}>Close</button>
         </div>
       </div>

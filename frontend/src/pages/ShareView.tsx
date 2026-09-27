@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, type Item, type SharePayload, type SharedPhoto, type Theme } from "../api/client";
+import { api, API_URL, type Item, type SharePayload, type SharedPhoto, type Theme } from "../api/client";
 import { resolveItemStyle } from "../lib/style";
 import { MapView } from "../components/MapView";
 import { EmptyState, Spinner } from "../components/ui";
@@ -14,7 +14,7 @@ function PhotoWall({ photos }: { photos: SharedPhoto[] }) {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8, padding: 16, overflow: "auto" }}>
       {photos.map((p) => (
         <figure key={p.id} style={{ margin: 0 }}>
-          <img src={p.thumbUrl ?? p.url} alt={p.caption} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 8 }} />
+          <img src={`${API_URL}${p.thumbUrl ?? p.url}`} alt={p.caption} loading="lazy" style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: 8 }} />
           {p.caption && <figcaption className="er-sub">{p.caption}</figcaption>}
         </figure>
       ))}

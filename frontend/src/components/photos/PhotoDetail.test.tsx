@@ -27,3 +27,14 @@ test("another family's photo is view-only", () => {
   expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   expect(screen.queryByPlaceholderText("Caption…")).toBeNull();
 });
+
+test("the original can be downloaded; videos play from their own link, with the still as poster", () => {
+  const video = { ...item, kind: "video", url: "/api/m/m1/preview?e=1&s=x", videoUrl: "/api/m/m1/video?e=1&s=x", originalUrl: "/api/m/m1/original?e=1&s=x", originalName: "clip.mov", caption: "Waves" };
+  const { container } = render(withQC(<PhotoDetail item={video as never} trips={[]} onChanged={() => {}} onClose={() => {}} />));
+  const player = container.querySelector("video")!;
+  expect(player).toHaveAttribute("src", "/api/m/m1/video?e=1&s=x");
+  expect(player).toHaveAttribute("poster", "/api/m/m1/preview?e=1&s=x");
+  const link = screen.getByRole("link", { name: "Download original" });
+  expect(link).toHaveAttribute("href", "/api/m/m1/original?e=1&s=x");
+  expect(link).toHaveAttribute("download", "clip.mov");
+});

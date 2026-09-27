@@ -161,8 +161,22 @@ function FamiliesCard({ data }: { data: ImmichAdmin }) {
     return failed ? `${(r.results?.length ?? 0) - failed} connected, ${failed} need attention` : "Every family is connected";
   });
 
+  async function syncNow(f: Family) {
+    setBusyId(f.id);
+    try {
+      await api.syncImmichFamily(f.id);
+      toast(`Updating photos for ${f.name} from Immich`, "success");
+      setTimeout(() => void qc.invalidateQueries({ queryKey: KEY }), 3000);
+    } catch (err) {
+      toast(errorText(err), "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function menu(f: Family): MenuEntry[] {
     const entries: MenuEntry[] = [];
+    if (f.state === "created" || f.state === "linked") entries.push({ label: "Sync photos now", icon: RefreshCw, onSelect: () => void syncNow(f) });
     if (f.state !== "created") entries.push({ label: "Link an existing Immich account…", icon: Link2, onSelect: () => setLinking(f) });
     if (f.state !== "none") entries.push({ label: "Disconnect…", icon: Unplug, danger: true, onSelect: () => void disconnect(f) });
     return entries;
@@ -192,7 +206,14 @@ function FamiliesCard({ data }: { data: ImmichAdmin }) {
                 </div>
                 <div className="er-sub member-meta">
                   {f.immichEmail && <span className="immich-email">{f.immichEmail}</span>}
+                  {(f.state === "created" || f.state === "linked") && (
+                    <span>
+                      {" · "}{f.photoCount ?? 0} {f.photoCount === 1 ? "photo" : "photos"}
+                      {f.lastSyncAt ? ` · synced ${formatRelative(f.lastSyncAt)}` : " · not synced yet"}
+                    </span>
+                  )}
                   {f.lastError && <span className="immich-error"> {f.lastError}</span>}
+                  {!f.lastError && f.syncError && <span className="immich-error"> Sync failed: {f.syncError}</span>}
                   {!f.immichEmail && !f.lastError && "No Immich account yet"}
                 </div>
               </div>

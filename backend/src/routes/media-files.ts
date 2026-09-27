@@ -38,7 +38,7 @@ export async function mediaFileRoutes(app: FastifyInstance): Promise<void> {
     }
     if (res.status === 400 || res.status === 404) {
       await res.body?.cancel();
-      return reply.code(404).send({ error: "This photo is no longer in Immich" });
+      return reply.code(404).send({ error: "This photo isn't available from Immich (it may still be processing, or it was deleted)" });
     }
     if (res.status >= 500 || res.status === 401 || res.status === 403) {
       await res.body?.cancel();
