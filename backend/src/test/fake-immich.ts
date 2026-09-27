@@ -418,7 +418,8 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
   // Real Immich sends a resized WebP/JPEG; the stand-in sends the original bytes, labelled truthfully.
   app.get("/api/assets/:id/thumbnail", serve("thumbnail", (a) => (a.type === "VIDEO" ? "image/jpeg" : a.mime)));
   app.get("/api/assets/:id/original", serve("original", (a) => a.mime, true));
-  app.get("/api/assets/:id/video/playback", serve("video", () => "video/mp4"));
+  // Real Immich plays the transcoded MP4 (or the original); the stand-in plays the original, labelled truthfully.
+  app.get("/api/assets/:id/video/playback", serve("video", (a) => (a.mime.startsWith("video/") ? a.mime : "video/mp4")));
 
   await app.listen({ host: "127.0.0.1", port: opts.port ?? 0 });
   const addr = app.server.address();

@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.4 |
-| **Next step** | Build Phase 2.4 ([plan](../plans/2026-09-27-phase-2.4-library-ui.md)): a windowed timeline laid out from month counts (20k+ photos), filters, hide and bulk actions, a full-screen viewer, the Photos map for the whole library, and an **Add photos** picker on places, trips, people and itinerary items |
+| **Current phase** | 2.5 |
+| **Next step** | Plan and build Phase 2.5: import each family's Immich people (faces), map them to Werejugo people (including cross-family linked people, using Immich's cluster groups), tag photos automatically, and a review queue for new faces |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -287,10 +287,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.4 Library UI — M
 
-**Status:** In progress · **Plan:** [phase-2.4](../plans/2026-09-27-phase-2.4-library-ui.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.4](../plans/2026-09-27-phase-2.4-library-ui.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
-- [ ] Photo picker for any item (place, trip, person, itinerary item): browses the whole library, starting with photos taken near the item's dates and place. (added 2026-09-27)
+- [x] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
+- [x] Photo picker for any item (place, trip, person, itinerary item): browses the whole library, starting with photos taken near the item's dates and place. (added 2026-09-27)
 
 #### 2.5 Faces → people — M
 
@@ -495,6 +495,23 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-27
+
+- **Done** — Phase 2.4 Library UI (PR #2).
+  - **Timeline:** the Photos page is one timeline, laid out from per-month counts and windowed. With 20,007 photos the first ones show in about 0.2 s, about 50 cells exist at a time, and scrolling fetches only the months that come into view. A year rail jumps anywhere.
+  - **Filters:** Photos/Videos, No trip, and Hidden join person, trip, place and dates.
+  - **Hide:** Werejugo's own flag; the photo stays in Immich and the sync never clears it.
+  - **Selection:** Shift+click for a range, or a long press on a phone. It can add to a trip, remove from a trip, hide or show, and delete.
+  - **Viewer:** full-screen with details beside the photo; ← → and swipes step across months; video plays.
+  - **Photos map:** every geotagged photo (not just the first page), clustered, with thumbnails for the biggest clusters on screen.
+  - **Add photos** on places, trips (a new Photos section), itinerary days and people opens on the photos taken then and there (matching both the dates and the place, those ticked for an item with none yet), or the whole library at that month. **Upload new** links there too (an upload can now go to a trip).
+  - **Verified:**
+    - Backend 399/399 and frontend 233/233.
+    - Playwright through nginx with 20,007 photos: 37 checks, including the timing and DOM-size checks, jumping to 2012, a range hidden and shown, the viewer across a month boundary with video, map clusters zooming, the picker from a place, trip, itinerary day and person, and phone layout.
+- **Note** — Found in 2.4:
+  - **Class names:** the library's `.tl-row` class collided with the planning timeline's, which gave every row a grey band. The library's classes are now `lib-`.
+  - **Map thumbnails:** a thumbnail that isn't in Immich yet shows a plain tile with the count instead of a broken image.
+  - **Offline map style:** the Photos map falls back to a plain background when the map style can't load, so the photos still show.
+  - **Tests:** the upload-cleanup test counted part files left over from earlier local runs; each test now clears the incoming folder.
 
 - **Done** — Phase 2.3 Uploads at scale (PR #2).
   - **Uploads in pieces:** photos and videos go up in 8 MB pieces (Cloudflare-safe), three files at a time, up to `MAX_UPLOAD_GB` (20 by default). A dropped piece is retried on its own. After a reload, choosing the same file again sends only the rest.

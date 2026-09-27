@@ -123,32 +123,32 @@ export function LibraryTimeline({ filters, onOpen, selection, onLongPress, initi
   if (timeline.isSuccess && months.length === 0) return <>{empty}</>;
 
   return (
-    <div className="tl" data-testid="library-timeline">
-      <div ref={scrollRef} className="tl-scroll">
-        <div className="tl-canvas" style={{ height: virt.getTotalSize(), marginRight: RAIL }}>
+    <div className="lib" data-testid="library-timeline">
+      <div ref={scrollRef} className="lib-scroll">
+        <div className="lib-canvas" style={{ height: virt.getTotalSize(), marginRight: RAIL }}>
           {vItems.map((v) => {
             const row = layout.rows[v.index];
             if (!row) return null;
             if (row.kind === "header") {
               const count = months.find((m) => m.month === row.month)?.count ?? 0;
               return (
-                <div key={v.key} className="tl-header" style={{ transform: `translateY(${v.start}px)`, height: row.height }}>
+                <div key={v.key} className="lib-header" style={{ transform: `translateY(${v.start}px)`, height: row.height }}>
                   {row.label} <span className="er-sub">· {count}</span>
                 </div>
               );
             }
             const items = byMonth.get(row.month);
             return (
-              <div key={v.key} className="tl-row" style={{ transform: `translateY(${v.start}px)`, height: row.height, gap: layout.gap, gridTemplateColumns: `repeat(${layout.columns}, ${layout.cell}px)` }}>
+              <div key={v.key} className="lib-row" style={{ transform: `translateY(${v.start}px)`, height: row.height, gap: layout.gap, gridTemplateColumns: `repeat(${layout.columns}, ${layout.cell}px)` }}>
                 {Array.from({ length: row.count }, (_, i) => {
                   const m = items?.[row.start + i];
-                  if (!m) return <div key={i} className="tl-cell tl-placeholder" style={{ height: layout.cell }} />;
+                  if (!m) return <div key={i} className="lib-cell lib-placeholder" style={{ height: layout.cell }} />;
                   const on = selection?.selected.has(m.id) ?? false;
                   return (
                     <button
                       key={m.id}
                       type="button"
-                      className={`tl-cell photo-cell${on ? " is-selected" : ""}`}
+                      className={`lib-cell photo-cell${on ? " is-selected" : ""}`}
                       style={{ height: layout.cell }}
                       title={m.caption || m.originalName || undefined}
                       aria-pressed={selection ? on : undefined}
@@ -163,7 +163,7 @@ export function LibraryTimeline({ filters, onOpen, selection, onLongPress, initi
                       {m.kind === "video" && <span className="play-badge" aria-hidden="true">▶{m.durationMs ? ` ${formatDuration(m.durationMs)}` : ""}</span>}
                       <ByFamily name={otherFamily(m, myFamilyId)} />
                       {badge?.(m)}
-                      {selection && <span className={`tl-check${on ? " on" : ""}`} aria-hidden="true">{on && <Check size={14} />}</span>}
+                      {selection && <span className={`lib-check${on ? " on" : ""}`} aria-hidden="true">{on && <Check size={14} />}</span>}
                     </button>
                   );
                 })}
@@ -173,7 +173,7 @@ export function LibraryTimeline({ filters, onOpen, selection, onLongPress, initi
         </div>
       </div>
       {layout.years.length > 1 && (
-        <nav className="tl-years" aria-label="Jump to year">
+        <nav className="lib-years" aria-label="Jump to year">
           {layout.years.map((y) => (
             <button key={y.year} type="button" onClick={() => virt.scrollToIndex(layout.monthRow.get(y.month)!, { align: "start" })}>
               {phone ? `'${y.year.slice(2)}` : y.year}

@@ -1,4 +1,4 @@
-import { readdir, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "vitest";
 import { config } from "../config.js";
@@ -20,6 +20,8 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await settleJobs();
+  // Every test starts with no bytes waiting (the cleanup test counts strays).
+  await rm(join(config.uploadsDir, "incoming"), { recursive: true, force: true });
   await fake.close();
   forgetFamilyConn();
   await query("DELETE FROM media_uploads");
@@ -270,6 +272,7 @@ test("the daily cleanup removes abandoned uploads, old failures and stray files"
   await query("UPDATE media_uploads SET updated_at = now() - interval '3 days' WHERE id = $1", [stale]);
   await query("UPDATE media_uploads SET state = 'processing', received = size, updated_at = now() - interval '7 hours' WHERE id = $1", [stuck]);
   const stray = join(config.uploadsDir, "incoming", "00000000-0000-4000-8000-000000000000.part");
+  await mkdir(join(config.uploadsDir, "incoming"), { recursive: true });
   await writeFile(stray, "x");
   const old = new Date(Date.now() - 2 * 3600_000);
   await utimes(stray, old, old);

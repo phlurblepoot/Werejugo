@@ -127,7 +127,7 @@ export function PhotoPicker({ entity, uploadLinkTo, onClose, onAttached }: Props
                         onClick={() => toggle(m, null)}
                       >
                         {m.thumbUrl && <MediaImage src={`${API_URL}${m.thumbUrl}`} alt="" loading="lazy" />}
-                        {done ? <span className="tl-badge">Added</span> : <span className={`tl-check${on ? " on" : ""}`} aria-hidden="true">{on && <Check size={14} />}</span>}
+                        {done ? <span className="lib-badge">Added</span> : <span className={`lib-check${on ? " on" : ""}`} aria-hidden="true">{on && <Check size={14} />}</span>}
                       </button>
                     );
                   })}
@@ -140,7 +140,7 @@ export function PhotoPicker({ entity, uploadLinkTo, onClose, onAttached }: Props
                 filters={{}}
                 initialMonth={sug.data?.month}
                 selection={{ selected, onToggle: toggle }}
-                badge={(m) => (attached.has(m.id) ? <span className="tl-badge">Added</span> : null)}
+                badge={(m) => (attached.has(m.id) ? <span className="lib-badge">Added</span> : null)}
                 empty={<EmptyState title="No photos yet" hint="Upload some, or add them in Immich." />}
               />
             )}

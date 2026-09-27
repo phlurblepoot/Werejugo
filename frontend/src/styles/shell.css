@@ -233,37 +233,37 @@ video.photo-detail-img { background: #000; width: 100%; }
 }
 
 /* ---- Photo library timeline (windowed; see LibraryTimeline) ---- */
-.tl { position: relative; height: 100%; min-height: 0; }
-.tl-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 16px 16px; }
-.tl-canvas { position: relative; }
-.tl-header, .tl-row { position: absolute; top: 0; left: 0; right: 0; }
-.tl-header { display: flex; align-items: flex-end; gap: 4px; padding-bottom: 8px; font-size: var(--text-sm); font-weight: 600; color: var(--color-text); }
-.tl-row { display: grid; align-content: start; }
-.tl-cell { aspect-ratio: auto; width: 100%; }
-.tl-placeholder { background: var(--color-surface-2); border-radius: var(--radius-sm); }
-.tl-check {
+.lib { position: relative; height: 100%; min-height: 0; }
+.lib-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 16px 16px; }
+.lib-canvas { position: relative; }
+.lib-header, .lib-row { position: absolute; top: 0; left: 0; right: 0; }
+.lib-header { display: flex; align-items: flex-end; gap: 4px; padding-bottom: 8px; font-size: var(--text-sm); font-weight: 600; color: var(--color-text); }
+.lib-row { display: grid; align-content: start; }
+.lib-cell { aspect-ratio: auto; width: 100%; }
+.lib-placeholder { background: var(--color-surface-2); border-radius: var(--radius-sm); }
+.lib-check {
   position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border-radius: 50%;
   border: 2px solid #fff; background: rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center;
   color: #fff; box-shadow: var(--shadow-sm);
 }
-.tl-check.on { background: var(--color-accent); border-color: var(--color-accent); }
+.lib-check.on { background: var(--color-accent); border-color: var(--color-accent); }
 .photo-cell.is-selected { outline: 3px solid var(--color-accent); outline-offset: -3px; }
 .photo-cell.is-selected img { transform: scale(0.92); border-radius: var(--radius-sm); }
-.tl-years {
+.lib-years {
   position: absolute; top: 4px; right: 2px; bottom: 4px; width: 40px; display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto; scrollbar-width: none;
 }
-.tl-years button {
+.lib-years button {
   min-height: 0; padding: 3px 0; font: inherit; font-size: 11px; font-weight: 500; color: var(--color-text-muted);
   background: none; border: none; border-radius: var(--radius-sm); cursor: pointer;
 }
-.tl-years button:hover { color: var(--color-text); background: var(--color-surface-2); }
-.tl-badge {
+.lib-years button:hover { color: var(--color-text); background: var(--color-surface-2); }
+.lib-badge {
   position: absolute; right: 4px; bottom: 4px; padding: 1px 6px; border-radius: var(--radius-full);
   font-size: 11px; font-weight: 600; background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm);
 }
 @media (max-width: 767px) {
-  .tl-scroll { padding: 2px 2px 16px 4px; }
+  .lib-scroll { padding: 2px 2px 16px 4px; }
 }
 
 /* ---- Photo viewer: full-screen, details beside (desktop) or below (phone) ---- */
@@ -317,7 +317,7 @@ img.viewer-media { width: auto; height: auto; }
 /* ---- Photo picker ---- */
 .picker-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 10px; }
 .picker-body { height: min(62vh, 640px); position: relative; overflow: hidden; }
-.picker-body > .tl { height: 100%; }
+.picker-body > .lib { height: 100%; }
 .picker-grid { height: 100%; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 4px; align-content: start; }
 .picker-grid .photo-cell:disabled { cursor: default; opacity: 0.7; }
 .picker-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
@@ -338,3 +338,5 @@ button.fchip { cursor: pointer; font: inherit; min-height: 0; border: 1px solid 
 button.fchip:not(.act) { background: var(--color-surface); color: var(--color-text-muted); border-color: var(--color-border); }
 .add-photos-btn { margin: 0 0 12px; }
 .trip-photos { align-items: center; gap: 12px; margin-bottom: 6px; }
+.photo-filter-bar > button.fchip { flex: 0 0 auto; width: auto; }
+.lib-cell .media-placeholder { width: 100%; height: 100%; }

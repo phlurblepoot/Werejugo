@@ -18,7 +18,7 @@ export function toFeatureCollection(points: Array<[string, number, number, Media
 }
 
 /** Thumbnails shown at once, at most. */
-export const MAX_THUMBS = 60;
+export const MAX_THUMBS = 80;
 
 /** When the map's own style can't load (offline tiles), photos still show on a plain background. */
 const BLANK_STYLE: maplibregl.StyleSpecification = {
@@ -57,7 +57,7 @@ export function PhotoMap({ filters, onOpen }: { filters: MediaFilters; onOpen: (
     function addLayers() {
       styleOk = true;
       if (map.getSource("photos")) return;
-      map.addSource("photos", { type: "geojson", data: dataRef.current ?? toFeatureCollection([]), cluster: true, clusterRadius: 60, clusterMaxZoom: 16 });
+      map.addSource("photos", { type: "geojson", data: dataRef.current ?? toFeatureCollection([]), cluster: true, clusterRadius: 80, clusterMaxZoom: 16 });
       map.addLayer({ id: "clusters", type: "circle", source: "photos", filter: ["has", "point_count"],
         paint: { "circle-color": "#0f766e", "circle-radius": ["step", ["get", "point_count"], 16, 10, 22, 100, 28], "circle-opacity": 0.8 } });
       map.addLayer({ id: "photo-pt", type: "circle", source: "photos", filter: ["!", ["has", "point_count"]],
@@ -87,8 +87,9 @@ export function PhotoMap({ filters, onOpen }: { filters: MediaFilters; onOpen: (
         if (!bounds.contains(lngLat)) continue;
         const key = p.cluster ? `c${p.cluster_id}` : `p${p.id}`;
         if (!spots.has(key)) spots.set(key, { key, lngLat, clusterId: p.cluster ? p.cluster_id : undefined, count: p.point_count, id: p.id });
-        if (spots.size >= MAX_THUMBS) break;
       }
+      // The biggest clusters get their thumbnails first.
+      for (const s of [...spots.values()].sort((a, b) => (b.count ?? 1) - (a.count ?? 1)).slice(MAX_THUMBS)) spots.delete(s.key);
       // A cluster shows one of its photos.
       await Promise.all([...spots.values()].filter((s) => s.clusterId !== undefined).map(async (s) => {
         const leaves = await src.getClusterLeaves(s.clusterId!, 1, 0).catch(() => []);
@@ -112,6 +113,8 @@ export function PhotoMap({ filters, onOpen }: { filters: MediaFilters; onOpen: (
         const img = document.createElement("img");
         img.src = `${API_URL}${thumb}`;
         img.alt = "";
+        // Not ready in Immich (or gone): a plain tile with the count is enough.
+        img.addEventListener("error", () => img.remove(), { once: true });
         el.appendChild(img);
         if (s.count) {
           const c = document.createElement("span");
