@@ -74,6 +74,18 @@ test("the next syncs pick up new, edited and trashed photos", async () => {
   expect(byAsset.get(c.id)?.caption).toBe("new one");
 });
 
+test("a photo the family hid stays hidden through syncs", async () => {
+  const a = fake.addAsset(immichUserId, { description: "receipt" });
+  await syncFamily(ctx.familyId, { full: true });
+  await query("UPDATE media SET hidden_at = now() WHERE immich_asset_id = $1", [a.id]);
+  a.description = "edited in Immich";
+  a.updatedAt = new Date(Date.now() + 1000).toISOString();
+  await syncFamily(ctx.familyId, { full: true });
+  const row = (await query("SELECT hidden_at, caption FROM media WHERE immich_asset_id = $1", [a.id])).rows[0];
+  expect(row.hidden_at).not.toBeNull();
+  expect(row.caption).toBe("edited in Immich");
+});
+
 test("photos in Immich's trash stay out, even though Immich's search includes them", async () => {
   const kept = fake.addAsset(immichUserId);
   const trashed = fake.addAsset(immichUserId);
