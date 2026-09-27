@@ -1009,8 +1009,9 @@ export const api = {
     request<PlaceSuggestion[]>(`/api/geo/airports?q=${encodeURIComponent(q)}`),
   searchPorts: (q: string) =>
     request<PlaceSuggestion[]>(`/api/geo/ports?q=${encodeURIComponent(q)}`),
-  searchPlaces: (q: string) =>
-    request<PlaceSuggestion[]>(`/api/geo/search?q=${encodeURIComponent(q)}`),
+  /** Place search as you type; `near` ([lng, lat]) puts places near it first. */
+  searchPlaces: (q: string, near?: [number, number] | null) =>
+    request<PlaceSuggestion[]>(`/api/geo/search?q=${encodeURIComponent(q)}${near ? `&near=${near[0].toFixed(3)},${near[1].toFixed(3)}` : ""}`),
 
   // documents
   listDocuments: (f: DocumentFilters = {}) => {

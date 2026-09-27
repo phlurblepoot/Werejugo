@@ -29,8 +29,10 @@ export const config = {
   maxUploadBytes: Math.round(Number(process.env.MAX_UPLOAD_GB || 20) * 1024 ** 3),
   storageDir: process.env.STORAGE_DIR ?? "/app/storage",
   aerodataboxKey: process.env.AERODATABOX_RAPIDAPI_KEY ?? "",
-  nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",
-  nominatimUserAgent: process.env.NOMINATIM_USER_AGENT ?? "Werejugo/0.1",
+  /** Place search (Photon): the public server, or your own. */
+  photonUrl: (process.env.PHOTON_URL || "https://photon.komoot.io").replace(/\/+$/, ""),
+  /** How Werejugo introduces itself to the services it asks (Photon, road routing). */
+  userAgent: process.env.WEREJUGO_USER_AGENT || "Werejugo (self-hosted family travel map; https://github.com/phlurblepoot/Werejugo)",
   cruiseLookupEnabled: (process.env.CRUISE_LOOKUP_ENABLED ?? "true") === "true",
   cruiseUserAgent:
     process.env.CRUISE_USER_AGENT ??

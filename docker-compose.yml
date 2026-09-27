@@ -32,8 +32,8 @@ services:
       BACKEND_PORT: ${BACKEND_PORT:-4000}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
       AERODATABOX_RAPIDAPI_KEY: ${AERODATABOX_RAPIDAPI_KEY:-}
-      NOMINATIM_URL: ${NOMINATIM_URL:-https://nominatim.openstreetmap.org}
-      NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-Werejugo/0.1}
+      PHOTON_URL: ${PHOTON_URL:-https://photon.komoot.io}
+      ROUTING_URL: ${ROUTING_URL:-https://routing.openstreetmap.de/routed-car}
       CRUISE_LOOKUP_ENABLED: ${CRUISE_LOOKUP_ENABLED:-true}
       # The largest single photo or video that can be uploaded, in GB.
       MAX_UPLOAD_GB: ${MAX_UPLOAD_GB:-20}

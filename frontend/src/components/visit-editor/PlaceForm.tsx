@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "../../api/client";
 import { PlaceSearch } from "../PlaceSearch";
+import { mapCentre } from "../../lib/mapCentre";
 
 interface Props {
   point: [number, number] | null;
@@ -11,6 +12,12 @@ interface Props {
 
 export function PlaceForm({ point, onSelect, onPick, onPhotoLocation }: Props) {
   const [exifMsg, setExifMsg] = useState<string | null>(null);
+  // Places near this one (or where the map is looking) first.
+  const [lng, lat] = point ?? mapCentre() ?? [null, null];
+  const search = useCallback(
+    (q: string) => api.searchPlaces(q, lng != null && lat != null ? [lng, lat] : null),
+    [lng, lat],
+  );
 
   async function fromPhoto(file: File) {
     setExifMsg("Reading photo…");
@@ -26,7 +33,7 @@ export function PlaceForm({ point, onSelect, onPick, onPhotoLocation }: Props) {
   return (
     <div className="field">
       <label>Location</label>
-      <PlaceSearch placeholder="Search a place or address…" search={api.searchPlaces} onSelect={(s) => onSelect(s.lng, s.lat, s.label)} />
+      <PlaceSearch placeholder="Search a place or address…" search={search} onSelect={(s) => onSelect(s.lng, s.lat, s.label)} />
       <div className="row" style={{ marginTop: 8, alignItems: "center" }}>
         <button type="button" onClick={onPick}>📍 Pick on map</button>
         <label className="filebtn" style={{ margin: 0 }}>

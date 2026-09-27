@@ -1,6 +1,6 @@
-import { config } from "../config.js";
 import { query } from "../db/pool.js";
 import { fold } from "../db/referenceMerge.js";
+import { photonSearch } from "./photon.js";
 
 export interface Place {
   label: string;
@@ -110,39 +110,12 @@ export async function searchPorts(q: string, limit = 8): Promise<Place[]> {
   }));
 }
 
-/** Free-form geocoding search via Nominatim — returns multiple matches. */
-export async function searchPlaces(q: string, limit = 6): Promise<Place[]> {
-  try {
-    const url = `${config.nominatimUrl}/search?format=jsonv2&limit=${limit}&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { headers: { "User-Agent": config.nominatimUserAgent } });
-    if (!res.ok) return [];
-    const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
-    return data.map((d) => ({
-      label: d.display_name,
-      lat: Number(d.lat),
-      lng: Number(d.lon),
-      source: "geocoder" as const,
-    }));
-  } catch {
-    return [];
-  }
+/** Place search as you type (Photon). */
+export async function searchPlaces(q: string, opts: { near?: { lng: number; lat: number }; limit?: number } = {}): Promise<Place[]> {
+  return photonSearch(q, opts);
 }
 
-/** Free-form geocoding via OpenStreetMap Nominatim. Best-effort; returns null on failure. */
+/** The best match for a free-form place name, or null. */
 export async function geocode(q: string): Promise<Place | null> {
-  try {
-    const url = `${config.nominatimUrl}/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { headers: { "User-Agent": config.nominatimUserAgent } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
-    if (!data[0]) return null;
-    return {
-      label: data[0].display_name,
-      lat: Number(data[0].lat),
-      lng: Number(data[0].lon),
-      source: "geocoder",
-    };
-  } catch {
-    return null;
-  }
+  return (await photonSearch(q, { limit: 1 }))[0] ?? null;
 }

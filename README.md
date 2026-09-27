@@ -62,6 +62,8 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 | `UPLOADS_DIR` | Custom pin icons, and photos and videos while they upload (each is removed once Immich has it). Leave room for the largest batch you'll upload | `/app/uploads` |
 | `MAX_UPLOAD_GB` | The largest single photo or video that can be uploaded | `20` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `http://localhost:8080` |
+| `PHOTON_URL` | Place search as you type ([Photon](https://photon.komoot.io); answers are cached). Self-host it to keep searches in the house | `https://photon.komoot.io` |
+| `ROUTING_URL` | Road routes for road trips (any [OSRM](https://project-osrm.org) server), asked only when a drive's stops change | `https://routing.openstreetmap.de/routed-car` |
 
 ## Photos (Immich)
 

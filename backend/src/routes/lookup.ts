@@ -90,10 +90,13 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     return searchPorts(q);
   });
 
+  // As you type (Photon); `near=lng,lat` (the map's centre) puts nearby places first.
   app.get("/api/geo/search", async (req) => {
-    const q = (req.query as { q?: string }).q ?? "";
-    if (q.length < 3) return [];
-    return searchPlaces(q);
+    const { q = "", near } = req.query as { q?: string; near?: string };
+    if (q.trim().length < 3) return [];
+    const [lng, lat] = (near ?? "").split(",").map(Number);
+    const ok = Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+    return searchPlaces(q, ok ? { near: { lng, lat } } : {});
   });
 
   // Resolve a single port/place name to coordinates (dataset, then geocoder).

@@ -8,6 +8,7 @@ import { buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
 import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
 import { formatDate } from "../lib/dates";
+import { setMapCentre } from "../lib/mapCentre";
 
 export interface ItemStyle {
   color: string;
@@ -92,6 +93,8 @@ export function MapView(props: Props) {
     map.on("load", () => renderAll());
     // Re-cluster markers as the viewport changes.
     map.on("moveend", () => {
+      const c = map.getCenter();
+      setMapCentre(c.lng, c.lat);
       if (mapRef.current?.isStyleLoaded()) renderMarkers(mapRef.current);
     });
 
