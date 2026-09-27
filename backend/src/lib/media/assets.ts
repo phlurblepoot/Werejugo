@@ -42,7 +42,7 @@ function durationMs(d: unknown): number | null {
 
 export function fieldsFromAsset(a: ImmichAsset): AssetFields | null {
   if (a.type !== "IMAGE" && a.type !== "VIDEO") return null;
-  if (a.visibility === "hidden" || a.visibility === "locked") return null;
+  if (a.visibility === "hidden" || a.visibility === "locked" || a.isTrashed) return null;
   const x = a.exifInfo;
   const lat = typeof x?.latitude === "number" ? x.latitude : null;
   const lng = typeof x?.longitude === "number" ? x.longitude : null;

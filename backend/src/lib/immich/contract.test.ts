@@ -154,10 +154,13 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect((await errorOf(immich.getAsset(otherKey, up.id))).kind).toBe("rejected");
     expect((await fetchMedia(otherKey, up.id, "original")).ok).toBe(false);
 
-    // Trash: gone from the normal search, found when asking about trashedAt.
+    // Trash: a plain structured search still includes it (Immich 3.2), so the
+    // sync asks for trashedAt = null; asking about trashedAt finds it.
     await immich.trashAssets(fam, [up.id]);
-    const after = await immich.searchAssets(fam, { filter: { updatedAt: { gt: started } }, size: 100 });
-    expect(after.items.map((a) => a.id)).not.toContain(up.id);
+    const plain = await immich.searchAssets(fam, { filter: { updatedAt: { gt: started } }, size: 100 });
+    expect(plain.items.find((a) => a.id === up.id)?.isTrashed).toBe(true);
+    const live = await immich.searchAssets(fam, { filter: { updatedAt: { gt: started }, trashedAt: { eq: null } }, size: 100 });
+    expect(live.items.map((a) => a.id)).not.toContain(up.id);
     const trashed = await immich.searchAssets(fam, { filter: { trashedAt: { gt: started } }, size: 100 });
     expect(trashed.items.map((a) => a.id)).toContain(up.id);
   }, 60_000); // a real Immich takes a few seconds to make the thumbnail

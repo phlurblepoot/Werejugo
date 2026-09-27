@@ -74,6 +74,17 @@ test("the next syncs pick up new, edited and trashed photos", async () => {
   expect(byAsset.get(c.id)?.caption).toBe("new one");
 });
 
+test("photos in Immich's trash stay out, even though Immich's search includes them", async () => {
+  const kept = fake.addAsset(immichUserId);
+  const trashed = fake.addAsset(immichUserId);
+  await syncFamily(ctx.familyId, { full: true });
+  trashed.trashedAt = new Date().toISOString();
+  trashed.updatedAt = trashed.trashedAt;
+
+  await syncFamily(ctx.familyId, { full: true });
+  expect((await refs()).map((x) => x.immich_asset_id)).toEqual([kept.id]);
+});
+
 test("photos deleted for good in Immich go at the next full sync, but a fresh upload is kept", async () => {
   const a = fake.addAsset(immichUserId);
   await syncFamily(ctx.familyId, { full: true });

@@ -96,6 +96,14 @@ function assetDto(a: FakeAsset, withExif = true) {
 }
 
 type DateOp = { eq?: string; gt?: string; gte?: string; lt?: string; lte?: string; ne?: string | null };
+/** trashedAt: `{ eq: null }` = not trashed, `{ ne: null }` = trashed, date bounds = trashed then; no filter = either. */
+function trashedMatches(value: string | null, f: (DateOp & { eq?: string | null }) | undefined): boolean {
+  if (!f) return true;
+  if (f.eq === null) return value === null;
+  if (value === null) return false;
+  return dateMatches(value, { ...f, eq: f.eq ?? undefined, ne: undefined });
+}
+
 function dateMatches(value: string | null, f: DateOp | undefined): boolean {
   if (!f) return true;
   if (value === null) return f.ne === null ? false : !Object.keys(f).length;
@@ -361,13 +369,14 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const c = auth(req, reply, "asset.read");
     if (!c) return reply;
     const b = (req.body ?? {}) as { filter?: Record<string, unknown>; cursor?: string; size?: number; withExif?: boolean };
-    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] } };
+    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] } };
     const size = Math.min(b.size ?? 250, 1000);
     const offset = b.cursor ? Number(Buffer.from(b.cursor, "base64url").toString()) : 0;
     const matching = [...assets.values()]
       .filter((a) => a.ownerId === c.user.id)
-      // Like Immich: trashed assets only when the filter asks about trashedAt.
-      .filter((a) => (f.trashedAt ? a.trashedAt !== null && dateMatches(a.trashedAt, f.trashedAt) : a.trashedAt === null))
+      // Like Immich 3.2's structured search: trashed assets are included unless
+      // the filter says otherwise (trashedAt: { eq: null } for "not trashed").
+      .filter((a) => trashedMatches(a.trashedAt, f.trashedAt))
       .filter((a) => dateMatches(a.updatedAt, f.updatedAt))
       .filter((a) => !f.id?.eq || a.id === f.id.eq)
       .filter((a) => (f.visibility?.eq ? a.visibility === f.visibility.eq : f.visibility?.in ? f.visibility.in.includes(a.visibility) : a.visibility !== "hidden" && a.visibility !== "locked"))

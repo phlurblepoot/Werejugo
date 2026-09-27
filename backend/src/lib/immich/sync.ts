@@ -24,8 +24,12 @@ export interface SyncResult {
 
 const PAGE = 1000;
 const OVERLAP_MS = 2 * 60_000;
-/** What Werejugo shows: the timeline and the archive (not hidden Live Photo halves, not Immich's locked folder). */
-const VISIBLE = { visibility: { in: ["timeline", "archive"] } } as const;
+/**
+ * What Werejugo shows: the timeline and the archive (not hidden Live Photo
+ * halves, not Immich's locked folder), and nothing in Immich's trash. Immich's
+ * structured search includes trashed assets unless the filter excludes them.
+ */
+const VISIBLE = { visibility: { in: ["timeline", "archive"] }, trashedAt: { eq: null } } as const;
 
 async function* allPages(conn: ImmichConn, filter: Record<string, unknown>, withExif: boolean) {
   let cursor: string | undefined;
