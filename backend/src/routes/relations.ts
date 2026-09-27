@@ -88,10 +88,13 @@ export async function relationRoutes(app: FastifyInstance): Promise<void> {
       [ref.type, ids]);
 
     // Compute the "other" ref for each link, then batch-resolve summaries per type (unreadable ones drop out).
-    const others = rows.map((r) => {
+    // A person's photos found by their face (role 'face') are many; they're in the
+    // photo library (filtered by person), not listed here. On a photo, a face tag
+    // shows who's in it but isn't removed here (the face sync would put it back).
+    const others = rows.filter((r) => !(ref.type === "person" && r.role === "face")).map((r) => {
       const isFrom = r.from_type === ref.type && ids.includes(r.from_id);
       return {
-        linkId: r.id, role: r.role, canRemove: r.family_id === scope.familyId,
+        linkId: r.id, role: r.role, canRemove: r.family_id === scope.familyId && r.role !== "face",
         via: isFrom ? r.from_id : r.to_id,
         type: (isFrom ? r.to_type : r.from_type) as CoreType, id: isFrom ? r.to_id : r.from_id,
       };
@@ -106,10 +109,12 @@ export async function relationRoutes(app: FastifyInstance): Promise<void> {
     return others
       .filter((o) => readableEnds.has(o.via))
       .map((o) => ({ linkId: o.linkId, role: o.role, canRemove: o.canRemove, entity: resolved.get(`${o.type}:${o.id}`) }))
+      // A face tag after a hand tag of the same person, so the removable one is kept.
+      .sort((a, b) => Number(a.role === "face") - Number(b.role === "face"))
       .filter((r) => {
         // drop dangling or unreadable ends, and the same entity reached through two linked people
         if (!r.entity) return false;
-        const key = `${r.entity.type}:${r.entity.id}:${r.role}`;
+        const key = `${r.entity.type}:${r.entity.id}:${r.role === "face" ? "" : r.role}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;

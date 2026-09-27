@@ -39,3 +39,22 @@ export function mediaUrls(r: { id: string; kind: string }) {
     videoUrl: r.kind === "video" ? signMediaUrl(r.id, "video") : null,
   };
 }
+
+const signFace = (id: string, e: number) =>
+  createHmac("sha256", config.fileSigningSecret).update(`face:${id}:${e}`).digest("base64url");
+
+/** A signed link to a face thumbnail (`GET /api/f/:id`), cacheable like media links. */
+export function signFaceUrl(id: string, nowMs = Date.now()): string {
+  const e = Math.ceil((nowMs / 1000 + MIN_TTL_S) / BUCKET_S) * BUCKET_S;
+  return `/api/f/${id}?e=${e}&s=${signFace(id, e)}`;
+}
+
+/** Seconds until a face link expires, or null if it isn't valid. */
+export function verifyFaceSig(id: string, e: string | undefined, s: string | undefined, nowMs = Date.now()): number | null {
+  if (!e || !s || !/^\d{1,12}$/.test(e)) return null;
+  const left = Number(e) - Math.floor(nowMs / 1000);
+  if (left <= 0) return null;
+  const want = Buffer.from(signFace(id, Number(e)));
+  const got = Buffer.from(s);
+  return want.length === got.length && timingSafeEqual(want, got) ? left : null;
+}

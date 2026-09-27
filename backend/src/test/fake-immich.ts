@@ -483,7 +483,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const c = auth(req, reply, "asset.read");
     if (!c) return reply;
     const b = (req.body ?? {}) as { filter?: Record<string, unknown>; cursor?: string; size?: number; withExif?: boolean };
-    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] }; personIds?: { any?: string[] } };
+    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] }; personIds?: { any?: string[] }; createdAt?: DateOp };
     // Like Immich: the locked folder is only for a PIN-unlocked session, never an API key.
     if (f.visibility?.eq === "locked" || f.visibility?.in?.includes("locked")) return fail(reply, 401, "Elevated permission is required");
     const size = Math.min(b.size ?? 250, 1000);
@@ -494,6 +494,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       // the filter says otherwise (trashedAt: { eq: null } for "not trashed").
       .filter((a) => trashedMatches(a.trashedAt, f.trashedAt))
       .filter((a) => dateMatches(a.updatedAt, f.updatedAt))
+      .filter((a) => dateMatches(a.createdAt, f.createdAt))
       .filter((a) => !f.id?.eq || a.id === f.id.eq)
       .filter((a) => !f.personIds?.any || faces.some((x) => x.assetId === a.id && f.personIds!.any!.includes(x.personId)))
       .filter((a) => (f.visibility?.eq ? a.visibility === f.visibility.eq : f.visibility?.in ? f.visibility.in.includes(a.visibility) : a.visibility !== "hidden" && a.visibility !== "locked"))

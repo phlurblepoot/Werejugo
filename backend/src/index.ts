@@ -15,6 +15,7 @@ import { linkRoutes } from "./routes/links.js";
 import { mediaRoutes } from "./routes/media.js";
 import { mediaUploadRoutes } from "./routes/media-uploads.js";
 import { mediaPickerRoutes } from "./routes/media-picker.js";
+import { faceRoutes } from "./routes/faces.js";
 import { mediaFileRoutes } from "./routes/media-files.js";
 import { mediaSuggestRoutes } from "./routes/media-suggest.js";
 import { visitRoutes } from "./routes/visits.js";
@@ -118,6 +119,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(mediaRoutes);
   await app.register(mediaUploadRoutes);
   await app.register(mediaPickerRoutes);
+  await app.register(faceRoutes);
   await app.register(mediaFileRoutes);
   await app.register(mediaSuggestRoutes);
   await app.register(visitRoutes);

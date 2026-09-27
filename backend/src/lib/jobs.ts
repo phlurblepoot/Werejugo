@@ -1,6 +1,7 @@
 import { PgBoss } from "pg-boss";
 import { config } from "../config.js";
 import { connectedFamilies, syncFamily } from "./immich/sync.js";
+import { syncFaces } from "./immich/faces.js";
 import { cleanupUploads, handOff } from "./media/uploads.js";
 
 /**
@@ -50,6 +51,13 @@ export async function startJobs(log: Log): Promise<void> {
   await b.work<{ familyId: string; full: boolean }>(Q.syncFamily, async ([job]) => {
     const r = await syncFamily(job.data.familyId, { full: job.data.full });
     if (!r.skipped && (r.upserted || r.removed)) log.info(`Immich sync ${r.full ? "(full) " : ""}for ${r.familyId}: ${r.upserted} added/updated, ${r.removed} removed`);
+    if (r.skipped) return;
+    // Then the faces: who's in the photos (a problem here doesn't undo the photos).
+    const f = await syncFaces(job.data.familyId, { full: job.data.full }).catch((err) => {
+      log.warn({ err: err instanceof Error ? err.message : err }, "face sync failed");
+      return null;
+    });
+    if (f && (f.tagged || f.untagged)) log.info(`Faces for ${r.familyId}: ${f.tagged} photos tagged, ${f.untagged} untagged`);
   });
   await b.work<{ uploadId: string }>(Q.handoff, async ([job]) => {
     await handOff(job.data.uploadId, { finalAttempt: job.retryCount >= HANDOFF_RETRIES });
@@ -76,7 +84,9 @@ export async function enqueueFamilySync(familyId: string, full = false): Promise
     await send(boss, familyId, full);
     return;
   }
-  const p: Promise<unknown> = syncFamily(familyId, { full }).catch(() => {}).finally(() => inline.delete(p));
+  const p: Promise<unknown> = syncFamily(familyId, { full })
+    .then((r) => (r.skipped ? null : syncFaces(familyId, { full })))
+    .catch(() => {}).finally(() => inline.delete(p));
   inline.add(p);
 }
 

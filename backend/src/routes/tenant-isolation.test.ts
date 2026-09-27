@@ -43,6 +43,7 @@ beforeAll(async () => {
   A.person2 = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person 2') RETURNING id`, [fa]);
   A.personLink = await one("INSERT INTO person_links (person_a, person_b) VALUES ($1, $2) RETURNING id", [A.person, A.person2]);
   await query(`INSERT INTO activity (trip_id, family_id, kind, summary) VALUES ($1, $2, 'visit.added', '${CANARY} activity')`, [A.trip, fa]);
+  A.face = await one(`INSERT INTO immich_people (family_id, immich_person_id, name, photo_count) VALUES ($1, gen_random_uuid(), '${CANARY} face', 5) RETURNING id`, [fa]);
   A.upload = await one(`INSERT INTO media_uploads (family_id, user_id, filename, size, state, error) VALUES ($1, $2, '${CANARY}.jpg', 100, 'failed', 'x') RETURNING id`, [fa, A.user]);
 
   const fb = b.familyId;
@@ -82,6 +83,7 @@ async function snapshotA(): Promise<string> {
     activity: "SELECT a.* FROM activity a JOIN trips t ON t.id = a.trip_id WHERE t.family_id = $1",
     family_immich: "SELECT * FROM family_immich WHERE family_id = $1",
     media_uploads: "SELECT * FROM media_uploads WHERE family_id = $1",
+    immich_people: "SELECT * FROM immich_people WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -176,6 +178,14 @@ const CASES: Case[] = [
   c("POST /api/links", () => "/api/links", 400, () => ({ from: `person:${B.person}`, to: `trip:${A.trip}` })),
   c("DELETE /api/links/:id", () => `/api/links/${A.link}`, 404),
 
+  // Faces found in photos
+  c("GET /api/faces", () => "/api/faces?view=all", "clean"),
+  c("GET /api/faces/count", () => "/api/faces/count", "clean"),
+  c("PATCH /api/faces/:id", () => `/api/faces/${A.face}`, 404, () => ({ personId: B.person })),
+  c("PATCH /api/faces/:id", () => `/api/faces/${A.face}`, 404, () => ({ ignored: true }), "ignore their face"),
+  c("POST /api/faces/:id/person", () => `/api/faces/${A.face}/person`, 404, () => ({ displayName: "x" })),
+  c("GET /api/people/:id/faces", () => `/api/people/${A.person}/faces`, 404),
+
   // Photos & videos
   c("GET /api/media", () => "/api/media", "clean"),
   c("GET /api/media", () => `/api/media?trip=${A.trip}`, "clean", undefined, "filter by their trip"),
@@ -210,6 +220,8 @@ const CASES: Case[] = [
   c("POST /api/media/uploads/:id/retry", () => `/api/media/uploads/${A.upload}/retry`, 404),
   c("DELETE /api/media/uploads/:id", () => `/api/media/uploads/${A.upload}`, 404),
   c("GET /api/m/:id/:size", () => `/api/m/${A.media}/thumbnail`, 403, undefined, "their photo, no signature"),
+  c("GET /api/f/:id", () => `/api/f/${A.face}`, 403, undefined, "their face, no signature"),
+  c("GET /api/f/:id", () => `/api/f/${A.face}?e=9999999999&s=forged`, 403, undefined, "their face, forged signature"),
   c("GET /api/m/:id/:size", () => `/api/m/${A.media}/original?e=9999999999&s=forged`, 403, undefined, "their photo, forged signature"),
 
   // Map sets and map styling
