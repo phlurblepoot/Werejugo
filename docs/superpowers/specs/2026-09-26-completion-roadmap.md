@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
 | **Current phase** | 2.4 |
-| **Next step** | Plan and build Phase 2.4: a virtualized library grid that stays fast at 20k+ photos, filters, lightbox, the Photos map with clustering, and a photo picker for any item that browses the whole library |
+| **Next step** | Build Phase 2.4 ([plan](../plans/2026-09-27-phase-2.4-library-ui.md)): a windowed timeline laid out from month counts (20k+ photos), filters, hide and bulk actions, a full-screen viewer, the Photos map for the whole library, and an **Add photos** picker on places, trips, people and itinerary items |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -287,7 +287,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.4 Library UI — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.4](../plans/2026-09-27-phase-2.4-library-ui.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
 - [ ] Photo picker for any item (place, trip, person, itinerary item): browses the whole library, starting with photos taken near the item's dates and place. (added 2026-09-27)
