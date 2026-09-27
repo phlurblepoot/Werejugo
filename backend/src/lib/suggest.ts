@@ -110,7 +110,7 @@ async function tripPlaces(scope: Scope, tripId: string): Promise<Suggestion[]> {
         WHERE m.family_id = $1 AND m.trip_id = $2 AND m.geom IS NOT NULL AND m.hidden_at IS NULL
      ), spots AS (
        SELECT count(*)::int AS n, ST_Centroid(ST_Collect(geom)) AS c, min(taken_at) AS first,
-              mode() WITHIN GROUP (ORDER BY city) AS city, array_agg(id ORDER BY taken_at, id) AS ids
+              mode() WITHIN GROUP (ORDER BY ${CITY_SQL("city")}) AS city, array_agg(id ORDER BY taken_at, id) AS ids
          FROM pts WHERE cid IS NOT NULL GROUP BY cid
      )
      SELECT n, ST_Y(c) AS lat, ST_X(c) AS lng, first, city, ids FROM spots
@@ -201,6 +201,13 @@ export function inferHome(pts: Array<{ t: number; lat: number; lng: number }>): 
   return best && best.days.size >= HOME_MIN_DAYS ? { lat: best.lat / best.n, lng: best.lng / best.n } : null;
 }
 
+/**
+ * A city as people say it. Immich's GeoNames data names city districts too:
+ * "Paris 16 Passy", "Lyon 03", "Marseille 08" are Paris, Lyon and Marseille.
+ */
+export const cityName = (raw: string | null): string | null => (raw ? raw.replace(/\s+\d{1,2}(\s.*)?$/, "") || raw : null);
+const CITY_SQL = (col: string) => `NULLIF(regexp_replace(${col}, '\\s+\\d{1,2}(\\s.*)?$', ''), '')`;
+
 /** "Lisbon", "Lisbon and Porto", or the country. */
 function placeLabel(pts: Pt[]): string | null {
   const count = (vals: Array<string | null>) => {
@@ -208,7 +215,7 @@ function placeLabel(pts: Pt[]): string | null {
     for (const v of vals) if (v) m.set(v, (m.get(v) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   };
-  const cities = count(pts.map((p) => p.city));
+  const cities = count(pts.map((p) => cityName(p.city)));
   if (cities.length) {
     const [first, second] = cities;
     return second && second[1] >= pts.length / 4 ? `${first[0]} and ${second[0]}` : first[0];

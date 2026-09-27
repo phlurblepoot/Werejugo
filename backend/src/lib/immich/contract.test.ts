@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startFakeImmich, type FakeImmich } from "../../test/fake-immich.js";
 import sharp from "sharp";
 import { jpeg } from "../../test/photos.js";
+import { cityName } from "../suggest.js";
 import { ADMIN_KEY_PERMISSIONS, ImmichError, fetchMedia, fetchPersonThumbnail, immich, normalizeImmichUrl } from "./client.js";
 import { isSupported } from "./version.js";
 
@@ -293,7 +294,9 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
       if (!exif?.city) await new Promise((r) => setTimeout(r, 1000));
     }
     expect(exif?.latitude).toBeCloseTo(48.8584, 3);
-    expect(exif?.city).toBe("Paris");
+    // GeoNames names the district ("Paris 16 Passy"); suggestions say the city.
+    expect(exif?.city).toMatch(/^Paris\b/);
+    expect(cityName(exif?.city ?? null)).toBe("Paris");
     expect(exif?.country).toBe("France");
   }, 120_000);
 

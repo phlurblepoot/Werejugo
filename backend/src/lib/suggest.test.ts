@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "vitest";
 import { query } from "../db/pool.js";
 import { addUser, bearer, buildTestApp, closeTestApp, type TestCtx, type TestUser } from "../test/helpers.js";
-import { forLibrary, forTrip, forVisit, inferHome } from "./suggest.js";
+import { cityName, forLibrary, forTrip, forVisit, inferHome } from "./suggest.js";
 import type { Scope } from "./access.js";
 
 let ctx: TestCtx;
@@ -59,6 +59,12 @@ test("a home is where photos were taken on the most days; a small library has no
   const home = inferHome(pts)!;
   expect(home.lat).toBeCloseTo(HOME.lat, 3);
   expect(inferHome(pts.slice(0, 4))).toBeNull();
+});
+
+test("district names from GeoNames read as their city", () => {
+  expect(["Paris 16 Passy", "Lyon 03", "Marseille 08", "Rome", "Porto", "Saint-Denis"].map(cityName))
+    .toEqual(["Paris", "Lyon", "Marseille", "Rome", "Porto", "Saint-Denis"]);
+  expect(cityName(null)).toBeNull();
 });
 
 test("the library: runs of photos away from home, in no trip, become trips to make", async () => {
@@ -140,7 +146,7 @@ test("places missing from a trip: spots with 3+ of its photos, more than 1 km fr
   const italy = await trip("Italy 2024", "2024-06-03", "2024-06-10");
   await place(italy, "Colosseum", ROME);
   await series(5, "2024-06-04T09:00:00Z", ROME, { trip: italy, city: "Rome" }, 1); // at the Colosseum: known
-  const florence = await series(4, "2024-06-06T09:00:00Z", FLORENCE, { trip: italy, city: "Florence" }, 1);
+  const florence = await series(4, "2024-06-06T09:00:00Z", FLORENCE, { trip: italy, city: "Florence 02 Centro" }, 1);
   await series(2, "2024-06-07T09:00:00Z", { lat: 43.3188, lng: 11.3308 }, { trip: italy, city: "Siena" }, 1); // too few
 
   const spots = (await forTrip(scope, italy)).filter((x) => x.kind === "trip-place");

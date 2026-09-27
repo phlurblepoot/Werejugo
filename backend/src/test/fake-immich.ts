@@ -90,6 +90,8 @@ const now = () => new Date().toISOString();
 /** A few places for the stand-in's reverse geocoding (real Immich ships GeoNames' cities). */
 const CITIES: Array<[number, number, string, string, string]> = [
   [48.8566, 2.3522, "Paris", "Île-de-France", "France"],
+  // Like GeoNames: big cities' districts are places of their own.
+  [48.8637, 2.2769, "Paris 16 Passy", "Île-de-France", "France"],
   [41.9028, 12.4964, "Rome", "Lazio", "Italy"],
   [43.7696, 11.2558, "Florence", "Tuscany", "Italy"],
   [45.4408, 12.3155, "Venice", "Veneto", "Italy"],
