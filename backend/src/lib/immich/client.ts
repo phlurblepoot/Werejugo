@@ -1,6 +1,8 @@
 import * as sdk from "@immich/sdk";
 import type { ImmichVersion } from "./version.js";
 
+export type { AssetResponseDto as ImmichAsset } from "@immich/sdk";
+
 /**
  * The only place Werejugo talks to Immich. Every call takes the server address
  * and the credential to use (an API key, or a session token right after
@@ -108,9 +110,15 @@ export const immich = {
 
   // ---- Assets (a family's photos and videos) ----
 
-  /** Hand a file to Immich. `duplicate` means the same file is already in the account (its id is returned). */
-  uploadAsset: (c: ImmichConn, file: Blob, meta: { filename: string; fileCreatedAt: string; fileModifiedAt: string }) =>
-    call("uploadAsset", c, (o) => sdk.uploadAsset({ assetMediaCreateDto: { assetData: file, ...meta } }, { ...o, signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS) })),
+  /**
+   * Hand a file to Immich. `duplicate` means the same file is already in the
+   * account (its id is returned). Immich decides whether it can take the file
+   * from the upload's own file name, so the bytes go as a named File.
+   */
+  uploadAsset: (c: ImmichConn, file: Blob, meta: { filename: string; fileCreatedAt: string; fileModifiedAt: string }) => {
+    const named = file instanceof File && file.name ? file : new File([file], meta.filename, { type: file.type });
+    return call("uploadAsset", c, (o) => sdk.uploadAsset({ assetMediaCreateDto: { assetData: named, ...meta } }, { ...o, signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS) }));
+  },
   getAsset: (c: ImmichConn, id: string) => call("getAsset", c, (o) => sdk.getAssetInfo({ id }, o)),
   /** Immich 3.2's structured search: `filter`, cursor paging, optional EXIF in the results. */
   searchAssets: (c: ImmichConn, q: { filter?: sdk.SearchFilter; cursor?: string; size?: number; withExif?: boolean }) =>

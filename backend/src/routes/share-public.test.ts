@@ -16,8 +16,8 @@ beforeAll(async () => {
      VALUES ($1,$2,'place','Colosseum', ST_SetSRID(ST_MakePoint(12.49,41.89),4326), $3) RETURNING id`,
     [ctx.familyId, tripId, ctx.userId])).rows[0].id;
   const mediaId = (await query<{ id: string }>(
-    `INSERT INTO media (family_id, trip_id, kind, rel_path, original_name, created_by)
-     VALUES ($1,$2,'image','trips/italy/photos/colosseum.jpg','colosseum.jpg',$3) RETURNING id`,
+    `INSERT INTO media (family_id, trip_id, kind, immich_asset_id, original_name, created_by)
+     VALUES ($1,$2,'image',gen_random_uuid(),'colosseum.jpg',$3) RETURNING id`,
     [ctx.familyId, tripId, ctx.userId])).rows[0].id;
   await query(
     "INSERT INTO links (family_id, from_type, from_id, to_type, to_id, role) VALUES ($1,'media',$2,'visit',$3,'appears_in')",
@@ -43,7 +43,7 @@ test("a trip share returns trip, visits, itinerary, photos — and no documents"
   expect(b.trip.name).toBe("Italy 2024");
   expect(b.visits).toHaveLength(1);
   expect(b.visits[0].geometry).toMatchObject({ type: "Point" });
-  expect(b.visits[0].photos[0].url).toContain("sig=");
+  expect(b.visits[0].photos[0].url).toMatch(/^\/api\/m\/[0-9a-f-]{36}\/preview\?e=\d+&s=[\w-]+$/);
   expect(b.itinerary.map((i: any) => i.title)).toEqual(["Visit the Forum"]);
   expect(JSON.stringify(b)).not.toContain("Booking"); // documents never shared
 });
@@ -54,7 +54,7 @@ test("an album share returns a flat photo list", async () => {
   const b = res.json();
   expect(b.targetType).toBe("album");
   expect(b.photos).toHaveLength(1);
-  expect(b.photos[0].url).toContain("sig=");
+  expect(b.photos[0].url).toMatch(/^\/api\/m\/[0-9a-f-]{36}\/preview\?e=\d+&s=[\w-]+$/);
 });
 
 test("an unknown token is 404", async () => {

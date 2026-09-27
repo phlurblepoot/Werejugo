@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { signFileUrl } from "../lib/filesign.js";
+import { signMediaUrl } from "../lib/media/urls.js";
 import { likeEscape } from "../lib/validate.js";
 
 interface Hit { type: string; id: string; label: string; thumbUrl: string | null; to: string }
@@ -27,21 +27,19 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       [fam, like, PER_GROUP])).rows.map<Hit>((r) => ({ type: "visit", id: r.id, label: r.title, thumbUrl: null, to: `/map?visit=${r.id}` }));
 
     const people = (await query<any>(
-      `SELECT p.id, p.display_name, m.rel_path, m.thumb_rel_path
+      `SELECT p.id, p.display_name, m.id AS avatar_id
        FROM people p LEFT JOIN media m ON m.id = p.avatar_media_id AND m.family_id = p.family_id
        WHERE p.family_id = $1 AND p.display_name ILIKE $2 ORDER BY p.display_name ASC LIMIT $3`,
-      [fam, like, PER_GROUP])).rows.map<Hit>((r) => {
-        const rel = r.thumb_rel_path ?? r.rel_path;
-        return { type: "person", id: r.id, label: r.display_name, thumbUrl: rel ? signFileUrl(rel) : null, to: `/people?person=${r.id}` };
-      });
+      [fam, like, PER_GROUP])).rows.map<Hit>((r) => ({
+        type: "person", id: r.id, label: r.display_name, thumbUrl: r.avatar_id ? signMediaUrl(r.avatar_id, "thumbnail") : null, to: `/people?person=${r.id}`,
+      }));
 
     const photos = (await query<any>(
-      `SELECT id, caption, original_name, rel_path, thumb_rel_path FROM media
+      `SELECT id, caption, original_name FROM media
        WHERE family_id = $1 AND (caption ILIKE $2 OR original_name ILIKE $2) ORDER BY created_at DESC LIMIT $3`,
-      [fam, like, PER_GROUP])).rows.map<Hit>((r) => {
-        const rel = r.thumb_rel_path ?? r.rel_path;
-        return { type: "media", id: r.id, label: r.caption || r.original_name || "Photo", thumbUrl: rel ? signFileUrl(rel) : null, to: `/photos?photo=${r.id}` };
-      });
+      [fam, like, PER_GROUP])).rows.map<Hit>((r) => ({
+        type: "media", id: r.id, label: r.caption || r.original_name || "Photo", thumbUrl: signMediaUrl(r.id, "thumbnail"), to: `/photos?photo=${r.id}`,
+      }));
 
     const documents = (await query<any>(
       "SELECT id, title FROM documents WHERE family_id = $1 AND title ILIKE $2 ORDER BY title ASC LIMIT $3",

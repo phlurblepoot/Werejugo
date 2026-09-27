@@ -2,7 +2,6 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { query, tx } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { reconcileMediaTrip } from "../lib/reconcile.js";
 import { assertRefs, scopeOf } from "../lib/access.js";
 import { recordActivity } from "../lib/activity.js";
 
@@ -54,7 +53,6 @@ export async function mediaSuggestRoutes(app: FastifyInstance): Promise<void> {
       if (tripId !== undefined) {
         for (const id of mediaIds) {
           await client.query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [tripId, id, fam]);
-          await reconcileMediaTrip(client, id);
         }
         await recordActivity({ tripId, familyId: fam, userId: scope.userId, kind: "photo.added",
           summary: `${mediaIds.length} photo${mediaIds.length === 1 ? "" : "s"}` }, client);

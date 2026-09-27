@@ -4,6 +4,7 @@ import { addUser, bearer, buildTestApp, closeTestApp, type TestCtx, type TestUse
 import { startFakeImmich, type FakeImmich } from "../test/fake-immich.js";
 import { useSecretBoxForTests } from "../lib/secretbox.js";
 import { immich } from "../lib/immich/client.js";
+import { settleJobs } from "../lib/jobs.js";
 
 let ctx: TestCtx; // an owner who is also the server admin
 let fake: FakeImmich;
@@ -121,14 +122,16 @@ test("only the server admin can see or change the Immich connection", async () =
 });
 
 test("a family sees whether Immich is on; owners also get the login, and can set the Immich password", async () => {
-  expect((await as(owner.token).get("/api/immich")).json()).toEqual({ enabled: false, state: "none" });
+  expect((await as(owner.token).get("/api/immich")).json()).toEqual({ enabled: false, state: "none", lastSyncAt: null, photoCount: null });
   await configure();
   await admin().post(`/api/admin/immich/families/${owner.familyId}/connect`);
+  await settleJobs(); // the first library sync runs in the background
 
   const mine = (await as(owner.token).get("/api/immich")).json();
   expect(mine).toMatchObject({ enabled: true, state: "created", url: fake.url, email: expect.stringMatching(/@werejugo\.local$/), mode: "created", canSetPassword: true });
   const theirs = (await as(member.token).get("/api/immich")).json();
-  expect(theirs).toEqual({ enabled: true, state: "created" });
+  expect(theirs).toEqual({ enabled: true, state: "created", lastSyncAt: expect.any(String), photoCount: 0 });
+  expect(Object.keys(theirs)).not.toContain("email");
 
   expect((await as(member.token).post("/api/immich/password", { password: "long-enough" })).statusCode).toBe(403);
   expect((await as(owner.token).post("/api/immich/password", { password: "short" })).statusCode).toBe(400);

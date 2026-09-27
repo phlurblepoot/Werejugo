@@ -50,9 +50,7 @@ export async function familyData(familyId: string): Promise<Record<string, unkno
 /** The family's files: [root, path relative to that root]. */
 async function familyFiles(familyId: string): Promise<Array<{ root: "storage" | "uploads"; rel: string }>> {
   const { rows } = await query<{ root: "storage" | "uploads"; rel: string }>(
-    `SELECT 'storage' AS root, rel_path AS rel FROM media WHERE family_id = $1
-     UNION SELECT 'storage', thumb_rel_path FROM media WHERE family_id = $1 AND thumb_rel_path IS NOT NULL
-     UNION SELECT 'storage', rel_path FROM documents WHERE family_id = $1 AND rel_path IS NOT NULL
+    `SELECT 'storage' AS root, rel_path AS rel FROM documents WHERE family_id = $1 AND rel_path IS NOT NULL
      UNION SELECT 'uploads', substring(url FROM '^/uploads/(.+)$') FROM icons WHERE family_id = $1 AND url LIKE '/uploads/%'`,
     [familyId]);
   return rows.filter((r) => r.rel);
@@ -67,7 +65,8 @@ function inside(root: string, rel: string): string | null {
 
 /**
  * A streaming .tar.gz of one family's data: `family.json` plus `files/storage/…`
- * (photos, videos, documents) and `files/uploads/…` (pin icons). Files
+ * (documents) and `files/uploads/…` (pin icons). Photos and videos are in the
+ * family's Immich account; `family.json` lists them (`media`) and says so. Files
  * are symlinked into a staging folder, not copied, so this needs no extra disk.
  */
 export async function familyArchive(familyId: string, familyName: string): Promise<{ stream: Readable; cleanup: () => Promise<void> }> {
@@ -90,6 +89,7 @@ export async function familyArchive(familyId: string, familyName: string): Promi
     version: 1,
     family: familyName,
     exportedAt: new Date().toISOString(),
+    photos: "Photos and videos are kept in your family's Immich account; the `media` list here has their details (immich_asset_id). Download the files from Immich.",
     missingFiles: missing,
     data,
   }, null, 2));

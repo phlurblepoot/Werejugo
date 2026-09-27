@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
 import { parseRef, CORE_TYPES, type CoreType } from "../lib/refs.js";
-import { signFileUrl } from "../lib/filesign.js";
+import { signMediaUrl } from "../lib/media/urls.js";
 import { likeEscape } from "../lib/validate.js";
 import { loadReadable, readableWhere, scopeOf } from "../lib/access.js";
 import { badRequest } from "../lib/errors.js";
@@ -14,10 +14,7 @@ export interface EntitySummary {
   familyName: string | null;
 }
 
-const thumb = (r: { rel_path: string | null; thumb_rel_path: string | null }) => {
-  const rel = r.thumb_rel_path ?? r.rel_path;
-  return rel ? signFileUrl(rel) : null;
-};
+const thumb = (mediaId: string | null) => (mediaId ? signMediaUrl(mediaId, "thumbnail") : null);
 
 /**
  * Display summaries for ids of one type — only those this family may see
@@ -40,19 +37,19 @@ async function summariesFor(familyId: string, type: CoreType, ids: string[]): Pr
     for (const r of rows) out.set(r.id, { type, id: r.id, label: r.name, subtitle: r.start_date, thumbUrl: r.cover_photo_url ?? null, familyName: other(r) });
   } else if (type === "person") {
     const { rows } = await query<any>(
-      `SELECT t.id, t.display_name, t.relationship, t.family_id, f.name AS family_name, m.rel_path, m.thumb_rel_path
+      `SELECT t.id, t.display_name, t.relationship, t.family_id, f.name AS family_name, m.id AS avatar_id
          FROM people t ${fam} LEFT JOIN media m ON m.id = t.avatar_media_id AND m.family_id = t.family_id
         WHERE t.id = ANY($2::uuid[]) AND ${readableWhere("person", "t", "$1")}`, [familyId, ids]);
     for (const r of rows) {
       // Another family's person: name and picture only.
       const mine = r.family_id === familyId;
-      out.set(r.id, { type, id: r.id, label: r.display_name, subtitle: mine ? r.relationship || null : null, thumbUrl: thumb(r), familyName: other(r) });
+      out.set(r.id, { type, id: r.id, label: r.display_name, subtitle: mine ? r.relationship || null : null, thumbUrl: thumb(r.avatar_id), familyName: other(r) });
     }
   } else if (type === "media") {
     const { rows } = await query<any>(
-      `SELECT t.id, t.caption, t.original_name, t.rel_path, t.thumb_rel_path, t.family_id, f.name AS family_name FROM media t ${fam}
+      `SELECT t.id, t.caption, t.original_name, t.family_id, f.name AS family_name FROM media t ${fam}
         WHERE t.id = ANY($2::uuid[]) AND ${readableWhere("media", "t", "$1")}`, [familyId, ids]);
-    for (const r of rows) out.set(r.id, { type, id: r.id, label: r.caption || r.original_name || "Photo", subtitle: null, thumbUrl: thumb(r), familyName: other(r) });
+    for (const r of rows) out.set(r.id, { type, id: r.id, label: r.caption || r.original_name || "Photo", subtitle: null, thumbUrl: thumb(r.id), familyName: other(r) });
   } else if (type === "document") {
     const { rows } = await query<any>(
       `SELECT t.id, t.title, t.doc_type FROM documents t WHERE t.id = ANY($2::uuid[]) AND ${readableWhere("document", "t", "$1")}`, [familyId, ids]);

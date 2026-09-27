@@ -39,16 +39,17 @@ test("disabling a family locks its members out until re-enabled", async () => {
 test("deleting a family needs its exact name, removes its data and files, and never your own", async () => {
   const fam = await addUser(ctx, { familyName: "Leaving Co", role: "owner" });
   await mkdir(join(config.storageDir, "loose", "2020"), { recursive: true });
-  await writeFile(join(config.storageDir, "loose", "2020", "gone.jpg"), "x");
-  await query(
-    "INSERT INTO media (family_id, kind, rel_path, original_name) VALUES ($1, 'image', 'loose/2020/gone.jpg', 'gone.jpg')",
-    [fam.familyId]);
+  await writeFile(join(config.storageDir, "loose", "2020", "gone.pdf"), "x");
+  await query("INSERT INTO documents (family_id, title, doc_type, rel_path) VALUES ($1, 'Passport', 'passport', 'loose/2020/gone.pdf')", [fam.familyId]);
+  // Its photos are references to its Immich account: the rows go, Immich keeps the photos.
+  await query("INSERT INTO media (family_id, kind, immich_asset_id) VALUES ($1, 'image', gen_random_uuid())", [fam.familyId]);
 
   expect((await req("DELETE", `/api/admin/families/${fam.familyId}`, ctx.token, { confirmName: "leaving co" })).statusCode).toBe(400);
   expect((await req("DELETE", `/api/admin/families/${ctx.familyId}`, ctx.token, { confirmName: "Test Family" })).statusCode).toBe(400);
   expect((await req("DELETE", `/api/admin/families/${fam.familyId}`, ctx.token, { confirmName: "Leaving Co" })).statusCode).toBe(204);
   expect((await query("SELECT 1 FROM families WHERE id = $1", [fam.familyId])).rowCount).toBe(0);
-  expect(existsSync(join(config.storageDir, "loose", "2020", "gone.jpg"))).toBe(false);
+  expect(existsSync(join(config.storageDir, "loose", "2020", "gone.pdf"))).toBe(false);
+  expect((await query("SELECT 1 FROM media WHERE family_id = $1", [fam.familyId])).rowCount).toBe(0);
 });
 
 test("users: search, make admin, disable — but never lose the last admin", async () => {

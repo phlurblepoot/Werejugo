@@ -27,7 +27,7 @@ beforeAll(async () => {
   await query(`INSERT INTO visit_waypoints (visit_id, label, geom) VALUES ($1, '${CANARY} stop', ST_SetSRID(ST_MakePoint(1, 1), 4326))`, [A.visit]);
   A.comment = await one(`INSERT INTO comments (visit_id, user_id, body) VALUES ($1, $2, '${CANARY} comment') RETURNING id`, [A.visit, A.user]);
   A.person = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person') RETURNING id`, [fa]);
-  A.media = await one(`INSERT INTO media (family_id, trip_id, rel_path, caption, taken_at, geom) VALUES ($1, $2, 'families/${fa}/loose/2024/a-1234abcd.jpg', '${CANARY} photo', '2024-06-02', ST_SetSRID(ST_MakePoint(12.5, 41.9), 4326)) RETURNING id`, [fa, A.trip]);
+  A.media = await one(`INSERT INTO media (family_id, trip_id, immich_asset_id, caption, taken_at, geom) VALUES ($1, $2, gen_random_uuid(), '${CANARY} photo', '2024-06-02', ST_SetSRID(ST_MakePoint(12.5, 41.9), 4326)) RETURNING id`, [fa, A.trip]);
   A.document = await one(`INSERT INTO documents (family_id, title, owner_person_id, expires_on) VALUES ($1, '${CANARY} passport', $2, CURRENT_DATE + 5) RETURNING id`, [fa, A.person]);
   A.theme = await one(`INSERT INTO themes (family_id, name) VALUES ($1, '${CANARY} theme') RETURNING id`, [fa]);
   A.icon = await one(`INSERT INTO icons (family_id, name, url) VALUES ($1, '${CANARY} icon', '/uploads/a.png') RETURNING id`, [fa]);
@@ -46,7 +46,7 @@ beforeAll(async () => {
 
   const fb = b.familyId;
   B.trip = await one("INSERT INTO trips (family_id, name) VALUES ($1, 'B trip') RETURNING id", [fb]);
-  B.media = await one(`INSERT INTO media (family_id, rel_path) VALUES ($1, 'families/${fb}/loose/2024/b.jpg') RETURNING id`, [fb]);
+  B.media = await one(`INSERT INTO media (family_id, immich_asset_id) VALUES ($1, gen_random_uuid()) RETURNING id`, [fb]);
   B.person = await one("INSERT INTO people (family_id, display_name) VALUES ($1, 'B person') RETURNING id", [fb]);
   B.visit = await one("INSERT INTO visits (family_id, title) VALUES ($1, 'B visit') RETURNING id", [fb]);
 
@@ -185,7 +185,9 @@ const CASES: Case[] = [
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [A.media], tripId: null })),
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [B.media], tripId: A.trip })),
   c("POST /api/media/apply-suggestion", () => "/api/media/apply-suggestion", 400, () => ({ mediaIds: [B.media], visitId: A.visit })),
-  c("GET /api/files/*", () => `/api/files/families/${ctx.familyId}/loose/2024/a-1234abcd.jpg`, 403, undefined, "no signature"),
+  c("GET /api/files/*", () => `/api/files/families/${ctx.familyId}/documents/passport-1234abcd.pdf`, 403, undefined, "no signature"),
+  c("GET /api/m/:id/:size", () => `/api/m/${A.media}/thumbnail`, 403, undefined, "their photo, no signature"),
+  c("GET /api/m/:id/:size", () => `/api/m/${A.media}/original?e=9999999999&s=forged`, 403, undefined, "their photo, forged signature"),
 
   // Map sets and map styling
   c("GET /api/themes", () => "/api/themes", "clean"),
@@ -269,7 +271,9 @@ const EXEMPT: Record<string, string> = {
   "POST /api/admin/immich/families/:id/link": "server admin only, audited (immich.test.ts)",
   "DELETE /api/admin/immich/families/:id": "server admin only, audited (immich.test.ts)",
   "POST /api/immich/password": "acts on the caller's own family only; no id to aim at another (immich.test.ts)",
-  "POST /api/media": "creates in the caller's family; the file goes in its own folder (media.test.ts)",
+  "POST /api/media": "creates in the caller's family's own Immich account (media.test.ts)",
+  "POST /api/immich/refresh": "syncs the caller's own family only; no id to aim at another (immich.test.ts)",
+  "POST /api/admin/immich/families/:id/sync": "server admin only (immich.test.ts)",
   "POST /api/import": "creates in the caller's family; onto another family's trip is 400 (import.test.ts)",
   "POST /api/icons": "creates in the caller's family",
   "POST /api/uploads/from-url": "no family data: a public map image",

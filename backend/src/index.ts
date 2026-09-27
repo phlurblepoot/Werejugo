@@ -13,6 +13,7 @@ import { authRoutes } from "./routes/auth.js";
 import { fileRoutes } from "./routes/files.js";
 import { linkRoutes } from "./routes/links.js";
 import { mediaRoutes } from "./routes/media.js";
+import { mediaFileRoutes } from "./routes/media-files.js";
 import { mediaSuggestRoutes } from "./routes/media-suggest.js";
 import { visitRoutes } from "./routes/visits.js";
 import { themeRoutes } from "./routes/themes.js";
@@ -43,6 +44,7 @@ import { downloadRoutes } from "./routes/downloads.js";
 import { adminRoutes } from "./routes/admin.js";
 import { adminImmichRoutes, familyImmichRoutes } from "./routes/immich.js";
 import { checkServer } from "./lib/immich/provision.js";
+import { startJobs } from "./lib/jobs.js";
 import { SUPPORTED_RANGE } from "./lib/immich/version.js";
 
 export interface RegisteredRoute {
@@ -112,6 +114,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fileRoutes);
   await app.register(linkRoutes);
   await app.register(mediaRoutes);
+  await app.register(mediaFileRoutes);
   await app.register(mediaSuggestRoutes);
   await app.register(visitRoutes);
   await app.register(themeRoutes);
@@ -149,6 +152,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 async function main(): Promise<void> {
   const app = await buildApp();
   await app.listen({ host: "0.0.0.0", port: config.port });
+  // Background jobs (Immich library sync). If they can't start, the app still works.
+  await startJobs(app.log).catch((e) => app.log.warn(`Background jobs didn't start: ${e instanceof Error ? e.message : e}`));
   // Say whether Immich is there and supported; never stop the server over it.
   checkServer().then((c) => {
     if (!c) return;

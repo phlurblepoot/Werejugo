@@ -13,7 +13,7 @@ test("resolves a person's links to entity summaries", async () => {
   const visit = await query<{ id: string }>(
     "INSERT INTO visits (family_id, kind, title, occurred_on) VALUES ($1,'place','Eiffel Tower','2024-06-02') RETURNING id", [ctx.familyId]);
   const media = await query<{ id: string }>(
-    "INSERT INTO media (family_id, kind, rel_path, thumb_rel_path, caption) VALUES ($1,'image','loose/2024/a.jpg','loose/2024/a.thumb.jpg','Selfie') RETURNING id", [ctx.familyId]);
+    "INSERT INTO media (family_id, kind, immich_asset_id, caption) VALUES ($1,'image',gen_random_uuid(),'Selfie') RETURNING id", [ctx.familyId]);
   await query(`INSERT INTO links (family_id, from_type, from_id, to_type, to_id, role)
                VALUES ($1,'person',$2,'visit',$3,'visited'), ($1,'media',$4,'person',$2,'shows')`,
     [ctx.familyId, person.rows[0].id, visit.rows[0].id, media.rows[0].id]);
@@ -25,7 +25,7 @@ test("resolves a person's links to entity summaries", async () => {
   expect(rels).toHaveLength(2);
   const byType = Object.fromEntries(rels.map((r: any) => [r.entity.type, r.entity]));
   expect(byType.visit).toMatchObject({ label: "Eiffel Tower" });
-  expect(byType.media.thumbUrl).toContain("/api/files/");
+  expect(byType.media.thumbUrl).toMatch(/^\/api\/m\/[0-9a-f-]{36}\/thumbnail\?e=\d+&s=[\w-]+$/);
 });
 
 test("rejects a malformed entity ref", async () => {

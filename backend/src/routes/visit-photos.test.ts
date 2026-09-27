@@ -11,7 +11,7 @@ test("a visit DTO includes linked media as photos with signed urls", async () =>
   const v = await query<{ id: string }>(
     "INSERT INTO visits (family_id, kind, title) VALUES ($1,'place','Tower') RETURNING id", [ctx.familyId]);
   const m = await query<{ id: string }>(
-    "INSERT INTO media (family_id, kind, rel_path, thumb_rel_path, caption) VALUES ($1,'image','loose/2024/a.jpg','loose/2024/a.thumb.jpg','Nice') RETURNING id",
+    "INSERT INTO media (family_id, kind, immich_asset_id, caption) VALUES ($1,'image',gen_random_uuid(),'Nice') RETURNING id",
     [ctx.familyId]);
   await query(
     `INSERT INTO links (family_id, from_type, from_id, to_type, to_id, role)
@@ -21,8 +21,8 @@ test("a visit DTO includes linked media as photos with signed urls", async () =>
   const dto = res.json();
   expect(dto.photos).toHaveLength(1);
   expect(dto.photos[0]).toMatchObject({ mediaType: "image", caption: "Nice" });
-  expect(dto.photos[0].url).toContain("/api/files/");
-  expect(dto.photos[0].thumbUrl).toContain("sig=");
+  expect(dto.photos[0].url).toMatch(/^\/api\/m\/[0-9a-f-]{36}\/preview\?e=\d+&s=[\w-]+$/);
+  expect(dto.photos[0].thumbUrl).toMatch(/^\/api\/m\/[0-9a-f-]{36}\/thumbnail\?e=\d+&s=[\w-]+$/);
 });
 
 test("the map list carries photos, waypoints and tagged people for every place in one go", async () => {

@@ -4,6 +4,7 @@ import { HttpError } from "../errors.js";
 import { secretBox, SecretUnreadable } from "../secretbox.js";
 import { ADMIN_KEY_PERMISSIONS, ImmichError, immich, normalizeImmichUrl, type ImmichConn } from "./client.js";
 import { formatVersion, isSupported } from "./version.js";
+import { enqueueFamilySync } from "../jobs.js";
 
 /**
  * Werejugo's side of the Immich connection: the server settings (address +
@@ -90,6 +91,7 @@ export async function saveServer(url: string, adminKey: string, userId: string):
     `INSERT INTO immich_server (id, url, admin_key_sealed, updated_by, updated_at) VALUES (true, $1, $2, $3, now())
      ON CONFLICT (id) DO UPDATE SET url = $1, admin_key_sealed = $2, updated_by = $3, updated_at = now()`,
     [url, sealed, userId]);
+  forgetFamilyConn();
 }
 
 /** Ping + version + admin key; the result is stored for the admin page and the startup log. */
@@ -121,6 +123,24 @@ export function familyState(row: Pick<FamilyRow, "api_key_sealed" | "last_error"
   if (!row) return "none";
   if (!row.api_key_sealed || row.last_error) return "error";
   return row.mode;
+}
+
+const connCache = new Map<string, { conn: ImmichConn | null; at: number }>();
+const CONN_TTL_MS = 60_000;
+
+/** familyConn, remembered for a minute (the media proxy asks for it on every image). */
+export async function familyConnCached(familyId: string): Promise<ImmichConn | null> {
+  const hit = connCache.get(familyId);
+  if (hit && Date.now() - hit.at < CONN_TTL_MS) return hit.conn;
+  const conn = await familyConn(familyId);
+  connCache.set(familyId, { conn, at: Date.now() });
+  return conn;
+}
+
+/** Forget remembered connections (one family, or all) after anything changes them. */
+export function forgetFamilyConn(familyId?: string): void {
+  if (familyId) connCache.delete(familyId);
+  else connCache.clear();
 }
 
 /** The family's own connection to Immich (its key), or null if it has none. */
@@ -200,6 +220,9 @@ export async function provisionFamily(familyId: string): Promise<FamilyState> {
     await query(
       `UPDATE family_immich SET api_key_id = $2, api_key_sealed = $3, last_ok_at = now(), last_error = NULL WHERE family_id = $1`,
       [familyId, created.id, box.seal(created.secret)]);
+    forgetFamilyConn(familyId);
+    // Bring in whatever the account already holds.
+    await enqueueFamilySync(familyId, true);
     return "created";
   } catch (e) {
     const message = e instanceof Error ? e.message : "Setting up the Immich account failed";
@@ -232,6 +255,11 @@ export async function linkFamily(familyId: string, apiKey: string): Promise<void
      ON CONFLICT (family_id) DO UPDATE SET mode = 'linked', immich_email = $2, immich_user_id = $3, api_key_id = $4,
        api_key_sealed = $5, last_ok_at = now(), last_error = NULL`,
     [familyId, me.email, me.id, keyId, secretBox().seal(conn.key)]);
+  forgetFamilyConn(familyId);
+  // A linked account usually has photos already: bring them in, and forget any
+  // references to the previous account's photos.
+  await query("UPDATE family_immich SET sync_since = NULL WHERE family_id = $1", [familyId]);
+  await enqueueFamilySync(familyId, true);
 }
 
 /** Stop using the family's Immich account. Its key is revoked when possible; the account and photos stay in Immich. */
@@ -241,6 +269,7 @@ export async function unlinkFamily(familyId: string): Promise<boolean> {
   const conn = await familyConn(familyId);
   if (conn && row.api_key_id) await immich.deleteApiKey(conn, row.api_key_id).catch(() => {});
   await query("DELETE FROM family_immich WHERE family_id = $1", [familyId]);
+  forgetFamilyConn(familyId);
   return true;
 }
 

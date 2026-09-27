@@ -10,6 +10,7 @@ import {
   setFamilyPassword, unlinkFamily, verifyServer, type ServerCheck,
 } from "../lib/immich/provision.js";
 import { SUPPORTED_RANGE } from "../lib/immich/version.js";
+import { enqueueFamilySync } from "../lib/jobs.js";
 
 const id = (params: unknown) => (params as { id: string }).id;
 
@@ -21,8 +22,10 @@ async function overview() {
   const families = (await query<{
     id: string; name: string; mode: "created" | "linked" | null; immich_email: string | null;
     api_key_sealed: string | null; last_error: string | null; last_ok_at: string | null;
+    last_sync_at: string | null; sync_error: string | null; asset_count: number | null;
   }>(
-    `SELECT f.id, f.name, fi.mode, fi.immich_email, fi.api_key_sealed, fi.last_error, fi.last_ok_at
+    `SELECT f.id, f.name, fi.mode, fi.immich_email, fi.api_key_sealed, fi.last_error, fi.last_ok_at,
+            fi.last_sync_at, fi.sync_error, fi.asset_count
        FROM families f LEFT JOIN family_immich fi ON fi.family_id = f.id
       ORDER BY f.created_at`)).rows;
   return {
@@ -42,6 +45,9 @@ async function overview() {
       immichEmail: f.immich_email,
       lastError: f.last_error,
       lastOkAt: f.last_ok_at,
+      lastSyncAt: f.last_sync_at,
+      syncError: f.sync_error,
+      photoCount: f.asset_count,
     })),
   };
 }
@@ -117,6 +123,14 @@ export async function adminImmichRoutes(app: FastifyInstance): Promise<void> {
     return overview();
   });
 
+  // Bring a family's library up to date now (a full sync: new, changed and removed photos).
+  app.post("/api/admin/immich/families/:id/sync", async (req) => {
+    const row = (await query("SELECT 1 FROM family_immich WHERE family_id = $1 AND api_key_sealed IS NOT NULL", [id(req.params)])).rowCount;
+    if (!row) throw new HttpError(409, "That family isn't connected to Immich");
+    await enqueueFamilySync(id(req.params), true);
+    return { queued: true };
+  });
+
   // Every family without a working connection gets one.
   app.post("/api/admin/immich/connect-all", async (req) => {
     needEncryption();
@@ -144,12 +158,15 @@ export async function familyImmichRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
   app.get("/api/immich", async (req) => {
-    const row = (await query<{ mode: "created" | "linked"; immich_email: string; immich_user_id: string | null; api_key_sealed: string | null; last_error: string | null }>(
-      "SELECT mode, immich_email, immich_user_id, api_key_sealed, last_error FROM family_immich WHERE family_id = $1",
+    const row = (await query<{
+      mode: "created" | "linked"; immich_email: string; immich_user_id: string | null; api_key_sealed: string | null;
+      last_error: string | null; last_sync_at: string | null; asset_count: number | null;
+    }>(
+      "SELECT mode, immich_email, immich_user_id, api_key_sealed, last_error, last_sync_at, asset_count FROM family_immich WHERE family_id = $1",
       [req.user.familyId])).rows[0];
     const server = (await query<{ url: string }>("SELECT url FROM immich_server")).rows[0];
     const state = server ? familyState(row ?? null) : "none";
-    const base = { enabled: state === "created" || state === "linked", state };
+    const base = { enabled: state === "created" || state === "linked", state, lastSyncAt: row?.last_sync_at ?? null, photoCount: row?.asset_count ?? null };
     if (req.user.role !== "owner" || !row || !server) return base;
     return {
       ...base,
@@ -158,6 +175,14 @@ export async function familyImmichRoutes(app: FastifyInstance): Promise<void> {
       mode: row.mode,
       canSetPassword: row.mode === "created" && Boolean(row.immich_user_id),
     };
+  });
+
+  // "Refresh from Immich": pick up photos added or changed there, now instead of within a few minutes.
+  app.post("/api/immich/refresh", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req) => {
+    const ok = (await query("SELECT 1 FROM family_immich WHERE family_id = $1 AND api_key_sealed IS NOT NULL", [req.user.familyId])).rowCount;
+    if (!ok) throw new HttpError(409, "Photos need Immich. Ask the server admin to connect your family.");
+    await enqueueFamilySync(req.user.familyId, false);
+    return { queued: true };
   });
 
   app.post("/api/immich/password", { preHandler: requireOwner }, async (req) => {

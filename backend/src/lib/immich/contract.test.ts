@@ -156,6 +156,18 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(trashed.items.map((a) => a.id)).toContain(up.id);
   });
 
+  test("a file Immich can't take is refused with its reason", async () => {
+    const e = email();
+    await immich.createUser({ url, key: adminKey }, { email: e, name: "Contract Types", password: "types-password-1" });
+    const s = await immich.login(url, e, "types-password-1");
+    const fam = { url, key: (await immich.createApiKey({ url, token: s.accessToken }, "W")).secret };
+    const err = await errorOf(immich.uploadAsset(fam, new Blob(["hello"], { type: "text/plain" }), {
+      filename: "notes.txt", fileCreatedAt: "2024-01-01T00:00:00.000Z", fileModifiedAt: "2024-01-01T00:00:00.000Z",
+    }));
+    expect(err.kind).toBe("rejected");
+    expect(err.message).toMatch(/Unsupported file type/);
+  });
+
   test("a wrong key is refused as unauthorized", async () => {
     expect((await errorOf(immich.me({ url, key: "not-a-real-key" }))).kind).toBe("unauthorized");
   });

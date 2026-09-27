@@ -102,11 +102,10 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       "SELECT count(*)::int AS n FROM users WHERE is_admin AND family_id <> $1", [familyId])).rows[0].n;
     if (otherAdmins === 0) return reply.code(400).send({ error: "That family has the only server admin" });
 
-    // Collect its files first; rows cascade away with the family.
+    // Collect its document files first; rows cascade away with the family. (Its
+    // photos are in its Immich account, which Werejugo never deletes.)
     const files = (await query<{ p: string | null }>(
-      `SELECT rel_path AS p FROM media WHERE family_id = $1
-        UNION ALL SELECT thumb_rel_path FROM media WHERE family_id = $1
-        UNION ALL SELECT rel_path FROM documents WHERE family_id = $1`, [familyId])).rows.map((r) => r.p);
+      "SELECT rel_path AS p FROM documents WHERE family_id = $1", [familyId])).rows.map((r) => r.p);
     await tx(async (client) => {
       await client.query("DELETE FROM families WHERE id = $1", [familyId]);
       await audit({ actorId: req.user.id, action: "family.deleted", target: fam.name, details: { familyId, files: files.length } }, client);

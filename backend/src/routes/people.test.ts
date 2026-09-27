@@ -29,13 +29,12 @@ test("creates, lists, updates, and deletes a person", async () => {
 
 test("a person's avatar resolves to a signed url", async () => {
   const m = await query<{ id: string }>(
-    "INSERT INTO media (family_id, kind, rel_path, thumb_rel_path) VALUES ($1,'image','loose/2024/a.jpg','loose/2024/a.thumb.jpg') RETURNING id",
+    "INSERT INTO media (family_id, kind, immich_asset_id) VALUES ($1,'image',gen_random_uuid()) RETURNING id",
     [ctx.familyId]);
   const create = await ctx.app.inject({
     method: "POST", url: "/api/people", headers: auth(),
     payload: { displayName: "Dad", avatarMediaId: m.rows[0].id } });
-  expect(create.json().avatarUrl).toContain("/api/files/");
-  expect(create.json().avatarUrl).toContain("sig=");
+  expect(create.json().avatarUrl).toMatch(/^\/api\/m\/[0-9a-f-]{36}\/thumbnail\?e=\d+&s=[\w-]+$/);
 });
 
 test("rejects an avatar that isn't the family's media", async () => {

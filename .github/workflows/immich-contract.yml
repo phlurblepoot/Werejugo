@@ -85,4 +85,4 @@ jobs:
         run: npx vitest run src/lib/immich/contract.test.ts
       - name: Immich logs
         if: failure()
-        run: docker compose -f ci/immich/docker-compose.yml logs --tail 200 immich-server
+        run: docker compose -f ci/immich/docker-compose.yml logs --tail 60 immich-server

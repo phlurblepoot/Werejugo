@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { requireAuth } from "../lib/auth.js";
-import { signFileUrl } from "../lib/filesign.js";
+import { mediaUrls } from "../lib/media/urls.js";
 
 const makeToken = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 20);
 
@@ -66,12 +66,11 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
 
     const photosOf = async (whereTripPhotos = true) => {
       const { rows } = await query<any>(
-        `SELECT id, rel_path, thumb_rel_path, kind, caption FROM media
+        `SELECT id, kind, caption FROM media
          WHERE family_id = $1 AND trip_id = $2 ORDER BY taken_at NULLS LAST, created_at ASC`,
         [familyId, tripId]);
       return rows.map((m, i) => ({
-        id: m.id, url: signFileUrl(m.rel_path), thumbUrl: m.thumb_rel_path ? signFileUrl(m.thumb_rel_path) : null,
-        mediaType: m.kind, caption: m.caption, seq: i,
+        id: m.id, ...mediaUrls(m), mediaType: m.kind, caption: m.caption, seq: i,
       }));
     };
 
@@ -90,8 +89,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
     const visits = (await query<any>(
       `SELECT v.id, v.kind, v.title, v.notes, v.color, v.icon, v.occurred_on,
               ST_AsGeoJSON(v.geom) AS geom,
-              COALESCE((SELECT json_agg(json_build_object('id', m.id, 'rel_path', m.rel_path,
-                         'thumb_rel_path', m.thumb_rel_path, 'mediaType', m.kind, 'caption', m.caption) ORDER BY m.created_at)
+              COALESCE((SELECT json_agg(json_build_object('id', m.id, 'mediaType', m.kind, 'caption', m.caption) ORDER BY m.created_at)
                        FROM links l JOIN media m ON m.id = CASE WHEN l.from_type='media' THEN l.from_id ELSE l.to_id END
                                    AND m.family_id = l.family_id
                        WHERE l.family_id = v.family_id
@@ -103,8 +101,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
         id: r.id, kind: r.kind, title: r.title, notes: r.notes, color: r.color, icon: r.icon, occurredOn: r.occurred_on,
         geometry: r.geom ? JSON.parse(r.geom) : null,
         photos: (r.photos as any[]).map((p, i) => ({
-          id: p.id, url: signFileUrl(p.rel_path), thumbUrl: p.thumb_rel_path ? signFileUrl(p.thumb_rel_path) : null,
-          mediaType: p.mediaType, caption: p.caption, seq: i,
+          id: p.id, ...mediaUrls({ id: p.id, kind: p.mediaType }), mediaType: p.mediaType, caption: p.caption, seq: i,
         })),
       }));
 

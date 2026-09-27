@@ -108,6 +108,9 @@ function dateMatches(value: string | null, f: DateOp | undefined): boolean {
   return true;
 }
 
+/** File name extensions Immich accepts (a subset of its list, enough for tests). */
+const SUPPORTED_UPLOAD = /\.(jpe?g|png|gif|webp|heic|heif|avif|tiff?|dng|cr2|cr3|nef|arw|raf|orf|rw2|mp4|mov|m4v|webm|avi|mkv|3gp|mts)$/i;
+
 /** Serve bytes the way Immich does: ETag, Accept-Ranges, 304 and 206. */
 function sendBytes(req: FastifyRequest, reply: FastifyReply, a: FakeAsset, mime: string, attachment: boolean) {
   const etag = `"${a.checksum}-${a.updatedAt.length}"`;
@@ -304,6 +307,8 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       else if (typeof part.value === "string") fields[part.fieldname] = part.value;
     }
     if (!file || !fields.fileCreatedAt || !fields.fileModifiedAt) return fail(reply, 400, "assetData, fileCreatedAt and fileModifiedAt are required");
+    // Like Immich: the upload's own file name decides whether the type is supported.
+    if (!SUPPORTED_UPLOAD.test(file.filename)) return fail(reply, 400, `Unsupported file type ${file.filename}`);
     const checksum = createHash("sha1").update(file.buf).digest("base64");
     const dup = [...assets.values()].find((a) => a.ownerId === c.user.id && a.checksum === checksum);
     if (dup) return reply.code(200).send({ id: dup.id, status: "duplicate" });

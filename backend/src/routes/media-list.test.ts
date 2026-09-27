@@ -14,11 +14,11 @@ beforeAll(async () => {
   visitId = v.rows[0].id;
   // m1: in trip, taken June, near colosseum, linked to Mom
   const m1 = await query<{ id: string }>(
-    `INSERT INTO media (family_id, kind, rel_path, taken_at, geom, trip_id) VALUES
-     ($1,'image','loose/2024/a.jpg','2024-06-10T10:00:00Z', ST_SetSRID(ST_MakePoint(12.4925,41.8903),4326), $2) RETURNING id`, [ctx.familyId, tripId]);
+    `INSERT INTO media (family_id, kind, immich_asset_id, taken_at, geom, trip_id) VALUES
+     ($1,'image',gen_random_uuid(),'2024-06-10T10:00:00Z', ST_SetSRID(ST_MakePoint(12.4925,41.8903),4326), $2) RETURNING id`, [ctx.familyId, tripId]);
   await query("INSERT INTO links (family_id, from_type, from_id, to_type, to_id, role) VALUES ($1,'media',$2,'person',$3,'shows')", [ctx.familyId, m1.rows[0].id, personId]);
   // m2: no trip, taken March, no geom
-  await query("INSERT INTO media (family_id, kind, rel_path, taken_at) VALUES ($1,'image','loose/2024/b.jpg','2024-03-05T10:00:00Z')", [ctx.familyId]);
+  await query("INSERT INTO media (family_id, kind, immich_asset_id, taken_at) VALUES ($1,'image',gen_random_uuid(),'2024-03-05T10:00:00Z')", [ctx.familyId]);
 });
 afterAll(async () => { await closeTestApp(ctx); });
 const auth = () => ({ authorization: `Bearer ${ctx.token}` });
@@ -29,7 +29,7 @@ test("lists all family media newest-first with cursors", async () => {
   const body = res.json();
   expect(body.items).toHaveLength(2);
   expect(body.items[0].takenAt).toContain("2024-06-10"); // newest first
-  expect(body.items[0].url).toContain("/api/files/");
+  expect(body.items[0].url).toContain("/api/m/");
   expect(body.items[0].cursor).toBeTruthy();
 });
 

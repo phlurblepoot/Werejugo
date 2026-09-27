@@ -10,18 +10,6 @@ const fileId = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
 
 // No SVG: served from our own origin it could run script (stored XSS).
 export const ALLOWED_IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
-const VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".m4v"]);
-const AUDIO_EXT = new Set([".mp3", ".m4a", ".ogg", ".wav", ".aac"]);
-const ALLOWED_MEDIA_EXT = new Set([...ALLOWED_IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT]);
-
-export type MediaType = "image" | "video" | "audio";
-
-function mediaTypeFor(ext: string): MediaType {
-  if (VIDEO_EXT.has(ext)) return "video";
-  if (AUDIO_EXT.has(ext)) return "audio";
-  return "image";
-}
-
 async function writePart(
   part: { filename: string; file: NodeJS.ReadableStream },
   allowed: Set<string>,
@@ -44,29 +32,6 @@ export async function saveUpload(part: {
   return url;
 }
 
-/** Save an item attachment (image/video/audio) plus a thumbnail for raster images. */
-export async function savePhoto(part: {
-  filename: string;
-  file: NodeJS.ReadableStream;
-}): Promise<{ url: string; thumbUrl: string | null; mediaType: MediaType }> {
-  const { url, path, ext } = await writePart(part, ALLOWED_MEDIA_EXT);
-  const mediaType = mediaTypeFor(ext);
-  let thumbUrl: string | null = null;
-  if (mediaType === "image" && ext !== ".gif") {
-    try {
-      const thumbName = `${basename(url).replace(ext, "")}_thumb.jpg`;
-      await sharp(path)
-        .rotate() // respect EXIF orientation
-        .resize(400, 400, { fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 80 })
-        .toFile(join(config.uploadsDir, thumbName));
-      thumbUrl = `/uploads/${thumbName}`;
-    } catch {
-      thumbUrl = null; // fall back to the full image
-    }
-  }
-  return { url, thumbUrl, mediaType };
-}
 
 function extForContentType(ct: string): string | null {
   if (ct.includes("png")) return ".png";
@@ -79,7 +44,7 @@ function extForContentType(ct: string): string | null {
 /** Download an external image into uploads (+ thumbnail). Caller must validate the host. */
 export async function downloadImage(
   srcUrl: string,
-): Promise<{ url: string; thumbUrl: string | null; mediaType: MediaType } | null> {
+): Promise<{ url: string; thumbUrl: string | null; mediaType: "image" } | null> {
   let res: Response;
   try {
     res = await fetch(srcUrl, { headers: { "User-Agent": config.cruiseUserAgent } });

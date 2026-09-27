@@ -13,7 +13,7 @@ const auth = () => ({ authorization: `Bearer ${ctx.token}` });
 test("applies a trip (sets trip_id) and a visit (links) to media", async () => {
   const trip = await query<{ id: string }>("INSERT INTO trips (family_id, name, start_date) VALUES ($1,'Italy','2024-06-01') RETURNING id", [ctx.familyId]);
   const visit = await query<{ id: string }>("INSERT INTO visits (family_id, kind, title) VALUES ($1,'place','Colosseum') RETURNING id", [ctx.familyId]);
-  const m = await query<{ id: string }>("INSERT INTO media (family_id, kind, rel_path) VALUES ($1,'image','loose/2024/a.jpg') RETURNING id", [ctx.familyId]);
+  const m = await query<{ id: string }>("INSERT INTO media (family_id, kind, immich_asset_id) VALUES ($1,'image',gen_random_uuid()) RETURNING id", [ctx.familyId]);
   const abs = absStoragePath("loose/2024/a.jpg");
   await mkdir(dirname(abs), { recursive: true });
   await writeFile(abs, "x");
