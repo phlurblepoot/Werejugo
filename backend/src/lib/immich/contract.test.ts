@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startFakeImmich, type FakeImmich } from "../../test/fake-immich.js";
 import sharp from "sharp";
-import { ADMIN_KEY_PERMISSIONS, ImmichError, fetchMedia, immich, normalizeImmichUrl } from "./client.js";
+import { ADMIN_KEY_PERMISSIONS, ImmichError, fetchMedia, fetchPersonThumbnail, immich, normalizeImmichUrl } from "./client.js";
 import { isSupported } from "./version.js";
 
 /**
@@ -214,6 +214,34 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     const locked = await errorOf(immich.searchAssets(fam, { filter: { visibility: { in: ["hidden", "locked"] as never } }, size: 10 }));
     expect(locked.status).toBe(401);
   });
+
+  test("people: a face on a photo is listed, found by search, counted, renamed, and has a thumbnail", async () => {
+    const fam = await newFamily("Contract Faces");
+    const jpeg = await sharp({ create: { width: 400, height: 300, channels: 3, background: { r: 200, g: Math.floor(Math.random() * 255), b: 120 } } }).jpeg().toBuffer();
+    const up = await immich.uploadAsset(fam, new Blob([jpeg], { type: "image/jpeg" }), { filename: "grandma.jpg", fileCreatedAt: "2023-12-24T18:00:00.000Z", fileModifiedAt: "2023-12-24T18:00:00.000Z" });
+    // What recognition does: a person, and their face on the photo.
+    const person = await immich.createPerson(fam, "Contract Person");
+    await immich.createFace(fam, { assetId: up.id, personId: person.id, imageWidth: 400, imageHeight: 300, x: 120, y: 60, width: 120, height: 120 });
+
+    expect((await immich.listPeople(fam)).map((p) => p.id)).toContain(person.id);
+    const found = await immich.searchAssets(fam, { filter: { personIds: { any: [person.id] } }, size: 10 });
+    expect(found.items.map((a) => a.id)).toEqual([up.id]);
+    expect(await immich.personStats(fam, person.id)).toBe(1);
+    await immich.renamePerson(fam, person.id, "Grandma");
+    expect((await immich.listPeople(fam)).find((p) => p.id === person.id)?.name).toBe("Grandma");
+
+    // The face thumbnail is made in the background from the featured face.
+    await immich.setPersonFeatureFace(fam, person.id, up.id);
+    let thumb: Response | null = null;
+    for (let i = 0; i < 40; i++) {
+      thumb = await fetchPersonThumbnail(fam, person.id);
+      if (thumb.status === 200) break;
+      await thumb.arrayBuffer().catch(() => {});
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(thumb!.status).toBe(200);
+    expect(thumb!.headers.get("content-type")).toMatch(/^image\//);
+  }, 60_000);
 
   test("a file Immich can't take is refused with its reason", async () => {
     const e = email();

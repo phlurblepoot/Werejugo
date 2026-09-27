@@ -139,7 +139,32 @@ export const immich = {
   /** The asset's description (Werejugo's caption). PUT /assets/:id is deprecated in 3.2 but is the only way until 4.0. */
   setDescription: (c: ImmichConn, id: string, description: string) =>
     call("setDescription", c, (o) => sdk.updateAsset({ id, updateAssetDto: { description } }, o)),
+
+  // ---- People (the faces Immich recognised in an account's photos) ----
+
+  /** Every person in the account, hidden ones included. */
+  listPeople: async (c: ImmichConn) => {
+    const all: sdk.PersonResponseDto[] = [];
+    for (let page = 1; page <= 100; page++) {
+      const r = await call("listPeople", c, (o) => sdk.getAllPeople({ page, size: 500, withHidden: true }, o));
+      all.push(...r.people);
+      if (!r.hasNextPage || !r.people.length) break;
+    }
+    return all;
+  },
+  /** How many photos a person is in. */
+  personStats: (c: ImmichConn, id: string) => call("personStats", c, (o) => sdk.getPersonStatistics({ id }, o)).then((r) => r.assets),
+  renamePerson: (c: ImmichConn, id: string, name: string) =>
+    call("renamePerson", c, (o) => sdk.updatePerson({ id, personUpdateDto: { name } }, o)),
+  /** Which face shows as the person's thumbnail. */
+  setPersonFeatureFace: (c: ImmichConn, id: string, assetId: string) =>
+    call("setPersonFeatureFace", c, (o) => sdk.updatePerson({ id, personUpdateDto: { featureFaceAssetId: assetId } }, o)),
+  /** Making a person and a face by hand (what recognition does): for tests and the contract. */
+  createPerson: (c: ImmichConn, name: string) => call("createPerson", c, (o) => sdk.createPerson({ personCreateDto: { name } }, o)),
+  createFace: (c: ImmichConn, face: sdk.AssetFaceCreateDto) => call("createFace", c, (o) => sdk.createFace({ assetFaceCreateDto: face }, o)),
 };
+
+export type ImmichPerson = sdk.PersonResponseDto;
 
 interface UploadMeta { filename: string; fileCreatedAt: string; fileModifiedAt: string }
 
@@ -215,15 +240,24 @@ const MEDIA_PATH: Record<MediaSize, (id: string) => string> = {
 export async function fetchMedia(
   c: ImmichConn, assetId: string, size: MediaSize, pass: { range?: string; ifNoneMatch?: string } = {},
 ): Promise<Response> {
+  return fetchRaw(c, MEDIA_PATH[size](assetId), `media.${size}`, pass);
+}
+
+/** A person's face thumbnail (a JPEG), streamed like fetchMedia. */
+export async function fetchPersonThumbnail(c: ImmichConn, personId: string, pass: { ifNoneMatch?: string } = {}): Promise<Response> {
+  return fetchRaw(c, `/api/people/${personId}/thumbnail`, "person.thumbnail", pass);
+}
+
+async function fetchRaw(c: ImmichConn, path: string, op: string, pass: { range?: string; ifNoneMatch?: string }): Promise<Response> {
   const headers: Record<string, string> = { "x-api-key": c.key ?? "" };
   if (pass.range) headers.Range = pass.range;
   if (pass.ifNoneMatch) headers["If-None-Match"] = pass.ifNoneMatch;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    return await fetch(`${c.url}${MEDIA_PATH[size](assetId)}`, { headers, signal: ctrl.signal });
+    return await fetch(`${c.url}${path}`, { headers, signal: ctrl.signal });
   } catch (e) {
-    throw explain(`media.${size}`, c.url, e);
+    throw explain(op, c.url, e);
   } finally {
     clearTimeout(timer);
   }

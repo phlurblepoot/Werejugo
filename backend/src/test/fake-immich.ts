@@ -42,6 +42,10 @@ export interface FakeAsset {
   height: number | null;
   durationMs: number | null;
 }
+/** A person Immich recognised (or someone made by hand). */
+export interface FakePerson { id: string; ownerId: string; name: string; birthDate: string | null; isHidden: boolean; updatedAt: string; featureAssetId: string | null }
+/** A face: which person is in which photo. */
+export interface FakeFace { id: string; assetId: string; personId: string }
 type Caller = { user: User; key: ApiKey | null };
 
 export interface FakeImmich {
@@ -63,6 +67,11 @@ export interface FakeImmich {
   addAsset(ownerId: string, a?: Partial<FakeAsset>): FakeAsset;
   /** Delete for good (as after Immich empties its trash). */
   purgeAsset(id: string): void;
+  people: Map<string, FakePerson>;
+  faces: FakeFace[];
+  /** A person Immich recognised, and the photos their face is in. */
+  addPerson(ownerId: string, p?: Partial<FakePerson>, assetIds?: string[]): FakePerson;
+  addFace(assetId: string, personId: string): void;
   close(): Promise<void>;
 }
 
@@ -146,6 +155,22 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
   const failures = new Map<string, number>();
   const calls: string[] = [];
   const assets = new Map<string, FakeAsset>();
+  const people = new Map<string, FakePerson>();
+  const faces: FakeFace[] = [];
+  const mkPerson = (ownerId: string, p: Partial<FakePerson> = {}): FakePerson => {
+    const person: FakePerson = { id: randomUUID(), ownerId, name: "", birthDate: null, isHidden: false, updatedAt: now(), featureAssetId: null, ...p };
+    people.set(person.id, person);
+    return person;
+  };
+  const addFace = (assetId: string, personId: string) => {
+    faces.push({ id: randomUUID(), assetId, personId });
+    const person = people.get(personId);
+    if (person && !person.featureAssetId) person.featureAssetId = assetId;
+  };
+  const personDto = (p: FakePerson) => ({
+    id: p.id, name: p.name, birthDate: p.birthDate, isHidden: p.isHidden, isFavorite: false, color: "#aabbcc",
+    thumbnailPath: p.featureAssetId ? `/thumbs/${p.id}.jpeg` : "", updatedAt: p.updatedAt,
+  });
 
   const mkAsset = (ownerId: string, a: Partial<FakeAsset> = {}): FakeAsset => {
     const bytes = a.bytes ?? Buffer.from(`fake-image-${randomUUID()}`);
@@ -365,6 +390,79 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     return reply.code(204).send();
   });
 
+  // ---- People and faces ----
+  const ownPerson = (c: Caller, id: string) => {
+    const p = people.get(id);
+    return p && p.ownerId === c.user.id ? p : null;
+  };
+
+  app.get("/api/people", async (req, reply) => {
+    if (!enter("listPeople", reply)) return reply;
+    const c = auth(req, reply, "person.read");
+    if (!c) return reply;
+    const q = req.query as { page?: string; size?: string; withHidden?: string };
+    const page = Number(q.page ?? 1);
+    const size = Math.min(Number(q.size ?? 500), 1000);
+    const mine = [...people.values()].filter((p) => p.ownerId === c.user.id && (q.withHidden === "true" || !p.isHidden));
+    const slice = mine.slice((page - 1) * size, page * size);
+    return { people: slice.map(personDto), total: mine.length, hidden: mine.filter((p) => p.isHidden).length, hasNextPage: page * size < mine.length };
+  });
+
+  app.post("/api/people", async (req, reply) => {
+    if (!enter("createPerson", reply)) return reply;
+    const c = auth(req, reply, "person.create");
+    if (!c) return reply;
+    const b = (req.body ?? {}) as { name?: string };
+    return reply.code(201).send(personDto(mkPerson(c.user.id, { name: b.name ?? "" })));
+  });
+
+  app.put("/api/people/:id", async (req, reply) => {
+    if (!enter("updatePerson", reply)) return reply;
+    const c = auth(req, reply, "person.update");
+    if (!c) return reply;
+    const p = ownPerson(c, (req.params as { id: string }).id);
+    if (!p) return fail(reply, 400, "Not found or no person.update access");
+    const b = (req.body ?? {}) as { name?: string; isHidden?: boolean; featureFaceAssetId?: string };
+    if (b.name !== undefined) p.name = b.name;
+    if (b.isHidden !== undefined) p.isHidden = b.isHidden;
+    if (b.featureFaceAssetId !== undefined) p.featureAssetId = b.featureFaceAssetId;
+    p.updatedAt = now();
+    return personDto(p);
+  });
+
+  app.get("/api/people/:id/statistics", async (req, reply) => {
+    if (!enter("personStats", reply)) return reply;
+    const c = auth(req, reply, "person.statistics");
+    if (!c) return reply;
+    const p = ownPerson(c, (req.params as { id: string }).id);
+    if (!p) return fail(reply, 400, "Not found or no person.statistics access");
+    const ids = new Set(faces.filter((x) => x.personId === p.id && assets.get(x.assetId)?.trashedAt === null).map((x) => x.assetId));
+    return { assets: ids.size };
+  });
+
+  app.get("/api/people/:id/thumbnail", async (req, reply) => {
+    if (!enter("personThumbnail", reply)) return reply;
+    const c = auth(req, reply, "person.read");
+    if (!c) return reply;
+    const p = ownPerson(c, (req.params as { id: string }).id);
+    const a = p?.featureAssetId ? assets.get(p.featureAssetId) : null;
+    if (!p) return fail(reply, 400, "Not found or no person.read access");
+    if (!a) return reply.code(404).send({ message: "Person thumbnail not found", statusCode: 404 });
+    return reply.header("content-type", "image/jpeg").send(a.bytes);
+  });
+
+  app.post("/api/faces", async (req, reply) => {
+    if (!enter("createFace", reply)) return reply;
+    const c = auth(req, reply, "face.create");
+    if (!c) return reply;
+    const b = (req.body ?? {}) as { assetId?: string; personId?: string };
+    const a = b.assetId ? ownAsset(c, b.assetId) : null;
+    const p = b.personId ? ownPerson(c, b.personId) : null;
+    if (!a || !p) return fail(reply, 400, "Not found or no face.create access");
+    addFace(a.id, p.id);
+    return reply.code(201).send();
+  });
+
   app.post("/api/trash/restore/assets", async (req, reply) => {
     if (!enter("restoreAssets", reply)) return reply;
     const c = auth(req, reply, "asset.delete");
@@ -385,7 +483,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const c = auth(req, reply, "asset.read");
     if (!c) return reply;
     const b = (req.body ?? {}) as { filter?: Record<string, unknown>; cursor?: string; size?: number; withExif?: boolean };
-    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] } };
+    const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] }; personIds?: { any?: string[] } };
     // Like Immich: the locked folder is only for a PIN-unlocked session, never an API key.
     if (f.visibility?.eq === "locked" || f.visibility?.in?.includes("locked")) return fail(reply, 401, "Elevated permission is required");
     const size = Math.min(b.size ?? 250, 1000);
@@ -397,6 +495,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
       .filter((a) => trashedMatches(a.trashedAt, f.trashedAt))
       .filter((a) => dateMatches(a.updatedAt, f.updatedAt))
       .filter((a) => !f.id?.eq || a.id === f.id.eq)
+      .filter((a) => !f.personIds?.any || faces.some((x) => x.assetId === a.id && f.personIds!.any!.includes(x.personId)))
       .filter((a) => (f.visibility?.eq ? a.visibility === f.visibility.eq : f.visibility?.in ? f.visibility.in.includes(a.visibility) : a.visibility !== "hidden" && a.visibility !== "locked"))
       .sort((x, y) => (y.fileCreatedAt.localeCompare(x.fileCreatedAt)) || x.id.localeCompare(y.id));
     const page = matching.slice(offset, offset + size);
@@ -432,6 +531,14 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     users, keys, calls, assets,
     addAsset: (ownerId, a) => mkAsset(ownerId, a),
     purgeAsset: (id) => { assets.delete(id); },
+    people,
+    faces,
+    addPerson: (ownerId, p, assetIds = []) => {
+      const person = mkPerson(ownerId, p);
+      for (const id of assetIds) addFace(id, person.id);
+      return person;
+    },
+    addFace,
     version: opts.version ?? { major: 3, minor: 2, patch: 2, prerelease: null },
     failNext: (op, status) => { failures.set(op, status); },
     addAdminKey: (permissions) => mkKey(admin.id, "limited", permissions).secret,
