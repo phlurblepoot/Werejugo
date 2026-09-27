@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
 | **Current phase** | 2.5 |
-| **Next step** | Plan and build Phase 2.5: import each family's Immich people (faces), map them to Werejugo people (including cross-family linked people, using Immich's cluster groups), tag photos automatically, and a review queue for new faces |
+| **Next step** | Build Phase 2.5 ([plan](../plans/2026-09-27-phase-2.5-faces-people.md)): import each family's Immich people, map faces to Werejugo people (including another family's), tag their photos automatically (links with role `face`), a review queue for new faces |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -294,7 +294,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.5 Faces → people — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.5](../plans/2026-09-27-phase-2.5-faces-people.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] Import Immich people per family; mapping UI (Immich face ↔ Werejugo person, including cross-family linked people); auto-tag photos; review queue for new faces.
 
@@ -495,6 +495,8 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-27
+
+- **Note** — Planning 2.5: Immich's **cluster groups** (shared face recognition between accounts) aren't used yet, although the fork research suggested them. Immich's API doesn't say which of another account's people is the same person, so there's nothing for Werejugo to read, and CI's Immich runs no machine learning to test them against. Cross-family faces work through Werejugo instead: a family can map a face to another family's person it can see, and person links carry the photos across.
 
 - **Done** — Phase 2.4 Library UI (PR #2).
   - **Timeline:** the Photos page is one timeline, laid out from per-month counts and windowed. With 20,007 photos the first ones show in about 0.2 s, about 50 cells exist at a time, and scrolling fetches only the months that come into view. A year rail jumps anywhere.
