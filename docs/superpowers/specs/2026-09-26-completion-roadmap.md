@@ -11,11 +11,11 @@
 
 | Field | Value |
 |---|---|
-| **Current milestone** | Milestone 1 — Foundation: safe, multi-family, new design |
-| **Current phase** | 1.1 |
-| **Next step** | Milestone 1 review: the owner tests the preview image `claude-cool-hopper-pku4ne` (reset the database first — README), merges PR #1 and approves deleting the old branch (the last 1.1 item). Then plan Phase 2.1. |
-| **Blocked on** | The owner's Milestone 1 review |
-| **Last updated** | 2026-09-26 |
+| **Current milestone** | Milestone 2 — Photos on Immich |
+| **Current phase** | 2.1 |
+| **Next step** | Build Phase 2.1: `ENCRYPTION_KEY` + secret box → Immich adapter and stand-in Immich → admin Immich settings, health and provisioning → owner's Immich login → contract tests against a real Immich in CI → Unraid install guide (NVIDIA) |
+| **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
+| **Last updated** | 2026-09-27 |
 <!-- status:end -->
 
 **How tracking works**
@@ -98,6 +98,8 @@ Health: backend typecheck clean, **102/102** tests pass; frontend typecheck clea
 | Photo backend | **Immich is the photo store and backend**, but Werejugo must feel seamless (images look native to Werejugo) |
 | Immich accounts | Each family gets an **account on the owner's Immich server** (not yet installed) |
 | Immich features | **Faces → people, trip ↔ Immich album sync, smart search, auto-suggest trip photos, location data to suggest new trips/visited places** |
+| Photo uploads (2026-09-27) | **Uploaded through Werejugo.** Werejugo also sees everything in the family's Immich account, including photos added in Immich directly, and uses the people, places and dates in them to suggest trips, places and people, for existing items and new ones. Choosing photos for any item **browses the whole Immich library** |
+| Immich hardware (2026-09-27) | **NVIDIA RTX 5070**: the install guide uses CUDA for face recognition and NVENC for video (was §7 Q8) |
 | Albums | **Smart albums** (saved filters) |
 | Notifications | **Phone push** (web push) |
 | Document security | **Encrypt document files at rest** |
@@ -204,7 +206,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [x] B5: `ST_Force2D` on import, handle every part of MultiLineStrings, report skipped features.
 - [x] B6: parse `DATE` columns as plain `YYYY-MM-DD` strings; one shared frontend date formatter.
 - [x] Quick hardening: `@fastify/rate-limit` on auth, `@fastify/helmet` security headers, reject SVG uploads, `/api/auth/me` returns 401 (not 500) for a deleted user, nginx `client_max_body_size`/timeouts sized for chunked uploads and restore.
-- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`. *(Waiting on the owner's approval at the Milestone 1 review.)*
+- [ ] After `main` exists and the owner approves: delete `claude/confident-ramanujan-xDIFr`. *(Approved 2026-09-27. The session can't delete other branches, so the owner deletes it on GitHub; tick when it's gone.)*
 - [x] CI runs `node scripts/roadmap.mjs --check --changed-since origin/main` on every PR, so a PR that changes app code without updating this roadmap fails. (added 2026-09-26)
 
 #### 1.2 Design system & responsive shell — M
@@ -261,11 +263,12 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.1 Immich connector & provisioning — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.1](../plans/2026-09-27-phase-2.1-immich-connector.md) · **PR:** —
 
 - [ ] Admin setup (URL + admin key), version check, health on the admin page; per-family Immich user + API key creation (or link existing); keys encrypted at rest.
 - [ ] Adapter module; fixtures-based unit tests; contract tests against a real Immich in CI (a nightly job if too slow for every PR).
 - [ ] Unraid guide for installing Immich alongside Werejugo (GPU acceleration for face recognition optional).
+- [ ] A family can also use Immich directly (its web page or app): an owner sets the family's Immich password in Settings → Family. (added 2026-09-27)
 
 #### 2.2 Media references & seamless serving — M
 
@@ -274,6 +277,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 - [ ] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
 - [ ] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
 - [ ] pg-boss job queue (§3.7).
+- [ ] Library sync: everything in a family's Immich account, including photos added in Immich directly, shows up in Werejugo within minutes; edits and deletions follow. (added 2026-09-27)
 
 #### 2.3 Uploads at scale — M
 
@@ -286,6 +290,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 **Status:** Not started · **Plan:** — · **PR:** —
 
 - [ ] Virtualized timeline grid that stays fast at 20k+ items; filters; lightbox with video playback; hide/unlink; the Photos map with clustering and thumbnails.
+- [ ] Photo picker for any item (place, trip, person, itinerary item): browses the whole library, starting with photos taken near the item's dates and place. (added 2026-09-27)
 
 #### 2.5 Faces → people — M
 
@@ -305,6 +310,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 - [ ] For a trip: "143 photos taken during Italy 2024 (near its pins) — attach?"
 - [ ] For the library: location/date clusters not covered by any trip or visit → "Looks like you were in Lisbon, 3–9 March 2019 — create a trip?" and suggested visits from photo locations.
+- [ ] For existing items: photos for a place (its date and location), places missing from a trip (where its photos were taken), and people whose faces appear in a trip's or place's photos ("Grandma is in 12 photos from this trip — add her?"). (added 2026-09-27)
 
 #### 2.8 Smart search & smart albums — S
 
@@ -343,7 +349,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 **Status:** Not started · **Plan:** — · **PR:** —
 
-- [ ] **Encryption at rest** (AES-256-GCM) for document files, key from a required `DOCUMENTS_ENCRYPTION_KEY`, key-rotation command, and loud docs: back the key up separately (without it, backups can't decrypt documents).
+- [ ] **Encryption at rest** (AES-256-GCM) for document files, key from the server's `ENCRYPTION_KEY` (introduced in 2.1 for stored Immich keys), key-rotation command, and loud docs: back the key up separately (without it, backups can't decrypt documents).
 - [ ] Fix search focus loss and the empty-filter dead end; delete confirmations; the renewals banner uses all documents, not the filtered list.
 - [ ] Bookings on shared trips stay private to the adding family.
 
@@ -480,13 +486,22 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 5. **Booking-email parsing with an LLM:** decide at 4.6 (needs an API key; structured markup covers most bookings without it).
 6. **Base map tiles:** OpenFreeMap (free, no key) stays the default.
 7. **Printed book:** browser "Save as PDF" first; server-rendered PDFs only if needed.
-8. **Immich face recognition hardware:** CPU works; a GPU speeds it up if your Unraid box has one.
+8. ~~**Immich face recognition hardware:** CPU works; a GPU speeds it up if your Unraid box has one.~~ Decided 2026-09-27: an NVIDIA RTX 5070 (§2).
 
 ---
 
 ## 8. Progress & change log
 
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
+
+### 2026-09-27
+
+- **Changed** — Started Milestone 2 at Phase 2.1 ([plan](../plans/2026-09-27-phase-2.1-immich-connector.md)). The owner hasn't installed Immich yet, and this sandbox can't pull Immich's images. So development runs against a stand-in Immich built from Immich 3.2.2's published API spec, and CI runs the same tests against a real Immich 3.2.2. Supported range: Immich 3.2 up to (not including) 4.0. The Unraid guide comes first in 2.1 so the owner can install Immich while the rest is built.
+- **Changed** — Items added from the owner's answers: 2.1 a family can use Immich directly; 2.2 library sync of everything in the family's Immich account; 2.4 a photo picker on every item that browses the whole library; 2.7 suggestions for existing items (photos for places, missing places, people from faces). 3.3's document key becomes the shared `ENCRYPTION_KEY` introduced in 2.1.
+- **Decided** — Photos are uploaded through Werejugo, and Werejugo also reads everything in the family's Immich account (including photos added in Immich directly) and uses its people, places and dates to suggest trips, places and people, for existing items and new ones. The photo picker browses the whole Immich library (§2).
+- **Decided** — Immich hardware: an NVIDIA RTX 5070, so the guide uses CUDA for face recognition and NVENC for video (§7 Q8 → §2).
+- **Note** — Deleting `claude/confident-ramanujan-xDIFr` is approved. Its one commit (`d67ffc5`, a May styling refresh replaced by 1.2) isn't in `main`. The session's git access can't delete other branches, so the owner deletes it on GitHub, and 1.1 stays In review until then.
+- **Done** — Milestone 1 merged into `main` (PR #1), after the owner tested the preview on Unraid with a fresh database.
 
 ### 2026-09-26
 
