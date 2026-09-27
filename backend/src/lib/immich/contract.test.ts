@@ -160,7 +160,7 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(after.items.map((a) => a.id)).not.toContain(up.id);
     const trashed = await immich.searchAssets(fam, { filter: { trashedAt: { gt: started } }, size: 100 });
     expect(trashed.items.map((a) => a.id)).toContain(up.id);
-  });
+  }, 60_000); // a real Immich takes a few seconds to make the thumbnail
 
   test("a file Immich can't take is refused with its reason", async () => {
     const e = email();
