@@ -523,12 +523,33 @@ export interface MediaItem {
   /** Another family's photo on a shared trip is shown with who added it, view-only. */
   familyId?: string;
   familyName?: string | null;
+  /** Hidden from the library by the family (still in Immich). */
+  hidden?: boolean;
 }
 
 export interface MediaFilters {
   person?: string; trip?: string; visit?: string;
   from?: string; to?: string; bbox?: string;
+  kind?: "image" | "video";
+  /** "only": just the hidden photos. */
+  hidden?: "only";
+  /** "1": photos in no trip. */
+  noTrip?: "1";
+  /** "2025-07": one month. */
+  month?: string;
   limit?: number; before?: string;
+}
+
+export interface MediaTimeline { months: Array<{ month: string; count: number }>; total: number }
+
+/** The photo picker's opening view for an item. */
+export interface PickerSuggestions {
+  label: string;
+  window: { from: string; to: string } | null;
+  near: boolean;
+  /** The month the library should open at ("2025-07"). */
+  month: string | null;
+  items: Array<MediaItem & { attached: boolean; match: "both" | "date" | "place" }>;
 }
 
 export interface MediaPage { items: MediaItem[]; nextCursor: string | null; }
@@ -628,6 +649,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 const body = (data: unknown) => JSON.stringify(data);
+
+/** Filters as a query string (empty values left out). */
+function queryString(f: object): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  return qs.toString();
+}
 
 export const api = {
   // auth
@@ -747,11 +775,17 @@ export const api = {
   deletePhoto: (id: string) => request<void>(`/api/media/${id}`, { method: "DELETE" }),
 
   // media library
-  listMedia: (f: MediaFilters = {}) => {
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
-    return request<MediaPage>(`/api/media?${qs.toString()}`);
-  },
+  listMedia: (f: MediaFilters = {}) => request<MediaPage>(`/api/media?${queryString(f)}`),
+  mediaTimeline: (f: MediaFilters = {}) => request<MediaTimeline>(`/api/media/timeline?${queryString(f)}`),
+  mediaGeo: (f: MediaFilters = {}) => request<{ points: Array<[string, number, number, MediaType]> }>(`/api/media/geo?${queryString(f)}`),
+  mediaLinks: (ids: string[]) => request<Record<string, { thumbUrl: string | null; url: string }>>("/api/media/links", { method: "POST", body: body({ ids }) }),
+  bulkMedia: (data: { mediaIds: string[]; hidden?: boolean; tripId?: string | null }) =>
+    request<{ updated: number }>("/api/media/bulk", { method: "POST", body: body(data) }),
+  setMediaHidden: (id: string, hidden: boolean) =>
+    request<MediaItem>(`/api/media/${id}`, { method: "PATCH", body: body({ hidden }) }),
+  mediaFor: (entity: string) => request<PickerSuggestions>(`/api/media/for?entity=${encodeURIComponent(entity)}`),
+  attachMedia: (mediaIds: string[], to: string) =>
+    request<{ attached: number; skipped: Array<{ id: string; reason: string }> }>("/api/media/attach", { method: "POST", body: body({ mediaIds, to }) }),
   setMediaTrip: (id: string, tripId: string | null) =>
     request<unknown>(`/api/media/${id}`, { method: "PATCH", body: body({ tripId }) }),
   getMediaSuggestions: (mediaIds: string[]) =>

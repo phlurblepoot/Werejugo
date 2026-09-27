@@ -26,6 +26,7 @@ afterEach(async () => {
   await query("DELETE FROM links");
   await query("DELETE FROM media");
   await query("DELETE FROM visits");
+  await query("DELETE FROM trips");
   await query("DELETE FROM family_immich");
   await query("DELETE FROM immich_server");
 });
@@ -154,6 +155,18 @@ test("a photo added for a place is linked to it, even though nobody waits for it
   const media = (await get(id)).json().media;
   const link = (await query("SELECT from_id, to_id, role, created_by FROM links WHERE family_id = $1", [ctx.familyId])).rows[0];
   expect(link).toMatchObject({ from_id: media.id, to_id: visit, role: "appears_in", created_by: ctx.userId });
+});
+
+test("a photo added for a trip lands in that trip", async () => {
+  const trip = (await query("INSERT INTO trips (family_id, name) VALUES ($1, 'Kyoto') RETURNING id", [ctx.familyId])).rows[0].id;
+  const { id } = await uploadAll(await jpeg(), { linkTo: `trip:${trip}` });
+  await settleJobs();
+  const media = (await get(id)).json().media;
+  expect(media.tripId).toBe(trip);
+  // Someone else's trip is refused before any bytes.
+  const other = await addUser(ctx, { familyName: "Them", role: "owner" });
+  const theirs = (await query("INSERT INTO trips (family_id, name) VALUES ($1, 'Theirs') RETURNING id", [other.familyId])).rows[0].id;
+  expect((await create({ filename: "a.jpg", size: 10, mime: "image/jpeg", linkTo: `trip:${theirs}` })).statusCode).toBe(400);
 });
 
 test("a file already in the library comes back as a duplicate, restored if it was in Immich's trash", async () => {

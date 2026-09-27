@@ -23,7 +23,7 @@ export function PhotoFilters({ value, onChange, trips }: Props) {
         <EntityPicker type="person" placeholder="Filter by person…" onPick={(e) => { setLabels((l) => ({ ...l, person: e.label })); set({ person: e.id }); }} />
       )}
 
-      <select value={value.trip ?? ""} onChange={(e) => set({ trip: e.target.value || undefined })}>
+      <select aria-label="Trip" value={value.trip ?? ""} onChange={(e) => set({ trip: e.target.value || undefined, noTrip: undefined })}>
         <option value="">✈️ Any trip</option>
         {trips.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
       </select>
@@ -36,8 +36,18 @@ export function PhotoFilters({ value, onChange, trips }: Props) {
         <EntityPicker type="visit" placeholder="Filter by place…" onPick={(e) => { setLabels((l) => ({ ...l, visit: e.label })); set({ visit: e.id }); }} />
       )}
 
-      <input type="date" value={value.from ?? ""} title="From" onChange={(e) => set({ from: e.target.value || undefined })} />
-      <input type="date" value={value.to ?? ""} title="To" onChange={(e) => set({ to: e.target.value || undefined })} />
+      <input type="date" value={value.from ?? ""} title="From" aria-label="From" onChange={(e) => set({ from: e.target.value || undefined })} />
+      <input type="date" value={value.to ?? ""} title="To" aria-label="To" onChange={(e) => set({ to: e.target.value || undefined })} />
+
+      <select aria-label="Photos or videos" value={value.kind ?? ""} onChange={(e) => set({ kind: (e.target.value || undefined) as MediaFilters["kind"] })}>
+        <option value="">Photos &amp; videos</option>
+        <option value="image">Photos</option>
+        <option value="video">Videos</option>
+      </select>
+      <button type="button" className={`fchip${value.noTrip ? " act" : ""}`} aria-pressed={!!value.noTrip}
+        onClick={() => set({ noTrip: value.noTrip ? undefined : "1", trip: undefined })}>No trip</button>
+      <button type="button" className={`fchip${value.hidden ? " act" : ""}`} aria-pressed={!!value.hidden}
+        onClick={() => set({ hidden: value.hidden ? undefined : "only" })}>Hidden</button>
     </div>
   );
 }

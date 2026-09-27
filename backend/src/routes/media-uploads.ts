@@ -74,7 +74,8 @@ export async function mediaUploadRoutes(app: FastifyInstance): Promise<void> {
     if (b.size > config.maxUploadBytes) throw badRequest(`That file is ${gb(b.size)}; the most one upload can be is ${gb(config.maxUploadBytes)}`);
     if (b.linkTo) {
       const ref = parseRef(b.linkTo);
-      if (!ref || !isAllowedPair("media", ref.type)) throw badRequest("Photos can't be linked to that");
+      // A place or person is linked; a trip becomes the photo's trip.
+      if (!ref || !(ref.type === "trip" || isAllowedPair("media", ref.type))) throw badRequest("Photos can't be linked to that");
       await assertRefs(scope, { [ref.type]: ref.id });
     }
     if (!(await familyConnCached(scope.familyId).catch(() => null))) throw new HttpError(409, NO_IMMICH);

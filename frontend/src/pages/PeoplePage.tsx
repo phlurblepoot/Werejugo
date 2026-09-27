@@ -10,7 +10,8 @@ import { PersonForm } from "../components/people/PersonForm";
 import { PersonLinkRequests, PersonLinks } from "../components/people/PersonLinks";
 import { EmptyState, ErrorState, Spinner } from "../components/ui";
 import { Button, PageHeader } from "../components/kit";
-import { Plus, Users } from "lucide-react";
+import { ImagePlus, Plus, Users } from "lucide-react";
+import { PhotoPicker } from "../components/photos/PhotoPicker";
 
 export function PeoplePage() {
   const qc = useQueryClient();
@@ -26,6 +27,7 @@ export function PeoplePage() {
   }, [params, setParams]);
   const [editing, setEditing] = useState<Person | null>(null);
   const [adding, setAdding] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const selected = people?.find((p) => p.id === selectedId) ?? null;
   const refresh = () => qc.invalidateQueries({ queryKey: ["people"] });
@@ -90,7 +92,9 @@ export function PeoplePage() {
             {selected.userId && <span className="er-sub">Linked to a login account</span>}
           </div>
           {selected.notes && <p>{selected.notes}</p>}
-          <RelatedPanel entity={`person:${selected.id}`} addTypes={["visit", "trip", "media"]} />
+          <RelatedPanel entity={`person:${selected.id}`} addTypes={["visit", "trip"]} />
+          <Button size="sm" icon={ImagePlus} onClick={() => setPicking(true)}>Add photos</Button>
+          {picking && <PhotoPicker entity={`person:${selected.id}`} uploadLinkTo={`person:${selected.id}`} onClose={() => setPicking(false)} />}
           <PersonLinks personId={selected.id} personName={selected.displayName} />
         </EntityDetail>
       )}

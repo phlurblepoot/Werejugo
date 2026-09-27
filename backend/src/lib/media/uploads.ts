@@ -8,6 +8,7 @@ import { query } from "../../db/pool.js";
 import { HttpError } from "../errors.js";
 import { ImmichError } from "../immich/client.js";
 import { familyConnCached } from "../immich/provision.js";
+import { assertRefs } from "../access.js";
 import { createLink } from "../links.js";
 import { importToImmich, NO_IMMICH } from "./import.js";
 
@@ -106,11 +107,17 @@ export async function handOff(id: string, opts: { finalAttempt: boolean }): Prom
       fileModifiedAt: u.file_modified_at ? new Date(u.file_modified_at).toISOString() : null, caption: u.caption || undefined,
     });
     let note: string | null = null;
-    // The link it was added for (a place, a person), as the person who added it.
+    // What it was added for (a place, a person, a trip), as the person who added it.
     if (u.link_to && u.user_id) {
+      const scope = { userId: u.user_id, familyId: u.family_id, role: "member" as const, isAdmin: false };
       try {
-        await createLink({ userId: u.user_id, familyId: u.family_id, role: "member", isAdmin: false },
-          `media:${r.mediaId}`, u.link_to, u.link_role);
+        if (u.link_to.startsWith("trip:")) {
+          const tripId = u.link_to.slice(5);
+          await assertRefs(scope, { trip: tripId });
+          await query("UPDATE media SET trip_id = $1 WHERE id = $2 AND family_id = $3", [tripId, r.mediaId, u.family_id]);
+        } else {
+          await createLink(scope, `media:${r.mediaId}`, u.link_to, u.link_role);
+        }
       } catch (e) {
         note = `Added, but not linked: ${e instanceof Error ? e.message : "the link failed"}`;
       }
