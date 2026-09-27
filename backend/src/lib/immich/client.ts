@@ -105,4 +105,54 @@ export const immich = {
   createApiKey: (c: ImmichConn, name: string) =>
     call("createApiKey", c, (o) => sdk.createApiKey({ apiKeyCreateDto: { name, permissions: [sdk.Permission.All] } }, o)),
   deleteApiKey: (c: ImmichConn, id: string) => call("deleteApiKey", c, (o) => sdk.deleteApiKey({ id }, o)),
+
+  // ---- Assets (a family's photos and videos) ----
+
+  /** Hand a file to Immich. `duplicate` means the same file is already in the account (its id is returned). */
+  uploadAsset: (c: ImmichConn, file: Blob, meta: { filename: string; fileCreatedAt: string; fileModifiedAt: string }) =>
+    call("uploadAsset", c, (o) => sdk.uploadAsset({ assetMediaCreateDto: { assetData: file, ...meta } }, { ...o, signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS) })),
+  getAsset: (c: ImmichConn, id: string) => call("getAsset", c, (o) => sdk.getAssetInfo({ id }, o)),
+  /** Immich 3.2's structured search: `filter`, cursor paging, optional EXIF in the results. */
+  searchAssets: (c: ImmichConn, q: { filter?: sdk.SearchFilter; cursor?: string; size?: number; withExif?: boolean }) =>
+    call("searchAssets", c, (o) => sdk.searchAssets({ metadataSearchDto: { ...q } }, o)).then((r) => r.assets),
+  /** Move to Immich's trash (restorable there); never a permanent delete. */
+  trashAssets: (c: ImmichConn, ids: string[]) =>
+    call("trashAssets", c, (o) => sdk.deleteAssets({ assetBulkDeleteDto: { ids, force: false } }, o)),
+  /** The asset's description (Werejugo's caption). PUT /assets/:id is deprecated in 3.2 but is the only way until 4.0. */
+  setDescription: (c: ImmichConn, id: string, description: string) =>
+    call("setDescription", c, (o) => sdk.updateAsset({ id, updateAssetDto: { description } }, o)),
 };
+
+const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+
+export type MediaSize = "thumbnail" | "preview" | "original" | "video";
+
+const MEDIA_PATH: Record<MediaSize, (id: string) => string> = {
+  thumbnail: (id) => `/api/assets/${id}/thumbnail?size=thumbnail`,
+  preview: (id) => `/api/assets/${id}/thumbnail?size=preview`,
+  original: (id) => `/api/assets/${id}/original`,
+  video: (id) => `/api/assets/${id}/video/playback`,
+};
+
+/**
+ * A photo or video's bytes, streamed straight through (Range and If-None-Match
+ * passed on). Only waiting for Immich to start answering is time-limited;
+ * a long video keeps streaming. Resolves with Immich's own Response (any
+ * status); rejects with an ImmichError if Immich can't be reached.
+ */
+export async function fetchMedia(
+  c: ImmichConn, assetId: string, size: MediaSize, pass: { range?: string; ifNoneMatch?: string } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { "x-api-key": c.key ?? "" };
+  if (pass.range) headers.Range = pass.range;
+  if (pass.ifNoneMatch) headers["If-None-Match"] = pass.ifNoneMatch;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(`${c.url}${MEDIA_PATH[size](assetId)}`, { headers, signal: ctrl.signal });
+  } catch (e) {
+    throw explain(`media.${size}`, c.url, e);
+  } finally {
+    clearTimeout(timer);
+  }
+}
