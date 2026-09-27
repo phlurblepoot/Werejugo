@@ -2,6 +2,7 @@ import { PgBoss } from "pg-boss";
 import { config } from "../config.js";
 import { connectedFamilies, syncFamily } from "./immich/sync.js";
 import { syncFaces } from "./immich/faces.js";
+import { syncAlbums } from "./immich/albums.js";
 import { cleanupUploads, handOff } from "./media/uploads.js";
 
 /**
@@ -58,6 +59,14 @@ export async function startJobs(log: Log): Promise<void> {
       return null;
     });
     if (f && (f.tagged || f.untagged)) log.info(`Faces for ${r.familyId}: ${f.tagged} photos tagged, ${f.untagged} untagged`);
+    // Then the trips' albums, both ways.
+    const a = await syncAlbums(job.data.familyId, { full: job.data.full }).catch((err) => {
+      log.warn({ err: err instanceof Error ? err.message : err }, "album sync failed");
+      return null;
+    });
+    if (a && (a.created || a.added || a.removed || a.joined || a.left || a.deleted || a.errors)) {
+      log.info(`Albums for ${r.familyId}: ${a.created} made, ${a.added} added, ${a.removed} removed, ${a.joined} put in trips, ${a.left} taken out, ${a.deleted} deleted, ${a.errors} failed`);
+    }
   });
   await b.work<{ uploadId: string }>(Q.handoff, async ([job]) => {
     await handOff(job.data.uploadId, { finalAttempt: job.retryCount >= HANDOFF_RETRIES });
@@ -85,9 +94,29 @@ export async function enqueueFamilySync(familyId: string, full = false): Promise
     return;
   }
   const p: Promise<unknown> = syncFamily(familyId, { full })
-    .then((r) => (r.skipped ? null : syncFaces(familyId, { full })))
+    .then(async (r) => {
+      if (r.skipped) return;
+      await syncFaces(familyId, { full }).catch(() => {});
+      await syncAlbums(familyId, { full });
+    })
     .catch(() => {}).finally(() => inline.delete(p));
   inline.add(p);
+}
+
+const albumsAsked = new Set<string>();
+/**
+ * Bring these families' trip albums up to date straight away, after something
+ * in Werejugo changed a photo's trip or a trip. Asks already waiting are merged;
+ * one that's missed is caught by the next sync (the triggers mark the albums).
+ */
+export function enqueueAlbumSync(...familyIds: Array<string | null | undefined>): void {
+  for (const familyId of new Set(familyIds)) {
+    if (!familyId || albumsAsked.has(familyId)) continue;
+    albumsAsked.add(familyId);
+    const p: Promise<unknown> = syncAlbums(familyId, { onStart: () => albumsAsked.delete(familyId) })
+      .catch(() => {}).finally(() => inline.delete(p));
+    inline.add(p);
+  }
 }
 
 /** Hand a fully received upload to Immich soon. */

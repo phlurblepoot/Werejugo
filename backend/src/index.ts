@@ -47,7 +47,7 @@ import { downloadRoutes } from "./routes/downloads.js";
 import { adminRoutes } from "./routes/admin.js";
 import { adminImmichRoutes, familyImmichRoutes } from "./routes/immich.js";
 import { checkServer } from "./lib/immich/provision.js";
-import { startJobs } from "./lib/jobs.js";
+import { enqueueAlbumSync, startJobs } from "./lib/jobs.js";
 import { SUPPORTED_RANGE } from "./lib/immich/version.js";
 
 export interface RegisteredRoute {
@@ -110,6 +110,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     for (const method of [r.method].flat()) if (method !== "HEAD") routes.push({ method, url: r.url });
   });
   app.decorate("registeredRoutes", routes);
+
+  // After anything that can change a photo's trip (or a trip), bring the family's
+  // Immich albums up to date straight away (lib/immich/albums.ts). Trips' own
+  // routes also ask for the other families on the trip.
+  const ALBUM_ROUTES = new Set([
+    "PATCH /api/media/:id", "POST /api/media/bulk", "POST /api/media/attach", "POST /api/media/apply-suggestion",
+    "POST /api/links", "POST /api/trip-invites/:token/accept",
+  ]);
+  app.addHook("onResponse", async (req, reply) => {
+    if (reply.statusCode < 400 && req.user?.familyId && ALBUM_ROUTES.has(`${req.method} ${req.routeOptions.url}`)) {
+      enqueueAlbumSync(req.user.familyId);
+    }
+  });
 
   app.get("/api/health", async () => ({ ok: true }));
 

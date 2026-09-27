@@ -43,6 +43,7 @@ beforeAll(async () => {
   A.person2 = await one(`INSERT INTO people (family_id, display_name) VALUES ($1, '${CANARY} person 2') RETURNING id`, [fa]);
   A.personLink = await one("INSERT INTO person_links (person_a, person_b) VALUES ($1, $2) RETURNING id", [A.person, A.person2]);
   await query(`INSERT INTO activity (trip_id, family_id, kind, summary) VALUES ($1, $2, 'visit.added', '${CANARY} activity')`, [A.trip, fa]);
+  await query("INSERT INTO trip_albums (family_id, trip_id, immich_album_id, name) VALUES ($1, $2, gen_random_uuid(), 'A album') ON CONFLICT (family_id, trip_id) DO UPDATE SET immich_album_id = EXCLUDED.immich_album_id, name = EXCLUDED.name", [fa, A.trip]);
   A.face = await one(`INSERT INTO immich_people (family_id, immich_person_id, name, photo_count) VALUES ($1, gen_random_uuid(), '${CANARY} face', 5) RETURNING id`, [fa]);
   A.upload = await one(`INSERT INTO media_uploads (family_id, user_id, filename, size, state, error) VALUES ($1, $2, '${CANARY}.jpg', 100, 'failed', 'x') RETURNING id`, [fa, A.user]);
 
@@ -84,6 +85,7 @@ async function snapshotA(): Promise<string> {
     family_immich: "SELECT * FROM family_immich WHERE family_id = $1",
     media_uploads: "SELECT * FROM media_uploads WHERE family_id = $1",
     immich_people: "SELECT * FROM immich_people WHERE family_id = $1",
+    trip_albums: "SELECT * FROM trip_albums WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -129,6 +131,7 @@ const CASES: Case[] = [
   c("POST /api/trips", () => "/api/trips", "clean", () => ({ name: "B's own trip" })),
   c("PATCH /api/trips/:id", () => `/api/trips/${A.trip}`, 404, () => ({ name: "hijacked" })),
   c("DELETE /api/trips/:id", () => `/api/trips/${A.trip}`, 404),
+  c("GET /api/trips/:id/album", () => `/api/trips/${A.trip}/album`, 404),
   c("GET /api/trips/:tripId/itinerary", () => `/api/trips/${A.trip}/itinerary`, 404),
   c("POST /api/trips/:tripId/itinerary", () => `/api/trips/${A.trip}/itinerary`, 404, () => ({ title: "x" })),
   c("PATCH /api/itinerary/:id", () => `/api/itinerary/${A.itinerary}`, 404, () => ({ title: "x" })),

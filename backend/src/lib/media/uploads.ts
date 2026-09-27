@@ -10,6 +10,7 @@ import { ImmichError } from "../immich/client.js";
 import { familyConnCached } from "../immich/provision.js";
 import { assertRefs } from "../access.js";
 import { createLink } from "../links.js";
+import { enqueueAlbumSync } from "../jobs.js";
 import { importToImmich, NO_IMMICH } from "./import.js";
 
 /**
@@ -118,6 +119,7 @@ export async function handOff(id: string, opts: { finalAttempt: boolean }): Prom
         } else {
           await createLink(scope, `media:${r.mediaId}`, u.link_to, u.link_role);
         }
+        enqueueAlbumSync(u.family_id); // a photo for a trip (or a trip's place) goes in its album
       } catch (e) {
         note = `Added, but not linked: ${e instanceof Error ? e.message : "the link failed"}`;
       }

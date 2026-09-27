@@ -167,6 +167,7 @@ export const immich = {
 
   /** The albums the account owns (not ones shared with it). No assets: search by album for those. */
   listAlbums: (c: ImmichConn) => call("listAlbums", c, (o) => sdk.getAllAlbums({ isOwned: true }, o)),
+  getAlbum: (c: ImmichConn, id: string) => call("getAlbum", c, (o) => sdk.getAlbumInfo({ id }, o)),
   createAlbum: (c: ImmichConn, albumName: string, description: string, assetIds: string[] = []) =>
     call("createAlbum", c, (o) => sdk.createAlbum({ createAlbumDto: { albumName, description, assetIds } }, o)),
   renameAlbum: (c: ImmichConn, id: string, albumName: string) =>
