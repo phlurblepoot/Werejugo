@@ -13,7 +13,7 @@
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
 | **Current phase** | 2.2 |
-| **Next step** | Plan and build Phase 2.2: `media` becomes references to Immich assets, pg-boss jobs, library sync from each family's Immich account, and proxied thumbnails/previews/originals/video with cacheable signed URLs |
+| **Next step** | Build Phase 2.2: adapter asset calls + contract tests → migration 0005 (media = Immich references) → signed media proxy with Range → upload hands off to Immich → pg-boss sync (incremental + nightly reconcile) → frontend (no-Immich state, video, original download) |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -272,7 +272,7 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.2 Media references & seamless serving — M
 
-**Status:** Not started · **Plan:** — · **PR:** —
+**Status:** In progress · **Plan:** [phase-2.2](../plans/2026-09-27-phase-2.2-media-on-immich.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
 - [ ] `media` becomes a reference table (§3.6); drop the local photo pipeline (test data only, so no migration).
 - [ ] Proxy endpoints for thumb/preview/original/video with Range support and **cacheable** signed URLs (time-bucketed, fixing today's every-request `Date.now()` signatures).
