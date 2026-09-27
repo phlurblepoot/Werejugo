@@ -11,6 +11,7 @@ import { CruiseForm } from "./CruiseForm";
 import { DriveForm } from "./DriveForm";
 import { AppearanceTab } from "./AppearanceTab";
 import { VisitPhotos, type StagedPhoto } from "./VisitPhotos";
+import { useUploads } from "../../lib/uploads/UploadsProvider";
 
 interface Props {
   item: Item | null;
@@ -39,6 +40,7 @@ export function VisitEditor(props: Props) {
   const [flightResult, setFlightResult] = useState<LookupResult | null>(null);
 
   const isPoint = POINT_KINDS.includes(draft.kind);
+  const uploads = useUploads();
 
   async function pickOnMap() {
     setPicking(true);
@@ -60,11 +62,11 @@ export function VisitEditor(props: Props) {
     try {
       const payload = buildPayload();
       const saved = editing && item ? await api.updateItem(item.id, payload) : await api.createItem(payload);
-      // Upload any staged photos in parallel, then link each to the saved visit.
-      await Promise.all(staged.map(async (p) => {
-        const m = await api.uploadMedia(p.file, p.caption);
-        await api.createLink(`media:${m.id}`, `visit:${saved.id}`, "appears_in");
-      }));
+      // Staged photos upload in the background (the upload tray shows them);
+      // the server links each one to the place when it arrives.
+      if (staged.length) {
+        uploads.add(staged.map((p) => ({ file: p.file, caption: p.caption })), { linkTo: `visit:${saved.id}`, linkRole: "appears_in" });
+      }
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save");

@@ -35,11 +35,13 @@ services:
       NOMINATIM_URL: ${NOMINATIM_URL:-https://nominatim.openstreetmap.org}
       NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-Werejugo/0.1}
       CRUISE_LOOKUP_ENABLED: ${CRUISE_LOOKUP_ENABLED:-true}
+      # The largest single photo or video that can be uploaded, in GB.
+      MAX_UPLOAD_GB: ${MAX_UPLOAD_GB:-20}
     volumes:
       # Photos, videos and documents. Without this volume they are lost when
       # the container is recreated.
       - storage:/app/storage
-      # Custom pin icons.
+      # Custom pin icons, and photos/videos while they upload (then handed to Immich).
       - uploads:/app/uploads
     # The backend is reached through the frontend's nginx proxy, so it only needs
     # to be visible inside the compose network — not published to the host.

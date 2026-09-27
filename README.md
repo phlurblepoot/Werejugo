@@ -58,13 +58,16 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 | `JWT_SECRET` | Signs login tokens. **Required in production**, at least 32 characters | — |
 | `FILE_SIGNING_SECRET` | Signs photo/document links | derived from `JWT_SECRET` |
 | `ENCRYPTION_KEY` | Encrypts the Immich keys Werejugo stores (and, later, document files). At least 32 characters (`openssl rand -hex 32`). Needed to turn on Immich. **Keep a copy**: a backup restored without it needs the Immich keys entered again | — |
-| `STORAGE_DIR` | Photos, videos, documents (browsable tree) | `/app/storage` |
-| `UPLOADS_DIR` | Custom pin icons | `/app/uploads` |
+| `STORAGE_DIR` | Document files (browsable tree) | `/app/storage` |
+| `UPLOADS_DIR` | Custom pin icons, and photos and videos while they upload (each is removed once Immich has it). Leave room for the largest batch you'll upload | `/app/uploads` |
+| `MAX_UPLOAD_GB` | The largest single photo or video that can be uploaded | `20` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `http://localhost:8080` |
 
 ## Photos (Immich)
 
 Each family's photos and videos live in its own account on an [Immich](https://immich.app) server next to Werejugo; Werejugo shows them in its own pages (thumbnails, previews, originals and seekable video at its own signed links) and Immich stays off the internet. Uploading in Werejugo puts the file in the family's Immich account; photos added in Immich directly show up in Werejugo within about five minutes (or at once with **Refresh from Immich** on the Photos page), and edits and deletions follow. Deleting a photo in Werejugo moves it to Immich's trash, where it can be restored for 30 days. Install Immich with [docs/immich-on-unraid.md](docs/immich-on-unraid.md), set `ENCRYPTION_KEY` on the backend, then connect it in **Admin → Immich** (address + an Immich admin API key) and **Connect all families**. Werejugo supports Immich 3.2 up to (not including) 4.0.
+
+**Uploading:** files go up in 8 MB pieces (well under Cloudflare's 100 MB request limit), three at a time, with each file's progress in the upload panel at the bottom of the screen. A dropped connection is retried on its own; after a reload, choose the same file again and it continues where it stopped. Once a file is in, Werejugo hands it to Immich in the background, so you can leave the page; a photo added to a place or person is linked to it when it arrives. A file already in the library says "Already in your library" (and comes back out of Immich's trash if it was deleted). iPhone HEIC and Live Photos, camera RAW files and videos go to Immich as they are. On an iPhone, Safari usually sends a JPEG copy and only the still of a Live Photo; for full quality, back the phone up with Immich's own app (the photos then appear in Werejugo through the sync).
 
 > **Upgrading from Milestone 1:** photos uploaded before Immich was added aren't carried over (the milestone ran on test data). Their files stay in the `storage` folder under `families/<id>/…/photos` and `families/<id>/loose/`; delete those folders once you no longer need them.
 

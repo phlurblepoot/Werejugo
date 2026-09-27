@@ -492,6 +492,13 @@ export interface MediaDto {
   duplicate?: boolean;
 }
 
+/** A photo or video on its way to Immich (uploaded in pieces). */
+export interface MediaUpload {
+  id: string; filename: string; size: number; offset: number;
+  state: "receiving" | "processing" | "done" | "failed";
+  duplicate: boolean; error: string | null; canRetry: boolean; media: MediaDto | null;
+}
+
 export interface MediaItem {
   id: string;
   kind: MediaType;
@@ -802,13 +809,13 @@ export const api = {
   searchEntities: (type: CoreType, q: string) =>
     request<EntitySummary[]>(`/api/entities/search?type=${type}&q=${encodeURIComponent(q)}`),
 
-  // generic media + links
-  uploadMedia: (file: File, caption = "") => {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("caption", caption);
-    return request<MediaDto>("/api/media", { method: "POST", body: fd });
-  },
+  // Photo and video uploads go in pieces (lib/uploads); the pieces themselves go by XHR, for progress.
+  createUpload: (b: { filename: string; size: number; mime: string; lastModified?: number; caption?: string; linkTo?: string; linkRole?: string }) =>
+    request<MediaUpload & { chunkSize: number }>("/api/media/uploads", { method: "POST", body: body(b) }),
+  getUpload: (id: string) => request<MediaUpload>(`/api/media/uploads/${id}`),
+  listUploads: () => request<{ items: MediaUpload[] }>("/api/media/uploads"),
+  retryUpload: (id: string) => request<MediaUpload>(`/api/media/uploads/${id}/retry`, { method: "POST" }),
+  cancelUpload: (id: string) => request<void>(`/api/media/uploads/${id}`, { method: "DELETE" }),
   createLink: (from: string, to: string, role = "") =>
     request<{ id: string }>("/api/links", { method: "POST", body: body({ from, to, role }) }),
   deleteLink: (id: string) => request<void>(`/api/links/${id}`, { method: "DELETE" }),

@@ -150,6 +150,7 @@ This needs the Werejugo version with the Immich connection (Milestone 2, phase 2
    - Enter `http://<your-unraid-ip>:2283` and paste the key.
    - Click **Test & save**, then **Connect all families**. Each family gets its own Immich account.
 3. **Optional:** a family owner can set the family's Immich password (**Settings → Family → Photos**) to use Immich's own web page or app on the home network.
+   - **iPhones:** Safari's photo picker usually uploads a JPEG copy and only the still of a Live Photo. For full-quality HEIC and Live Photos, sign in to Immich's app with the family's Immich login and turn on backup; those photos appear in Werejugo within a few minutes. (The app reaches Immich on the home network, or over a VPN such as Tailscale; Immich itself stays off the internet.)
 
 ## 6. Keep Immich private
 

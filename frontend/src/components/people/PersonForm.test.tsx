@@ -7,10 +7,11 @@ const { createPerson, listFamilyMembers } = vi.hoisted(() => ({
 }));
 vi.mock("../../api/client", () => ({ API_URL: "", api: { createPerson, listFamilyMembers } }));
 import { PersonForm } from "./PersonForm";
+import { withUploads } from "../../test/uploads";
 
 test("requires a name then creates a person", async () => {
   const onSaved = vi.fn();
-  render(<PersonForm person={null} onClose={() => {}} onSaved={onSaved} />);
+  render(withUploads(<PersonForm person={null} onClose={() => {}} onSaved={onSaved} />));
   fireEvent.click(screen.getByText("Save"));
   expect(await screen.findByText(/please enter a name/i)).toBeInTheDocument(); // validation message
   expect(createPerson).not.toHaveBeenCalled();

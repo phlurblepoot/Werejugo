@@ -71,7 +71,8 @@ server {
   # Photo and video uploads arrive in 8 MB pieces (the backend takes up to 32 MB
   # each), streamed straight through so progress is real and nothing is
   # buffered to disk here.
-  location ^~ /api/media/uploads/ {
+  # (No trailing slash: with one, nginx answers /api/media/uploads itself with a 301.)
+  location ^~ /api/media/uploads {
     resolver 127.0.0.11 valid=30s;
     set $media_upload_upstream http://${BACKEND_HOST}:${BACKEND_PORT};
     proxy_pass $media_upload_upstream$request_uri;

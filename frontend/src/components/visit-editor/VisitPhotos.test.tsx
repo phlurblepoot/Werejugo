@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 const { deletePhoto } = vi.hoisted(() => ({ deletePhoto: vi.fn(async () => {}) }));
-vi.mock("../../api/client", () => ({ API_URL: "", api: { deletePhoto, updatePhoto: vi.fn(), uploadMedia: vi.fn(), createLink: vi.fn() } }));
+vi.mock("../../api/client", () => ({ API_URL: "", api: { deletePhoto, updatePhoto: vi.fn(), createLink: vi.fn() } }));
 import { VisitPhotos } from "./VisitPhotos";
 
 test("stages selected files and reports them", () => {
