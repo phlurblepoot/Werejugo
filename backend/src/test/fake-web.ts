@@ -11,6 +11,9 @@
  *   coordinates; `/ships/cruise.json`, the day-by-day ports). The JSON answers
  *   only requests that look like a browser's XHR; others are redirected to the
  *   ship's page, as the real site does.
+ * - `/aerodatabox/flights/number/{number}/{date}` — AeroDataBox's flights by
+ *   number on a local date: one entry per leg; 204 when there's no such flight;
+ *   400 for a date outside what it covers.
  *
  * Point `config` at `${url}/<service>` in a test. `calls` records every request
  * ("photon q=rome"); `down` makes a service answer 503.
@@ -239,6 +242,38 @@ export async function startFakeWeb(): Promise<FakeWeb> {
     const html = `<table class="cruiseExpand"><tbody>${rows.map((r) => `<tr>${r.html}</tr>`).join("")}</tbody></table>`;
     return { result: html };
   }
+  // AeroDataBox (RapidAPI): /flights/number/WN1234/2026-10-01
+  const airport = (iata: string, icao: string, name: string, city: string, lat: number, lon: number) =>
+    ({ iata, icao, name, shortName: name, municipalityName: city, location: { lat, lon }, countryCode: "US", timeZone: "America/Chicago" });
+  const MDW = airport("MDW", "KMDW", "Chicago Midway", "Chicago", 41.786, -87.7524);
+  const DEN = airport("DEN", "KDEN", "Denver", "Denver", 39.8617, -104.6731);
+  const PHX = airport("PHX", "KPHX", "Phoenix Sky Harbor", "Phoenix", 33.4343, -112.0116);
+  const JFK = airport("JFK", "KJFK", "New York John F Kennedy", "New York", 40.6398, -73.7789);
+  const LHR = airport("LHR", "EGLL", "London Heathrow", "London", 51.4706, -0.461941);
+  const leg = (from: object, to: object, dep: string, arr: string, number: string) => ({
+    number, status: "Arrived", airline: { name: number.startsWith("WN") ? "Southwest" : "British Airways", iata: number.slice(0, 2) },
+    departure: { airport: from, scheduledTime: { utc: dep.replace(/[-+]\d{2}:\d{2}$/, "Z"), local: dep } },
+    arrival: { airport: to, scheduledTime: { utc: arr.replace(/[-+]\d{2}:\d{2}$/, "Z"), local: arr } },
+  });
+  const FLIGHTS: Record<string, object[]> = {
+    // Two legs, listed out of order (as AeroDataBox may).
+    "WN1234/2026-10-01": [
+      leg(DEN, PHX, "2026-10-01 12:40-06:00", "2026-10-01 13:55-07:00", "WN 1234"),
+      leg(MDW, DEN, "2026-10-01 09:05-05:00", "2026-10-01 10:40-06:00", "WN 1234"),
+    ],
+    // Overnight: lands the next day.
+    "BA178/2025-05-01": [leg(JFK, LHR, "2025-05-01 21:30-04:00", "2025-05-02 09:35+01:00", "BA 178")],
+  };
+  app.get("/aerodatabox/flights/number/:number/:date", async (req, reply) => {
+    const { number, date } = req.params as { number: string; date: string };
+    calls.push(`aerodatabox ${number} ${date}`);
+    if ((req.headers["x-rapidapi-key"] ?? "") === "") return reply.code(401).send({ message: "You are not subscribed to this API." });
+    if (date < "2020-01-01") return reply.code(400).send({ message: "Request is out of allowed time range" });
+    const flights = FLIGHTS[`${number.toUpperCase()}/${date}`];
+    if (!flights) return reply.code(204).send();
+    return flights;
+  });
+
   // A page that sends you somewhere else entirely.
   app.get(`${CM}/elsewhere`, async (_req, reply) => reply.redirect("http://example.com/"));
   // The track and the ports' coordinates.

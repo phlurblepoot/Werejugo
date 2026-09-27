@@ -463,10 +463,13 @@ export interface CustomIcon {
 
 export interface LookupResult {
   title: string;
-  waypoints: Array<{ label: string; lng: number; lat: number; kind: string }>;
+  /** Local wall-clock times at each airport, written as UTC. */
+  waypoints: Array<{ label: string; lng: number; lat: number; kind: string; arriveAt?: string; departAt?: string }>;
   path: number[][];
   warnings: string[];
   image?: string | null;
+  /** A flight number's: the day it left (local). */
+  date?: string;
 }
 
 export interface PlaceSuggestion {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { requireAdmin, requireAuth } from "../lib/auth.js";
+import { ymd } from "../lib/validate.js";
 import { lookupFlightByCodes, lookupFlightByNumber } from "../services/flightLookup.js";
 import {
   diagnoseCruise,
@@ -14,7 +15,11 @@ import { findPort, searchAirports, searchPorts, searchPlaces } from "../services
 
 const flightSchema = z.union([
   z.object({ codes: z.array(z.string().min(2).max(5)).min(2) }),
-  z.object({ flightNumber: z.string().min(2).max(10), date: z.string() }),
+  z.object({
+    // An airline's code and a number: "BA178", "WN 1234", "U2 8123".
+    flightNumber: z.string().regex(/^[A-Za-z0-9]{2,3}\s?\d{1,4}[A-Za-z]?$/, "A flight number looks like BA178"),
+    date: ymd,
+  }),
 ]);
 
 export async function lookupRoutes(app: FastifyInstance): Promise<void> {

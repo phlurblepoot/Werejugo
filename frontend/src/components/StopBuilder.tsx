@@ -7,7 +7,7 @@ import { formatWaypointTime } from "../lib/waypoint";
 interface Props {
   stops: Waypoint[];
   onChange: (stops: Waypoint[]) => void;
-  source: "ports" | "places";
+  source: "ports" | "places" | "airports";
   label: string;
   /** A day for each stop (a cruise's port days): the first is `startDate`, each added one the day after the last. */
   dated?: boolean;
@@ -36,7 +36,9 @@ export function StopBuilder({ stops, onChange, source, label, dated, startDate, 
   const last = stops[stops.length - 1];
   const [nLng, nLat] = last ? [last.lng, last.lat] : (mapCentre() ?? [null, null]);
   const search = useCallback(
-    (q: string) => (source === "ports" ? api.searchPorts(q) : api.searchPlaces(q, nLng != null && nLat != null ? [nLng, nLat] : null)),
+    (q: string) => (source === "ports" ? api.searchPorts(q)
+      : source === "airports" ? api.searchAirports(q)
+      : api.searchPlaces(q, nLng != null && nLat != null ? [nLng, nLat] : null)),
     [source, nLng, nLat],
   );
   function add(s: PlaceSuggestion) {

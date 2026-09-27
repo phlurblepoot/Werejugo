@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  api, type CustomIcon, type Item, type LookupResult,
+  api, type CustomIcon, type Item,
   type PathSettings, type PinSettings, type Theme,
 } from "../../api/client";
 import { ITEM_KINDS, KIND_LABELS } from "../../lib/style";
@@ -39,7 +39,6 @@ export function VisitEditor(props: Props) {
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorField, setErrorField] = useState<"title" | "location" | null>(null);
-  const [flightResult, setFlightResult] = useState<LookupResult | null>(null);
 
   const isPoint = POINT_KINDS.includes(draft.kind);
   const uploads = useUploads();
@@ -50,12 +49,6 @@ export function VisitEditor(props: Props) {
     setPicking(true);
     try { const [lng, lat] = await onRequestPick(); set({ point: [lng, lat] }); }
     finally { setPicking(false); }
-  }
-
-  function applyFlight(r: LookupResult) {
-    setFlightResult(r);
-    if (r.title && !draft.title) set({ title: r.title });
-    set({ stops: r.waypoints.map((w, i) => ({ label: w.label, kind: (w.kind as any) ?? "stop", lng: w.lng, lat: w.lat, seq: i })) });
   }
 
   async function save() {
@@ -124,7 +117,7 @@ export function VisitEditor(props: Props) {
                 onPhotoLocation={(lat, lng, date) => { set({ point: [lng, lat] }); if (date && !draft.occurredOn) set({ occurredOn: date }); }}
               />
             ) : draft.kind === "flight" ? (
-              <FlightForm onResult={applyFlight} />
+              <FlightForm draft={draft} set={set} />
             ) : draft.kind === "cruise" ? (
               <CruiseForm draft={draft} set={set} />
             ) : (
@@ -136,10 +129,6 @@ export function VisitEditor(props: Props) {
                 {routing ? "Finding the route…" : draft.route?.distanceM ? `${formatDistance(draft.route.distanceM)} ${routeLabel[draft.route.source]}`.trim() : null}
                 {!routing && routeNote && <div className="warnings">{routeNote}</div>}
               </div>
-            )}
-
-            {draft.kind === "flight" && flightResult && flightResult.warnings.length > 0 && (
-              <div className="warnings">{flightResult.warnings.map((w, i) => <div key={i}>• {w}</div>)}</div>
             )}
 
             {draft.kind !== "cruise" && (
