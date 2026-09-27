@@ -206,10 +206,13 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect((await immich.getAsset(fam, p.id)).type).toBe("IMAGE");
   }, 30_000);
 
-  test("hidden and locked assets can be searched for (how the sync notices Live Photo clips Immich hid)", async () => {
+  test("hidden assets can be searched for (how the sync notices Live Photo clips Immich hid); the locked folder can't", async () => {
     const fam = await newFamily("Contract Hidden");
-    const r = await immich.searchAssets(fam, { filter: { visibility: { in: ["hidden", "locked"] as never }, updatedAt: { gt: "2020-01-01T00:00:00.000Z" } }, size: 10 });
+    const r = await immich.searchAssets(fam, { filter: { visibility: { eq: "hidden" as never }, updatedAt: { gt: "2020-01-01T00:00:00.000Z" } }, size: 10 });
     expect(Array.isArray(r.items)).toBe(true);
+    // The locked folder needs Immich's PIN-unlocked session, which an API key never has.
+    const locked = await errorOf(immich.searchAssets(fam, { filter: { visibility: { in: ["hidden", "locked"] as never } }, size: 10 }));
+    expect(locked.status).toBe(401);
   });
 
   test("a file Immich can't take is refused with its reason", async () => {

@@ -386,6 +386,8 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     if (!c) return reply;
     const b = (req.body ?? {}) as { filter?: Record<string, unknown>; cursor?: string; size?: number; withExif?: boolean };
     const f = (b.filter ?? {}) as { updatedAt?: DateOp; trashedAt?: DateOp & { eq?: string | null }; id?: { eq?: string }; visibility?: { eq?: string; in?: string[] } };
+    // Like Immich: the locked folder is only for a PIN-unlocked session, never an API key.
+    if (f.visibility?.eq === "locked" || f.visibility?.in?.includes("locked")) return fail(reply, 401, "Elevated permission is required");
     const size = Math.min(b.size ?? 250, 1000);
     const offset = b.cursor ? Number(Buffer.from(b.cursor, "base64url").toString()) : 0;
     const matching = [...assets.values()]

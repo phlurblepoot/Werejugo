@@ -101,8 +101,10 @@ async function run(familyId: string, opts: { full?: boolean }): Promise<SyncResu
         removed += await removeRefs(familyId, items.map((a) => a.id));
       }
       // Hidden since (Immich pairs a Live Photo's clip with its photo and hides
-      // the clip) or moved to Immich's locked folder: out of Werejugo too.
-      for await (const items of allPages(conn, { visibility: { in: ["hidden", "locked"] }, updatedAt: { gt: since } }, false)) {
+      // the clip): out of Werejugo too. Immich's locked folder can't be searched
+      // with an API key (it needs the PIN-unlocked session), so photos moved
+      // there go at the nightly full sync instead.
+      for await (const items of allPages(conn, { visibility: { eq: "hidden" }, updatedAt: { gt: since } }, false)) {
         removed += await removeRefs(familyId, items.map((a) => a.id));
       }
     }
