@@ -180,3 +180,31 @@ test("the first page of a big library is read from the timeline index, not by so
   expect(plan).toMatch(/media_timeline/);
   expect(plan).not.toMatch(/Sort/);
 });
+
+test("a person's photos: ours, and another family's on a trip we share, tagged with them or their linked self", async () => {
+  const smiths = await addUser(ctx, { familyName: "The Smiths", role: "owner" });
+  const ourRose = await one("INSERT INTO people (family_id, display_name) VALUES ($1, 'Grandma Rose') RETURNING id", [ctx.familyId]);
+  const theirRose = await one("INSERT INTO people (family_id, display_name) VALUES ($1, 'Rose') RETURNING id", [smiths.familyId]);
+  await query("INSERT INTO person_links (person_a, person_b, status) VALUES ($1, $2, 'accepted')", [ourRose, theirRose]);
+  const shared = await one("INSERT INTO trips (family_id, name) VALUES ($1, 'Tahoe') RETURNING id", [ctx.familyId]);
+  await query("INSERT INTO trip_members (trip_id, family_id, role) VALUES ($1, $2, 'contributor')", [shared, smiths.familyId]);
+  const tag = (familyId: string, media: string, person: string, role = "") =>
+    query("INSERT INTO links (family_id, from_type, from_id, to_type, to_id, role) VALUES ($1, 'media', $2, 'person', $3, $4)", [familyId, media, person, role]);
+
+  const ours = await photo({ takenAt: "2025-07-01T10:00:00Z" });
+  await tag(ctx.familyId, ours, ourRose, "face");
+  const theirsShared = await photo({ familyId: smiths.familyId, tripId: shared, takenAt: "2025-07-02T10:00:00Z" });
+  await tag(smiths.familyId, theirsShared, theirRose);
+  const theirsPrivate = await photo({ familyId: smiths.familyId, takenAt: "2025-07-03T10:00:00Z" });
+  await tag(smiths.familyId, theirsPrivate, theirRose);
+  // Someone else's tag on our photo doesn't count (tags are the photo's own family's).
+  const untagged = await photo({ takenAt: "2025-07-04T10:00:00Z" });
+  await tag(smiths.familyId, untagged, theirRose);
+
+  const ids = async (person: string, token = ctx.token) => (await get(`/api/media?person=${person}`, token)).json().items.map((m: Json) => m.id);
+  expect(await ids(ourRose)).toEqual([theirsShared, ours]);
+  expect(await ids(theirRose)).toEqual([theirsShared, ours]);
+  // The Smiths see their own photos of her, not our photo that's on no shared trip.
+  expect(await ids(theirRose, smiths.token)).toEqual([theirsPrivate, theirsShared]);
+  expect((await get(`/api/media/timeline?person=${ourRose}`)).json().total).toBe(2);
+});

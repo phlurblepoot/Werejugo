@@ -189,6 +189,7 @@ const CASES: Case[] = [
   // Photos & videos
   c("GET /api/media", () => "/api/media", "clean"),
   c("GET /api/media", () => `/api/media?trip=${A.trip}`, "clean", undefined, "filter by their trip"),
+  c("GET /api/media", () => `/api/media?person=${A.person}`, "clean", undefined, "filter by their person"),
   c("GET /api/media/:id", () => `/api/media/${A.media}`, 404),
   c("PATCH /api/media/:id", () => `/api/media/${A.media}`, 404, () => ({ caption: "x" })),
   c("PATCH /api/media/:id", () => `/api/media/${B.media}`, 400, () => ({ tripId: A.trip }), "put my photo in their trip"),

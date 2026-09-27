@@ -25,7 +25,8 @@ export function AppShell() {
   const { logout, user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const { data: dueCount } = useQuery({ queryKey: ["documents-due-count"], queryFn: api.documentsDueCount });
-  const badges = { documents: dueCount?.count ?? 0 };
+  const { data: faceCount } = useQuery({ queryKey: ["faces-count"], queryFn: api.facesCount, staleTime: 5 * 60_000 });
+  const badges = { documents: dueCount?.count ?? 0, people: faceCount?.review ?? 0 };
   const shell = useMemo(() => ({ openSearch: () => setSearchOpen(true) }), []);
 
   useEffect(() => {

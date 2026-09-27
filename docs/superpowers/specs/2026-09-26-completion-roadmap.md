@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.5 |
-| **Next step** | Build Phase 2.5 ([plan](../plans/2026-09-27-phase-2.5-faces-people.md)): import each family's Immich people, map faces to Werejugo people (including another family's), tag their photos automatically (links with role `face`), a review queue for new faces |
+| **Current phase** | 2.6 |
+| **Next step** | Plan Phase 2.6 (trip ↔ Immich album sync): one Immich album per trip per member family, Werejugo's changes written at once, Immich's picked up by the sync and **Refresh from Immich** |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -294,9 +294,9 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.5 Faces → people — M
 
-**Status:** In progress · **Plan:** [phase-2.5](../plans/2026-09-27-phase-2.5-faces-people.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.5](../plans/2026-09-27-phase-2.5-faces-people.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Import Immich people per family; mapping UI (Immich face ↔ Werejugo person, including cross-family linked people); auto-tag photos; review queue for new faces.
+- [x] Import Immich people per family; mapping UI (Immich face ↔ Werejugo person, including cross-family linked people); auto-tag photos; review queue for new faces.
 
 #### 2.6 Trip ↔ Immich album sync — S
 
@@ -496,6 +496,24 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Done** — Phase 2.5 Faces → people (PR #2).
+  - **Faces:** after every library sync, each family's Immich people come into Werejugo with their photo counts. Renames, hiding and removal in Immich follow.
+  - **People → Faces:** tabs To review / Matched / Ignored. To review lists faces in 2 or more photos that aren't hidden in Immich, most photos first. Its count shows on the People switch, on the rail, and on More on phones.
+  - **"Who is this?":**
+    - Our people first, then other families' people we share a trip with, each marked with their family.
+    - **New person**, with the name from Immich filled in, or **Not someone we keep**.
+    - A matched face can be changed or unmatched.
+    - A face with no name in Immich gets the person's name there too.
+  - **Tags:** matching a face tags every photo it's in (a media → person link with role `face`), straight away. New photos with that face are tagged at the next sync, and the nightly sync reconciles everyone. Only `face` links are ever removed this way; tags added by hand stay.
+  - **A person's page:** "See N photos" opens the library filtered to them, with their faces beside it.
+  - **Verified:**
+    - Backend 423/423 (faces sync, routes, isolation cases) and frontend 244/244.
+    - The people/faces contract passes against the real Immich in CI.
+    - Playwright through nginx with the stand-in: 34 checks. Four faces reviewed: one to our Grandma Rose, one to the Smiths' Rose, one new person, one ignored. Badges on desktop and phone; Grandma Rose's 7 photos, counting the linked person's; the Smiths seeing the Wanderers' 3 photos of Rose from the shared trip.
+- **Note** — Found in 2.5:
+  - **The person filter** (the library's, and "See N photos") now covers every photo the family may see: its own, plus other families' photos on shared trips. It also matches tags of the same person in another family (an accepted person link), so "our Grandma is your Grandma" carries face tags across too. Before, it only covered the family's own photos, so the Smiths never saw the Wanderers' tagged photos of their Rose.
+  - **Face tags stay out of a person's Related list** (there can be thousands); "See N photos" has them. On a photo, a face tag shows who's in it with no remove button, since the next sync would put it back. A person tagged by hand as well is listed once, removable.
+  - **Faster sync:** the 5-minute sync first checks whether there are new photos at all, before searching each matched face.
 - **Note** — Planning 2.5: Immich's **cluster groups** (shared face recognition between accounts) aren't used yet, although the fork research suggested them. Immich's API doesn't say which of another account's people is the same person, so there's nothing for Werejugo to read, and CI's Immich runs no machine learning to test them against. Cross-family faces work through Werejugo instead: a family can map a face to another family's person it can see, and person links carry the photos across.
 
 - **Done** — Phase 2.4 Library UI (PR #2).

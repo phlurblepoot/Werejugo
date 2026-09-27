@@ -483,6 +483,21 @@ export interface EntitySummary {
   familyName?: string | null;
 }
 
+/** A face Immich found in the family's photos (lib/immich/faces on the server). */
+export interface Face {
+  id: string;
+  /** Its name in Immich ("" if none). */
+  name: string;
+  thumbUrl: string;
+  photoCount: number | null;
+  ignored: boolean;
+  hiddenInImmich: boolean;
+  firstSeenAt: string;
+  /** The Werejugo person it is; familyName is set when that's another family's. */
+  person: { id: string; displayName: string; familyName: string | null } | null;
+}
+export type FaceView = "review" | "mapped" | "ignored" | "all";
+
 export interface Relation { linkId: string; role: string; entity: EntitySummary; canRemove?: boolean; }
 
 export interface MediaDto {
@@ -836,6 +851,15 @@ export const api = {
     request<Person>(`/api/people/${id}`, { method: "PATCH", body: body(data) }),
   deletePerson: (id: string) => request<void>(`/api/people/${id}`, { method: "DELETE" }),
   listFamilyMembers: () => request<FamilyMember[]>("/api/family-members"),
+
+  // faces Immich found, and who they are
+  listFaces: (view: FaceView = "review") => request<Face[]>(`/api/faces?view=${view}`),
+  facesCount: () => request<{ review: number }>("/api/faces/count"),
+  updateFace: (id: string, b: { personId?: string | null; ignored?: boolean }) =>
+    request<{ face: Face; tagged: number; untagged: number }>(`/api/faces/${id}`, { method: "PATCH", body: body(b) }),
+  personFromFace: (id: string, displayName: string) =>
+    request<{ face: Face; personId: string; tagged: number }>(`/api/faces/${id}/person`, { method: "POST", body: body({ displayName }) }),
+  personFaces: (personId: string) => request<Face[]>(`/api/people/${personId}/faces`),
 
   // entity graph
   getRelations: (entity: string) =>

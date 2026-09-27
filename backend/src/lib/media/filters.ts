@@ -33,6 +33,18 @@ const linkedTo = (type: string, ph: string) =>
      AND ((l.from_type='media' AND l.from_id=m.id AND l.to_type='${type}' AND l.to_id=${ph})
        OR (l.to_type='media' AND l.to_id=m.id AND l.from_type='${type}' AND l.from_id=${ph})))`;
 
+/**
+ * Tagged with this person, or with the same person in another family (an
+ * accepted person link), by the photo's own family: "our Grandma is your Grandma".
+ */
+const taggedWithPerson = (ph: string) => {
+  const same = `(SELECT ${ph}::uuid UNION ALL SELECT CASE WHEN pl.person_a = ${ph} THEN pl.person_b ELSE pl.person_a END
+                   FROM person_links pl WHERE pl.status = 'accepted' AND ${ph} IN (pl.person_a, pl.person_b))`;
+  return `EXISTS (SELECT 1 FROM links l WHERE l.family_id = m.family_id
+     AND ((l.from_type = 'media' AND l.from_id = m.id AND l.to_type = 'person' AND l.to_id IN ${same})
+       OR (l.to_type = 'media' AND l.to_id = m.id AND l.from_type = 'person' AND l.from_id IN ${same})))`;
+};
+
 /** The first day of the month after "YYYY-MM". */
 function nextMonth(month: string): string {
   const [y, m] = month.split("-").map(Number);
@@ -42,17 +54,16 @@ function nextMonth(month: string): string {
 /**
  * WHERE conditions (table alias `m`) for these filters. `$1` is the caller's
  * family; `add` appends more parameters. The library is my family's photos;
- * a trip's album is everyone's photos on that trip that I may see.
+ * a trip's album, and a person's photos, are everyone's that I may see.
  */
 export function filterSql(q: MediaFilter, familyId: string) {
   const params: unknown[] = [familyId];
   const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
-  const where: string[] = q.trip && !q.hidden
-    ? [`m.trip_id = ${add(q.trip)}`, readableWhere("media", "m", "$1")]
-    : ["m.family_id = $1"];
-  if (q.trip && q.hidden) where.push(`m.trip_id = ${add(q.trip)}`);
+  const everyones = (q.trip || q.person) && !q.hidden;
+  const where: string[] = everyones ? [readableWhere("media", "m", "$1")] : ["m.family_id = $1"];
+  if (q.trip) where.push(`m.trip_id = ${add(q.trip)}`);
   where.push(q.hidden === "only" ? "m.hidden_at IS NOT NULL" : "m.hidden_at IS NULL");
-  if (q.person) where.push(linkedTo("person", add(q.person)));
+  if (q.person) where.push(taggedWithPerson(add(q.person)));
   if (q.visit) where.push(linkedTo("visit", add(q.visit)));
   if (q.kind) where.push(`m.kind = ${add(q.kind)}`);
   if (q.noTrip) where.push("m.trip_id IS NULL");

@@ -27,6 +27,13 @@ test("shows the documents badge on the Docs tab", () => {
   expect(screen.getByRole("link", { name: /Docs/ })).toHaveTextContent("3");
 });
 
+test("a badge on a module under More shows on More and on its row (faces waiting on People)", async () => {
+  renderAt("/map", { badges: { people: 4 } });
+  expect(screen.getByRole("button", { name: /More/ })).toHaveTextContent("4");
+  await userEvent.click(screen.getByRole("button", { name: /More/ }));
+  expect(within(screen.getByRole("dialog", { name: "More" })).getByRole("link", { name: /People/ })).toHaveTextContent("People4");
+});
+
 test("More opens a sheet with the other modules, search, settings and sign out", async () => {
   const onSignOut = vi.fn();
   const onSearch = vi.fn();

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { MediaFilters } from "../../api/client";
+import { useQuery } from "@tanstack/react-query";
+import { api, type MediaFilters } from "../../api/client";
 import { EntityPicker } from "../shared/EntityPicker";
 
 interface Props {
@@ -10,13 +11,20 @@ interface Props {
 
 export function PhotoFilters({ value, onChange, trips }: Props) {
   const [labels, setLabels] = useState<{ person?: string; visit?: string }>({});
+  // A person filter that came in the address (/photos?person=…, from their page) needs their name.
+  const { data: personName } = useQuery({
+    queryKey: ["person", value.person],
+    queryFn: () => api.getPerson(value.person!),
+    enabled: !!value.person && !labels.person,
+    select: (p) => p.displayName,
+  });
 
   const set = (patch: Partial<MediaFilters>) => onChange({ ...value, ...patch });
 
   return (
     <div className="photo-filter-bar">
       {value.person ? (
-        <span className="fchip act">👤 {labels.person ?? "Person"}
+        <span className="fchip act">👤 {labels.person ?? personName ?? "Person"}
           <button aria-label="Clear person filter" onClick={() => set({ person: undefined })}>✕</button>
         </span>
       ) : (

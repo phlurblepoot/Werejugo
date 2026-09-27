@@ -24,8 +24,10 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const [filters, setFilters] = useState<MediaFilters>(() => {
+    // /photos?trip=… and /photos?person=… (a person's page links here) open filtered.
     const trip = initialTrip ?? params.get("trip") ?? undefined;
-    return trip ? { trip } : {};
+    const person = params.get("person") ?? undefined;
+    return { ...(trip ? { trip } : {}), ...(person ? { person } : {}) };
   });
   const [view, setView] = useState<"grid" | "map">("grid");
   const [open, setOpen] = useState<MediaItem | null>(null);

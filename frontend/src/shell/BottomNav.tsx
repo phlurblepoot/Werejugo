@@ -20,6 +20,7 @@ export function BottomNav({
   const [more, setMore] = useState(false);
   const { pathname } = useLocation();
   const extras = MODULES.filter((m) => !m.tab);
+  const moreBadge = extras.reduce((n, m) => n + (badges[m.key] ?? 0), 0);
   const moreActive = extras.some((m) => pathname.startsWith(m.path)) || pathname.startsWith("/settings") || pathname.startsWith("/admin");
 
   return (
@@ -34,7 +35,10 @@ export function BottomNav({
         </NavLink>
       ))}
       <button type="button" className={`tab-item${moreActive ? " active" : ""}`} aria-haspopup="dialog" onClick={() => setMore(true)}>
-        <span className="tab-icon"><MenuIcon size={22} aria-hidden="true" /></span>
+        <span className="tab-icon">
+          <MenuIcon size={22} aria-hidden="true" />
+          {moreBadge > 0 && <span className="tab-badge"><Badge>{moreBadge}</Badge></span>}
+        </span>
         <span>More</span>
       </button>
 
@@ -52,6 +56,7 @@ export function BottomNav({
           {extras.map((m) => (
             <NavLink key={m.key} to={m.path} className="more-row" onClick={() => setMore(false)}>
               <m.icon size={20} aria-hidden="true" /> <span>{m.label}</span>
+              {badges[m.key] > 0 && <Badge>{badges[m.key]}</Badge>}
             </NavLink>
           ))}
           <button type="button" className="more-row" onClick={() => { setMore(false); onSearch(); }}>
