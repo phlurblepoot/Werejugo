@@ -109,7 +109,7 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
 
     // trip share: visits (with geometry + their linked photos) + itinerary
     const visits = (await query<any>(
-      `SELECT v.id, v.kind, v.title, v.notes, v.color, v.icon, v.occurred_on,
+      `SELECT v.id, v.kind, v.title, v.notes, v.color, v.icon, v.occurred_on, v.theme_id, v.properties,
               ST_AsGeoJSON(v.geom) AS geom,
               COALESCE((SELECT json_agg(json_build_object('id', m.id, 'mediaType', m.kind, 'caption', m.caption) ORDER BY m.created_at)
                        FROM links l JOIN media m ON m.id = CASE WHEN l.from_type='media' THEN l.from_id ELSE l.to_id END
@@ -121,6 +121,9 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
        ORDER BY v.occurred_on NULLS LAST, v.created_at ASC`,
       [tripId, familyId])).rows.map((r) => ({
         id: r.id, kind: r.kind, title: r.title, notes: r.notes, color: r.color, icon: r.icon, occurredOn: r.occurred_on,
+        themeId: r.theme_id,
+        // Only what the pin and trail look like.
+        properties: Object.fromEntries(["pin", "path", "cruiseLine"].filter((k) => r.properties?.[k] != null).map((k) => [k, r.properties[k]])),
         geometry: r.geom ? JSON.parse(r.geom) : null,
         photos: (r.photos as any[]).map((p, i) => ({
           id: p.id, ...mediaUrls({ id: p.id, kind: p.mediaType }), mediaType: p.mediaType, caption: p.caption, seq: i,
@@ -131,6 +134,15 @@ export async function shareRoutes(app: FastifyInstance): Promise<void> {
       "SELECT id, title, notes, scheduled_on, seq FROM itinerary_items WHERE trip_id = $1 AND family_id = $2 ORDER BY seq ASC",
       [tripId, familyId])).rows.map((r) => ({ id: r.id, title: r.title, notes: r.notes, scheduledOn: r.scheduled_on, seq: r.seq }));
 
-    return { targetType, trip, visits, itinerary, photos: await photosOf() };
+    // The family's map look, so the shared map's pins look as they do at home.
+    const settings = (await query<{ settings: Record<string, unknown> }>("SELECT settings FROM families WHERE id = $1", [familyId])).rows[0]?.settings ?? {};
+    const style = Object.fromEntries(["pin", "path"].filter((k) => settings[k]).map((k) => [k, settings[k]]));
+    const themeIds = [...new Set(visits.map((v) => v.themeId).filter(Boolean))];
+    const themes = themeIds.length
+      ? (await query<any>("SELECT id, name, kind, icon, color, line_color, line_width FROM themes WHERE id = ANY($1::uuid[]) AND (family_id = $2 OR family_id IS NULL)", [themeIds, familyId])).rows
+        .map((t) => ({ id: t.id, name: t.name, kind: t.kind, icon: t.icon, color: t.color, lineColor: t.line_color, lineWidth: t.line_width, isBuiltin: false }))
+      : [];
+
+    return { targetType, trip, visits, itinerary, photos: await photosOf(), style, themes };
   });
 }

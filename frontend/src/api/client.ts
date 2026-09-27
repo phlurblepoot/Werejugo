@@ -421,9 +421,15 @@ export interface SharedPhoto { id: string; url: string; thumbUrl: string | null;
 export interface SharedVisit {
   id: string; kind: ItemKind; title: string; notes: string; color: string | null; icon: string | null;
   occurredOn: string | null; geometry: Geometry | null; photos: SharedPhoto[];
+  /** Its theme, and its own pin and trail choices (pin, path, cruiseLine). */
+  themeId?: string | null; properties?: Record<string, unknown>;
 }
 export interface SharedItineraryItem { id: string; title: string; notes: string; scheduledOn: string | null; seq: number; }
-export interface TripSharePayload { targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[]; }
+export interface TripSharePayload {
+  targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[];
+  /** The family's pin and trail defaults, and the themes its places use: the shared map looks as it does at home. */
+  style?: Pick<FamilySettings, "pin" | "path">; themes?: Theme[];
+}
 export interface AlbumSharePayload { targetType: "album"; trip: SharedTrip; photos: SharedPhoto[]; }
 /** A smart album, evaluated when the link is opened. */
 export interface SmartAlbumSharePayload { targetType: "smart_album"; album: { name: string }; photos: SharedPhoto[]; }
@@ -1011,6 +1017,8 @@ export const api = {
   createTheme: (data: Partial<Theme>) =>
     request<Theme>("/api/themes", { method: "POST", body: body(data) }),
   deleteTheme: (id: string) => request<void>(`/api/themes/${id}`, { method: "DELETE" }),
+  updateTheme: (id: string, data: Partial<Theme>) =>
+    request<Theme>(`/api/themes/${id}`, { method: "PATCH", body: body(data) }),
 
   // icons / uploads
   listIcons: () => request<{ builtin: string[]; custom: CustomIcon[] }>("/api/icons"),

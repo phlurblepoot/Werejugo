@@ -36,7 +36,7 @@ interface Props {
 export function VisitEditor(props: Props) {
   const { item, themes, trips, customIcons, onRequestPick, onClose, onSaved } = props;
   const editing = Boolean(item);
-  const { draft, set, setKind, applyTheme, validate, buildPayload } = useVisitDraft(item, props.pinSettings, props.pathSettings);
+  const { draft, set, setKind, applyTheme, validate, buildPayload, inherited } = useVisitDraft(item, props.pinSettings, props.pathSettings, themes);
   const [tab, setTab] = useState<"details" | "appearance">("details");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
   // Set once the place exists (editing, or after the first save): later saves update it.
@@ -176,7 +176,7 @@ export function VisitEditor(props: Props) {
             />
           </>
         ) : (
-          <AppearanceTab draft={draft} set={set} applyTheme={applyTheme} themes={themes} customIcons={customIcons} onIconsChanged={props.onIconsChanged} />
+          <AppearanceTab draft={draft} set={set} applyTheme={applyTheme} inherited={inherited} themes={themes} customIcons={customIcons} onIconsChanged={props.onIconsChanged} />
         )}
 
         {error && !errorField && <div className="error-text">{error}</div>}

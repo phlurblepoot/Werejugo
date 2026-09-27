@@ -583,3 +583,9 @@ button.primary.is-success { background: var(--color-success) !important; border-
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .confetti { display: none; }
 }
+
+/* A cruise line with a look of its own, under Cruise in the legend. */
+.legend-sub { padding-left: 16px; font-size: var(--text-xs); cursor: default; }
+/* Editing a theme in "Themes & icons". */
+.theme-edit { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 8px; margin-bottom: 8px; }
+.style-own, .style-inherited { margin: -4px 0 10px; }

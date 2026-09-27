@@ -17,6 +17,20 @@ export function ManagePanel({ themes, customIcons, onClose, onChanged }: Props) 
   const [icon, setIcon] = useState("pin");
   const [busy, setBusy] = useState(false);
   const [iconName, setIconName] = useState("");
+  // The theme being edited: its name, pin colour and icon, and trail colour.
+  const [editing, setEditing] = useState<{ id: string; name: string; color: string; icon: string; lineColor: string } | null>(null);
+
+  async function saveTheme() {
+    if (!editing || !editing.name.trim()) return;
+    setBusy(true);
+    try {
+      await api.updateTheme(editing.id, { name: editing.name.trim(), color: editing.color, icon: editing.icon, lineColor: editing.lineColor });
+      setEditing(null);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function addTheme() {
     if (!name.trim()) return;
@@ -61,13 +75,32 @@ export function ManagePanel({ themes, customIcons, onClose, onChanged }: Props) 
         {themes.filter((t) => !t.isBuiltin).length === 0 && (
           <div className="empty">No custom themes yet.</div>
         )}
-        {themes.filter((t) => !t.isBuiltin).map((t) => (
+        {themes.filter((t) => !t.isBuiltin).map((t) => editing?.id === t.id ? (
+          <div key={t.id} className="theme-edit" role="group" aria-label={`Edit ${t.name}`}>
+            <div className="field">
+              <label htmlFor={`theme-name-${t.id}`}>Name</label>
+              <input id={`theme-name-${t.id}`} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            </div>
+            <StylePicker color={editing.color} icon={editing.icon} customIcons={customIcons}
+              onColor={(c) => setEditing({ ...editing, color: c })} onIcon={(i) => setEditing({ ...editing, icon: i })} />
+            <div className="field">
+              <label htmlFor={`theme-line-${t.id}`}>Trail colour</label>
+              <input id={`theme-line-${t.id}`} type="color" value={editing.lineColor} onChange={(e) => setEditing({ ...editing, lineColor: e.target.value })} />
+            </div>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="primary" onClick={() => void saveTheme()} disabled={busy || !editing.name.trim()}>Save theme</button>
+              <button onClick={() => setEditing(null)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
           <div key={t.id} className="item-row">
             <div className="badge" style={{ background: t.color }}>
               {isImageIcon(t.icon) ? <img src={`${API_URL}${t.icon}`} alt="" /> : glyphFor(t.icon)}
             </div>
             <div className="meta"><div className="title">{t.name}</div></div>
-            <button className="ghost" onClick={() => deleteTheme(t.id)}>✕</button>
+            <button className="ghost" aria-label={`Edit ${t.name}`}
+              onClick={() => setEditing({ id: t.id, name: t.name, color: t.color, icon: t.icon, lineColor: t.lineColor || t.color })}>✎</button>
+            <button className="ghost" aria-label={`Delete ${t.name}`} onClick={() => deleteTheme(t.id)}>✕</button>
           </div>
         ))}
 

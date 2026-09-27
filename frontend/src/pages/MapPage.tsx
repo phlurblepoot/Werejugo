@@ -261,7 +261,7 @@ export function MapPage() {
             <span>No places yet — hit <strong>+ Add to map</strong> to drop your first memory.</span>
           </div>
         )}
-        <Legend items={legendItems} kindFilter={filters.kinds} onToggleKind={toggleKind} />
+        <Legend items={legendItems} kindFilter={filters.kinds} onToggleKind={toggleKind} settings={settings} />
         {timelineOn && (
           <TimelineBar items={items} cursor={timelineCursor} onCursor={setTimelineCursor} onClose={() => setTimelineOn(false)} />
         )}
@@ -299,6 +299,7 @@ export function MapPage() {
       {panel === "appearance" && (
         <SettingsPanel
           settings={settings ?? {}}
+          canEdit={user?.role === "owner"}
           customIcons={customIcons}
           onClose={() => setPanel(null)}
           onSaved={() => { setPanel(null); qc.invalidateQueries({ queryKey: ["settings"] }); }}

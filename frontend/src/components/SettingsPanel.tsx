@@ -27,12 +27,14 @@ const lineKey = (t: Target) => t.slice(5);
 
 interface Props {
   settings: FamilySettings;
+  /** Family owners change the map's look; everyone else sees it. */
+  canEdit?: boolean;
   customIcons: CustomIcon[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function SettingsPanel({ settings, customIcons, onClose, onSaved }: Props) {
+export function SettingsPanel({ settings, canEdit = true, customIcons, onClose, onSaved }: Props) {
   const [styleUrl, setStyleUrl] = useState(settings.map?.styleUrl ?? "");
   const [pin, setPin] = useState<PinSettings>(settings.pin ?? {});
   const [path, setPath] = useState<PathSettings>(settings.path ?? {});
@@ -198,9 +200,10 @@ export function SettingsPanel({ settings, customIcons, onClose, onSaved }: Props
           <p className="hint" style={{ marginTop: 4 }}>A MapLibre style JSON, e.g. from MapTiler or your own tile server. Applies to your whole family.</p>
         </div>
 
+        {!canEdit && <p className="hint" role="note">Only a family owner can change the map's look.</p>}
         <div className="modal-actions">
-          <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save settings"}</button>
+          <button onClick={onClose}>{canEdit ? "Cancel" : "Close"}</button>
+          {canEdit && <button className="primary" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save settings"}</button>}
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type {
-  CruiseDetails, Geometry, Item, ItemKind, PathSettings, PathStyle, PinSettings, PinStyle, RouteInfo, Waypoint,
+  CruiseDetails, FamilySettings, Geometry, Item, ItemKind, PathSettings, PathStyle, PinSettings, PinStyle, RouteInfo, Theme, Waypoint,
 } from "../../api/client";
 import { buildRoutePath, type LngLat } from "../../lib/geo";
-import { defaultColor, defaultIcon, defaultPinStyle, defaultPathStyle } from "../../lib/style";
+import { inheritedStyle } from "../../lib/style";
+import type { ItemStyle } from "../MapView";
 import type { PinShapeVals } from "../PinStyleControls";
 import type { PathVals } from "../PathStyleControls";
 
@@ -36,12 +37,23 @@ export interface VisitDraft {
 
 export interface VisitError { field: "title" | "location"; message: string; }
 
-function makeInitial(item: Item | null, kind: ItemKind, pin?: PinSettings, path?: PathSettings): VisitDraft {
+/** What the draft's pin and trail would be without choices of its own (see inheritedStyle). */
+function inheritedOf(d: Pick<VisitDraft, "kind" | "themeId" | "cruiseLine">, ctx: StyleContext, pathStyle?: string): ItemStyle {
+  return inheritedStyle(d.kind, { themeId: d.themeId, cruiseLine: d.cruiseLine, pathStyle }, ctx.themesById, ctx.settings);
+}
+const pinOf = (s: ItemStyle): PinShapeVals => ({ size: s.size, shape: s.shape, borderWidth: s.borderWidth, borderColor: s.borderColor });
+const pathOf = (s: ItemStyle): PathVals => ({ style: s.pathStyle, color: s.lineColor, width: s.lineWidth, imageUrl: s.pathImageUrl });
+
+interface StyleContext { themesById: Map<string, Theme>; settings: FamilySettings }
+
+function makeInitial(item: Item | null, kind: ItemKind, ctx: StyleContext): VisitDraft {
   const props = (item?.properties ?? {}) as Record<string, unknown>;
   const initPin = (props.pin ?? {}) as PinStyle;
-  const pinBase = defaultPinStyle(kind, pin);
   const initPath = (props.path ?? {}) as PathStyle;
-  const pathBase = defaultPathStyle(kind, path);
+  const cruiseLine = (props.cruiseLine as string) ?? "";
+  const inh = inheritedOf({ kind, themeId: item?.themeId ?? null, cruiseLine }, ctx, initPath.style);
+  const pinBase = pinOf(inh);
+  const pathBase = pathOf(inh);
   const pt = item?.geometry?.type === "Point" ? (item.geometry.coordinates as number[]) : null;
   return {
     kind,
@@ -51,8 +63,8 @@ function makeInitial(item: Item | null, kind: ItemKind, pin?: PinSettings, path?
     occurredEnd: item?.occurredEnd ?? "",
     themeId: item?.themeId ?? null,
     tripId: item?.tripId ?? null,
-    color: item?.color ?? defaultColor(kind, pin),
-    icon: item?.icon ?? defaultIcon(kind, pin),
+    color: item?.color ?? inh.color,
+    icon: item?.icon ?? inh.icon,
     pin: {
       size: initPin.size ?? pinBase.size,
       shape: initPin.shape ?? pinBase.shape,
@@ -69,38 +81,84 @@ function makeInitial(item: Item | null, kind: ItemKind, pin?: PinSettings, path?
     stops: item?.waypoints ?? [],
     routePath: item?.geometry?.type === "LineString" ? (item.geometry.coordinates as number[][]) : null,
     route: (props.route as RouteInfo | undefined) ?? null,
-    cruiseLine: (props.cruiseLine as string) ?? "",
+    cruiseLine,
     ship: (props.ship as string) ?? "",
     cruise: (props.cruise as CruiseDetails | undefined) ?? null,
     baseProperties: props,
   };
 }
 
-export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathSettings) {
-  const [draft, setDraft] = useState<VisitDraft>(() => makeInitial(item, item?.kind ?? "place", pin, path));
+/**
+ * The item's own style choices: what differs from what it would inherit (the
+ * rest follows the family's defaults, its theme and its cruise line).
+ */
+export function ownStyle(d: VisitDraft, ctx: StyleContext) {
+  const inh = inheritedOf(d, ctx);
+  const inhPath = pathOf(inheritedOf(d, ctx, d.path.style));
+  const pin = Object.fromEntries((Object.keys(d.pin) as Array<keyof PinShapeVals>)
+    .filter((k) => d.pin[k] !== pinOf(inh)[k]).map((k) => [k, d.pin[k]])) as Partial<PinShapeVals>;
+  const path = Object.fromEntries((Object.keys(d.path) as Array<keyof PathVals>)
+    .filter((k) => d.path[k] !== undefined && d.path[k] !== (k === "style" ? pathOf(inh).style : inhPath[k]))
+    .map((k) => [k, d.path[k]])) as Partial<PathVals>;
+  return {
+    color: d.color.toLowerCase() !== inh.color.toLowerCase() ? d.color : null,
+    icon: d.icon !== inh.icon ? d.icon : null,
+    pin,
+    path,
+  };
+}
 
-  const set = (patch: Partial<VisitDraft>) => setDraft((d) => ({ ...d, ...patch }));
+export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathSettings, themes: Theme[] = []) {
+  const ctx: StyleContext = { themesById: new Map(themes.map((t) => [t.id, t])), settings: { pin, path } };
+  const [draft, setDraft] = useState<VisitDraft>(() => makeInitial(item, item?.kind ?? "place", ctx));
+
+  /**
+   * Another kind, theme or cruise line: whatever was still following the defaults
+   * follows the new ones; the item's own choices stay.
+   */
+  function restyle(before: VisitDraft, after: VisitDraft): VisitDraft {
+    const was = inheritedOf(before, ctx);
+    const now = inheritedOf(after, ctx);
+    const follow = <T,>(value: T, old: T, next: T) => (value === old ? next : value);
+    const [wasPin, nowPin] = [pinOf(was), pinOf(now)];
+    const style = follow(after.path.style, was.pathStyle, now.pathStyle);
+    // A trail's default width depends on its style (patterns are wider).
+    const wasWidth = inheritedOf(before, ctx, before.path.style).lineWidth;
+    const nowWidth = inheritedOf(after, ctx, style).lineWidth;
+    return {
+      ...after,
+      color: follow(after.color, was.color, now.color),
+      icon: follow(after.icon, was.icon, now.icon),
+      pin: Object.fromEntries((Object.keys(after.pin) as Array<keyof PinShapeVals>).map((k) => [k, follow(after.pin[k], wasPin[k], nowPin[k])])) as unknown as PinShapeVals,
+      path: {
+        ...after.path,
+        style,
+        color: follow(after.path.color, was.lineColor, now.lineColor),
+        width: follow(after.path.width, wasWidth, nowWidth),
+        imageUrl: follow(after.path.imageUrl, was.pathImageUrl, now.pathImageUrl),
+      },
+    };
+  }
+
+  const set = (patch: Partial<VisitDraft>) =>
+    setDraft((d) => ("cruiseLine" in patch && patch.cruiseLine !== d.cruiseLine ? restyle(d, { ...d, ...patch }) : { ...d, ...patch }));
 
   function setKind(kind: ItemKind) {
-    setDraft((d) => ({
+    setDraft((d) => restyle(d, {
       ...d,
       kind,
-      color: d.themeId ? d.color : defaultColor(kind, pin),
-      icon: d.themeId ? d.icon : defaultIcon(kind, pin),
-      pin: defaultPinStyle(kind, pin),
-      path: defaultPathStyle(kind, path),
       // Another kind's line (roads for a drive, water for a cruise) is worked out again.
       routePath: kind === d.kind ? d.routePath : null,
       route: kind === d.kind ? d.route : null,
     }));
   }
 
-  function applyTheme(id: string | null, themes: { id: string; color: string; icon: string }[]) {
-    setDraft((d) => {
-      const t = themes.find((x) => x.id === id);
-      return t ? { ...d, themeId: id, color: t.color, icon: t.icon } : { ...d, themeId: id };
-    });
+  function applyTheme(id: string | null) {
+    setDraft((d) => restyle(d, { ...d, themeId: id }));
   }
+
+  /** What this draft would get without choices of its own (for "Use default"). */
+  const inherited = { ...inheritedOf(draft, ctx), lineWidth: inheritedOf(draft, ctx, draft.path.style).lineWidth };
 
   function validate(): VisitError | null {
     if (!draft.title.trim()) return { field: "title", message: "Please give it a title." };
@@ -131,9 +189,10 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
       route = known ? draft.route : { source: draft.kind === "drive" ? "straight" : "great-circle" };
     }
     const properties: Record<string, unknown> = { ...draft.baseProperties };
-    properties.pin = draft.pin;
-    if (isPoint) delete properties.path;
-    else properties.path = draft.path;
+    // Only the item's own choices: the rest follows the family's defaults.
+    const own = ownStyle(draft, ctx);
+    if (Object.keys(own.pin).length) properties.pin = own.pin; else delete properties.pin;
+    if (!isPoint && Object.keys(own.path).length) properties.path = own.path; else delete properties.path;
     if (route) properties.route = route; else delete properties.route;
     if (draft.kind === "cruise") {
       if (draft.cruiseLine) properties.cruiseLine = draft.cruiseLine; else delete properties.cruiseLine;
@@ -148,8 +207,8 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
       notes: draft.notes,
       themeId: draft.themeId,
       tripId: draft.tripId,
-      color: draft.color,
-      icon: draft.icon,
+      color: own.color,
+      icon: own.icon,
       occurredOn: draft.occurredOn || null,
       ...(draft.kind === "cruise" ? { occurredEnd: draft.occurredEnd || null } : {}),
       geometry,
@@ -158,5 +217,5 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
     };
   }
 
-  return { draft, set, setKind, applyTheme, validate, buildPayload };
+  return { draft, set, setKind, applyTheme, validate, buildPayload, inherited };
 }
