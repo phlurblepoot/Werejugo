@@ -97,6 +97,7 @@ const ENTITIES = {
   },
   link: { table: "links", label: "link", read: own, edit: own },
   share_link: { table: "share_links", label: "share link", read: own, edit: own },
+  smart_album: { table: "smart_albums", label: "smart album", read: own, edit: own },
   user: { table: "users", label: "family member", read: own, edit: own },
 } satisfies Record<string, EntityDef>;
 

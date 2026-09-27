@@ -185,7 +185,11 @@ function sendBytes(req: FastifyRequest, reply: FastifyReply, a: FakeAsset, mime:
 const fail = (reply: FastifyReply, statusCode: number, message: string) =>
   reply.code(statusCode).send({ message, error: { 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden" }[statusCode] ?? "Error", statusCode });
 
-export async function startFakeImmich(opts: { version?: FakeImmich["version"]; port?: number; adminKey?: string } = {}): Promise<FakeImmich> {
+export async function startFakeImmich(opts: {
+  version?: FakeImmich["version"]; port?: number; adminKey?: string;
+  /** Immich's machine learning (smart search): on unless said otherwise. CI's real Immich runs without it. */
+  machineLearning?: boolean;
+} = {}): Promise<FakeImmich> {
   const users = new Map<string, User>();
   const keys = new Map<string, ApiKey>();
   const sessions = new Map<string, string>(); // token -> userId
@@ -564,6 +568,35 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const next = offset + size < matching.length ? Buffer.from(String(offset + size)).toString("base64url") : null;
     return {
       assets: { items: page.map((a) => assetDto(a, b.withExif ?? false)), count: page.length, nextCursor: next, nextPage: null, total: matching.length, facets: [] },
+      albums: { items: [], count: 0, total: 0, facets: [] },
+    };
+  });
+
+  // ---- Smart search ----
+  // Real Immich compares CLIP embeddings; the stand-in matches words against
+  // the description, file name and place name, most matching words first.
+  app.post("/api/search/smart", async (req, reply) => {
+    if (!enter("smartSearch", reply)) return reply;
+    const c = auth(req, reply, "asset.read");
+    if (!c) return reply;
+    if (opts.machineLearning === false) return fail(reply, 400, "Smart search is not enabled");
+    const b = (req.body ?? {}) as { query?: string; page?: number; size?: number; type?: string };
+    if (!b.query) return fail(reply, 400, "query should not be empty");
+    const words = b.query.toLowerCase().split(/\s+/).filter(Boolean);
+    const size = Math.min(b.size ?? 100, 1000);
+    const page = b.page ?? 1;
+    const scored = [...assets.values()]
+      .filter((a) => a.ownerId === c.user.id && !a.trashedAt && (a.visibility === "timeline" || a.visibility === "archive"))
+      .filter((a) => !b.type || a.type === b.type)
+      .map((a) => {
+        const text = `${a.description} ${a.originalFileName} ${a.city ?? ""}`.toLowerCase();
+        return { a, score: words.filter((w) => text.includes(w)).length };
+      })
+      .filter((x) => x.score > 0)
+      .sort((x, y) => y.score - x.score || y.a.fileCreatedAt.localeCompare(x.a.fileCreatedAt) || x.a.id.localeCompare(y.a.id));
+    const items = scored.slice((page - 1) * size, page * size).map((x) => assetDto(x.a, false));
+    return {
+      assets: { items, count: items.length, total: scored.length, nextPage: page * size < scored.length ? String(page + 1) : null, facets: [] },
       albums: { items: [], count: 0, total: 0, facets: [] },
     };
   });

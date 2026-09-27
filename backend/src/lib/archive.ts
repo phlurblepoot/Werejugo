@@ -20,6 +20,8 @@ export const BACKUP_TABLES = [
   "immich_people",
   // Suggestions a family said no to.
   "suggestion_dismissals",
+  // Saved searches.
+  "smart_albums",
 ] as const;
 
 /** Tables that aren't backed up, and why. Every other table must be in BACKUP_TABLES. */

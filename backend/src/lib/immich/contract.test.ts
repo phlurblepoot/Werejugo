@@ -5,7 +5,7 @@ import { startFakeImmich, type FakeImmich } from "../../test/fake-immich.js";
 import sharp from "sharp";
 import { jpeg } from "../../test/photos.js";
 import { cityName } from "../suggest.js";
-import { ADMIN_KEY_PERMISSIONS, ImmichError, fetchMedia, fetchPersonThumbnail, immich, normalizeImmichUrl } from "./client.js";
+import { ADMIN_KEY_PERMISSIONS, ImmichError, fetchMedia, fetchPersonThumbnail, immich, normalizeImmichUrl, smartSearchOff } from "./client.js";
 import { isSupported } from "./version.js";
 
 /**
@@ -27,7 +27,7 @@ let adminKey = "";
 beforeAll(async () => {
   if (REAL) ({ url, adminKey } = REAL);
   else {
-    fake = await startFakeImmich();
+    fake = await startFakeImmich({ machineLearning: false }); // like CI's real Immich
     ({ url, adminKey } = fake);
   }
 });
@@ -299,6 +299,15 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(cityName(exif?.city ?? null)).toBe("Paris");
     expect(exif?.country).toBe("France");
   }, 120_000);
+
+  test("smart search without Immich's machine learning is refused, and says why", async () => {
+    const fam = await newFamily("Contract Smart");
+    const err = await errorOf(immich.smartSearch(fam, { query: "beach at sunset", size: 10, page: 1, type: "IMAGE" }));
+    // The request itself is well-formed: the refusal is about machine learning.
+    expect(err.status).toBe(400);
+    expect(err.message).toMatch(/Smart search is not enabled/);
+    expect(smartSearchOff(err)).toBe(true);
+  });
 
   test("a file Immich can't take is refused with its reason", async () => {
     const e = email();

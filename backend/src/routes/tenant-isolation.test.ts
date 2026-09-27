@@ -44,6 +44,7 @@ beforeAll(async () => {
   A.personLink = await one("INSERT INTO person_links (person_a, person_b) VALUES ($1, $2) RETURNING id", [A.person, A.person2]);
   await query(`INSERT INTO activity (trip_id, family_id, kind, summary) VALUES ($1, $2, 'visit.added', '${CANARY} activity')`, [A.trip, fa]);
   await query("INSERT INTO trip_albums (family_id, trip_id, immich_album_id, name) VALUES ($1, $2, gen_random_uuid(), 'A album') ON CONFLICT (family_id, trip_id) DO UPDATE SET immich_album_id = EXCLUDED.immich_album_id, name = EXCLUDED.name", [fa, A.trip]);
+  A.smartAlbum = await one(`INSERT INTO smart_albums (family_id, name, filters) VALUES ($1, '${CANARY} album', '{"q": "beach"}') RETURNING id`, [fa]);
   A.face = await one(`INSERT INTO immich_people (family_id, immich_person_id, name, photo_count) VALUES ($1, gen_random_uuid(), '${CANARY} face', 5) RETURNING id`, [fa]);
   A.upload = await one(`INSERT INTO media_uploads (family_id, user_id, filename, size, state, error) VALUES ($1, $2, '${CANARY}.jpg', 100, 'failed', 'x') RETURNING id`, [fa, A.user]);
 
@@ -87,6 +88,7 @@ async function snapshotA(): Promise<string> {
     immich_people: "SELECT * FROM immich_people WHERE family_id = $1",
     trip_albums: "SELECT * FROM trip_albums WHERE family_id = $1",
     suggestion_dismissals: "SELECT * FROM suggestion_dismissals WHERE family_id = $1",
+    smart_albums: "SELECT * FROM smart_albums WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -96,14 +98,14 @@ async function snapshotA(): Promise<string> {
 }
 let before = "";
 
-type Outcome = 400 | 403 | 404 | "clean";
+type Outcome = 400 | 403 | 404 | 503 | "clean";
 interface Case {
   /** The registered route this covers, e.g. "GET /api/visits/:id". */
   route: string;
   /** What family B sends. Ids are filled in lazily (the fixture runs first). */
   url: () => string;
   payload?: () => object;
-  /** 400/403/404 exactly, or "clean": any 2xx whose body mentions nothing of family A. */
+  /** 400/403/404/503 exactly, or "clean": any 2xx whose body mentions nothing of family A. */
   expect: Outcome;
   note?: string;
 }
@@ -181,6 +183,15 @@ const CASES: Case[] = [
   c("GET /api/links", () => `/api/links?entity=trip:${A.trip}`, 404),
   c("POST /api/links", () => "/api/links", 400, () => ({ from: `person:${B.person}`, to: `trip:${A.trip}` })),
   c("DELETE /api/links/:id", () => `/api/links/${A.link}`, 404),
+
+  // Smart search and smart albums
+  c("GET /api/media/search", () => `/api/media/search?q=${CANARY}&trip=${A.trip}`, 503, undefined, "B has no Immich; never A's library"),
+  c("GET /api/smart-albums", () => "/api/smart-albums", "clean"),
+  c("POST /api/smart-albums", () => "/api/smart-albums", 400, () => ({ name: "x", filters: { person: A.person } }), "their person"),
+  c("POST /api/smart-albums", () => "/api/smart-albums", 400, () => ({ name: "x", filters: { trip: A.trip } }), "their trip"),
+  c("PATCH /api/smart-albums/:id", () => `/api/smart-albums/${A.smartAlbum}`, 404, () => ({ name: "x" })),
+  c("DELETE /api/smart-albums/:id", () => `/api/smart-albums/${A.smartAlbum}`, 404),
+  c("POST /api/shares", () => "/api/shares", 404, () => ({ targetType: "smart_album", targetId: A.smartAlbum }), "their smart album"),
 
   // Suggestions from photos
   c("GET /api/suggestions", () => `/api/suggestions?for=trip:${A.trip}`, 404),

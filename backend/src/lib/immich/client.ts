@@ -130,6 +130,13 @@ export const immich = {
   /** Immich 3.2's structured search: `filter`, cursor paging, optional EXIF in the results. */
   searchAssets: (c: ImmichConn, q: { filter?: sdk.SearchFilter; cursor?: string; size?: number; withExif?: boolean }) =>
     call("searchAssets", c, (o) => sdk.searchAssets({ metadataSearchDto: { ...q } }, o)).then((r) => r.assets),
+  /**
+   * Smart search (CLIP): assets matching a description, most relevant first,
+   * `size` a page. Needs Immich's machine learning; without it, see smartSearchOff.
+   */
+  smartSearch: (c: ImmichConn, q: { query: string; page?: number; size?: number; type?: "IMAGE" | "VIDEO"; takenAfter?: string; takenBefore?: string }) =>
+    call("smartSearch", c, (o) => sdk.searchSmart({ smartSearchDto: { ...q, type: q.type as sdk.AssetTypeEnum | undefined } }, o))
+      .then((r) => ({ items: r.assets.items, nextPage: r.assets.nextPage ? Number(r.assets.nextPage) : null })),
   /** Move to Immich's trash (restorable there); never a permanent delete. */
   trashAssets: (c: ImmichConn, ids: string[]) =>
     call("trashAssets", c, (o) => sdk.deleteAssets({ assetBulkDeleteDto: { ids, force: false } }, o)),
@@ -190,6 +197,9 @@ export const immich = {
 
 /** Assets added to or removed from an album per request. */
 const ALBUM_BATCH = 500;
+
+/** Immich refused a smart search because its machine learning is turned off. */
+export const smartSearchOff = (e: unknown) => e instanceof ImmichError && e.status === 400 && /smart search is not enabled/i.test(e.message);
 
 export type ImmichPerson = sdk.PersonResponseDto;
 export type ImmichAlbum = sdk.AlbumResponseDto;
