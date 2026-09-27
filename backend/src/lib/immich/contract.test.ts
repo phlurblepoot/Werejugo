@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { startFakeImmich, type FakeImmich } from "../../test/fake-immich.js";
 import sharp from "sharp";
+import { jpeg } from "../../test/photos.js";
 import { ADMIN_KEY_PERMISSIONS, ImmichError, fetchMedia, fetchPersonThumbnail, immich, normalizeImmichUrl } from "./client.js";
 import { isSupported } from "./version.js";
 
@@ -280,6 +281,21 @@ describe(`Immich contract (${REAL ? `real Immich at ${REAL.url}` : "stand-in"})`
     expect(await listed()).toBeUndefined();
     expect((await immich.getAsset(fam, b.id)).id).toBe(b.id);
   }, 60_000);
+
+  test("a photo with a location gets Immich's place name (city, country), which suggestions use", async () => {
+    const fam = await newFamily("Contract Places");
+    const shot = await jpeg({ date: "2024-05-01T10:00:00", lat: 48.8584, lng: 2.2945 }); // the Eiffel Tower
+    const up = await immich.uploadAsset(fam, new Blob([shot], { type: "image/jpeg" }), { filename: "paris.jpg", fileCreatedAt: "2024-05-01T10:00:00.000Z", fileModifiedAt: "2024-05-01T10:00:00.000Z" });
+    // Immich reads the file and looks the place up in the background.
+    let exif: { city?: string | null; country?: string | null; latitude?: number | null } | undefined;
+    for (let i = 0; i < 90 && !exif?.city; i++) {
+      exif = (await immich.getAsset(fam, up.id)).exifInfo ?? undefined;
+      if (!exif?.city) await new Promise((r) => setTimeout(r, 1000));
+    }
+    expect(exif?.latitude).toBeCloseTo(48.8584, 3);
+    expect(exif?.city).toBe("Paris");
+    expect(exif?.country).toBe("France");
+  }, 120_000);
 
   test("a file Immich can't take is refused with its reason", async () => {
     const e = email();

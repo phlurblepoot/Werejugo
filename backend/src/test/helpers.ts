@@ -17,7 +17,7 @@ const APP_TABLES = [
   "media", "documents", "visits", "trips", "people", "packing_lists",
   "icons", "themes", "share_links", "invites", "password_resets", "audit_log",
   "trip_members", "trip_invites", "person_links", "activity",
-  "family_immich", "immich_server", "media_uploads", "immich_people", "trip_albums",
+  "family_immich", "immich_server", "media_uploads", "immich_people", "trip_albums", "suggestion_dismissals",
   "users", "families",
 ];
 

@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { extractExif } from "../lib/exif.js";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
 
@@ -37,6 +38,10 @@ export interface FakeAsset {
   description: string;
   latitude: number | null;
   longitude: number | null;
+  /** Immich's reverse geocoding of the location (the stand-in knows a few cities). */
+  city: string | null;
+  state: string | null;
+  country: string | null;
   dateTimeOriginal: string | null;
   width: number | null;
   height: number | null;
@@ -82,6 +87,31 @@ export interface FakeImmich {
 
 const now = () => new Date().toISOString();
 
+/** A few places for the stand-in's reverse geocoding (real Immich ships GeoNames' cities). */
+const CITIES: Array<[number, number, string, string, string]> = [
+  [48.8566, 2.3522, "Paris", "Île-de-France", "France"],
+  [41.9028, 12.4964, "Rome", "Lazio", "Italy"],
+  [43.7696, 11.2558, "Florence", "Tuscany", "Italy"],
+  [45.4408, 12.3155, "Venice", "Veneto", "Italy"],
+  [38.7223, -9.1393, "Lisbon", "Lisbon", "Portugal"],
+  [41.1579, -8.6291, "Porto", "Porto", "Portugal"],
+  [38.9399, -119.9772, "South Lake Tahoe", "California", "United States of America"],
+  [39.3280, -120.1833, "Truckee", "California", "United States of America"],
+  [37.7749, -122.4194, "San Francisco", "California", "United States of America"],
+  [51.5072, -0.1276, "London", "England", "United Kingdom"],
+];
+/** The nearest known city within 100 km, like Immich's nearest populated place. */
+export function reverseGeocode(lat: number, lng: number): { city: string; state: string; country: string } | null {
+  let best: { d: number; c: (typeof CITIES)[number] } | null = null;
+  for (const c of CITIES) {
+    const dLat = (c[0] - lat) * 111;
+    const dLng = (c[1] - lng) * 111 * Math.cos((lat * Math.PI) / 180);
+    const d = Math.hypot(dLat, dLng);
+    if (!best || d < best.d) best = { d, c };
+  }
+  return best && best.d <= 100 ? { city: best.c[2], state: best.c[3], country: best.c[4] } : null;
+}
+
 function userDto(u: User) {
   return {
     id: u.id, email: u.email, name: u.name, isAdmin: u.isAdmin, avatarColor: "primary",
@@ -103,7 +133,7 @@ function assetDto(a: FakeAsset, withExif = true) {
     ...(withExif ? {
       exifInfo: {
         description: a.description, latitude: a.latitude, longitude: a.longitude, dateTimeOriginal: a.dateTimeOriginal,
-        exifImageWidth: a.width, exifImageHeight: a.height, fileSizeInByte: a.bytes.length, city: null, country: null, state: null,
+        exifImageWidth: a.width, exifImageHeight: a.height, fileSizeInByte: a.bytes.length, city: a.city, country: a.country, state: a.state,
       },
     } : {}),
   };
@@ -200,7 +230,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     const asset: FakeAsset = {
       id: randomUUID(), ownerId, type: "IMAGE", originalFileName: "IMG_0001.jpg", mime: "image/jpeg",
       checksum: createHash("sha1").update(bytes).digest("base64"), fileCreatedAt: now(), createdAt: now(), updatedAt: now(),
-      trashedAt: null, visibility: "timeline", description: "", latitude: null, longitude: null, dateTimeOriginal: null,
+      trashedAt: null, visibility: "timeline", description: "", latitude: null, longitude: null, city: null, state: null, country: null, dateTimeOriginal: null,
       width: 4032, height: 3024, durationMs: null,
       ...a, bytes,
     };
@@ -371,7 +401,12 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"]; p
     if (dup) return reply.code(200).send({ id: dup.id, status: "duplicate" });
     const name = fields.filename || file.filename;
     const video = /\.(mp4|mov|m4v|webm)$/i.test(name) || file.mime.startsWith("video/");
+    // Like Immich's metadata extraction: the date and place from EXIF, the place reverse-geocoded.
+    const exif = video ? null : await extractExif(file.buf).catch(() => null);
+    const place = exif?.lat != null && exif.lng != null ? reverseGeocode(exif.lat, exif.lng) : null;
     const a = mkAsset(c.user.id, {
+      latitude: exif?.lat ?? null, longitude: exif?.lng ?? null, dateTimeOriginal: exif?.takenAt ?? null,
+      city: place?.city ?? null, state: place?.state ?? null, country: place?.country ?? null,
       bytes: file.buf, originalFileName: name,
       mime: video ? (file.mime.startsWith("video/") ? file.mime : "video/mp4") : file.mime === "application/octet-stream" ? "image/jpeg" : file.mime,
       type: video ? "VIDEO" : "IMAGE", fileCreatedAt: new Date(fields.fileCreatedAt).toISOString(), durationMs: video ? 12_345 : null,

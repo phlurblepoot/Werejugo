@@ -18,6 +18,8 @@ export const BACKUP_TABLES = [
   "immich_server", "family_immich",
   // Which Immich face is which person (without it, a restore would untag every face).
   "immich_people",
+  // Suggestions a family said no to.
+  "suggestion_dismissals",
 ] as const;
 
 /** Tables that aren't backed up, and why. Every other table must be in BACKUP_TABLES. */

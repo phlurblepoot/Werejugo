@@ -24,6 +24,10 @@ export interface AssetFields {
   height: number | null;
   /** The description, when Immich sent EXIF (otherwise the caption is left alone). */
   caption: string | null;
+  /** Immich's reverse geocoding of the location. */
+  city: string | null;
+  state: string | null;
+  country: string | null;
   updatedAt: string | null;
 }
 
@@ -60,6 +64,9 @@ export function fieldsFromAsset(a: ImmichAsset): AssetFields | null {
     width: a.width ?? x?.exifImageWidth ?? null,
     height: a.height ?? x?.exifImageHeight ?? null,
     caption: x ? (x.description ?? "") : null,
+    city: x?.city || null,
+    state: x?.state || null,
+    country: x?.country || null,
     updatedAt: a.updatedAt ?? null,
   };
 }
@@ -79,10 +86,10 @@ export async function upsertAsset(
   const run = opts.db ? opts.db.query.bind(opts.db) : query;
   const { rows } = await run<{ id: string; inserted: boolean }>(
     `INSERT INTO media (family_id, immich_asset_id, kind, original_name, mime, bytes, duration_ms, thumbhash, taken_at, geom,
-                        width, height, caption, immich_updated_at, synced_at, created_by)
+                        width, height, caption, immich_updated_at, synced_at, created_by, city, state, country)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
              CASE WHEN $10::float8 IS NULL OR $11::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($11, $10), 4326) END,
-             $12, $13, COALESCE($14, ''), $15, now(), $16)
+             $12, $13, COALESCE($14, ''), $15, now(), $16, $17, $18, $19)
      ON CONFLICT (immich_asset_id) DO UPDATE SET
        kind = EXCLUDED.kind, original_name = EXCLUDED.original_name, mime = EXCLUDED.mime,
        bytes = COALESCE(EXCLUDED.bytes, media.bytes), duration_ms = COALESCE(EXCLUDED.duration_ms, media.duration_ms),
@@ -90,11 +97,13 @@ export async function upsertAsset(
        taken_at = COALESCE(EXCLUDED.taken_at, media.taken_at), geom = COALESCE(EXCLUDED.geom, media.geom),
        width = COALESCE(EXCLUDED.width, media.width), height = COALESCE(EXCLUDED.height, media.height),
        caption = CASE WHEN $14::text IS NULL THEN media.caption ELSE EXCLUDED.caption END,
+       city = COALESCE(EXCLUDED.city, media.city), state = COALESCE(EXCLUDED.state, media.state),
+       country = COALESCE(EXCLUDED.country, media.country),
        immich_updated_at = EXCLUDED.immich_updated_at, synced_at = now()
      WHERE media.family_id = EXCLUDED.family_id
      RETURNING id, (xmax = 0) AS inserted`,
     [familyId, assetId, f.kind, f.originalName, f.mime, f.bytes, f.durationMs, f.thumbhash, takenAt, lat, lng,
-     f.width, f.height, f.caption, f.updatedAt, opts.createdBy ?? null],
+     f.width, f.height, f.caption, f.updatedAt, opts.createdBy ?? null, f.city, f.state, f.country],
   );
   return rows[0] ?? null;
 }

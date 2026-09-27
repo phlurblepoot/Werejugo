@@ -62,7 +62,7 @@ export async function importToImmich(conn: ImmichConn, input: ImportInput): Prom
   const fields: AssetFields = (asset && fieldsFromAsset(asset)) ?? {
     kind: mime.startsWith("video/") ? "video" : "image", originalName: input.filename, mime,
     bytes: input.file.size, durationMs: null, thumbhash: null, takenAt: null, lat: null, lng: null, width: null, height: null,
-    caption: null, updatedAt: null,
+    caption: null, city: null, state: null, country: null, updatedAt: null,
   };
   const saved = await upsertAsset(input.familyId, up.id, fields, {
     createdBy: duplicate ? null : input.userId, fallback: { takenAt: exif.takenAt, lat: exif.lat, lng: exif.lng },
