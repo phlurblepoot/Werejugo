@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckSquare, EyeOff, Eye, FolderMinus, Images, LayoutGrid, Map as MapIcon, RefreshCw, Trash2, X } from "lucide-react";
-import { api, type MediaFilters, type MediaItem } from "../api/client";
+import { CheckSquare, EyeOff, Eye, FolderMinus, Images, LayoutGrid, Map as MapIcon, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { api, type MediaFilters, type MediaItem, type SmartAlbum } from "../api/client";
+import { SearchResults } from "../components/photos/SearchResults";
+import { AlbumBar, SaveAlbumDialog, SmartAlbumMenu, albumFilters } from "../components/photos/SmartAlbums";
 import { MediaUploader } from "../components/shared/MediaUploader";
 import { PhotoFilters } from "../components/photos/PhotoFilters";
 import { LibraryTimeline } from "../components/photos/LibraryTimeline";
@@ -30,6 +32,40 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
     return { ...(trip ? { trip } : {}), ...(person ? { person } : {}) };
   });
   const [view, setView] = useState<"grid" | "map">("grid");
+  // Smart search (what's in the photos): /photos?q=… opens one.
+  const [q, setQ] = useState(params.get("q") ?? "");
+  const [draft, setDraft] = useState(q);
+  // A smart album: /photos?album=<id> opens it (its filters and search).
+  const [albumId, setAlbumId] = useState<string | null>(params.get("album"));
+  const [saving, setSaving] = useState(false);
+  const { data: albums = [] } = useQuery({ queryKey: ["smart-albums"], queryFn: api.listSmartAlbums });
+  const album = albums.find((a) => a.id === albumId) ?? null;
+  const [appliedAlbum, setAppliedAlbum] = useState<string | null>(null);
+  function openAlbum(a: SmartAlbum) {
+    const { q: text = "", ...f } = a.filters;
+    setFilters(f);
+    setQ(text);
+    setDraft(text);
+    setAlbumId(a.id);
+    setAppliedAlbum(a.id);
+    setView("grid");
+  }
+  useEffect(() => {
+    if (album && appliedAlbum !== album.id) openAlbum(album);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album, appliedAlbum]);
+  // Asked for again while the page is open (the command palette, a link): follow the address.
+  const wantedQ = params.get("q");
+  useEffect(() => {
+    if (wantedQ !== null) { setQ(wantedQ); setDraft(wantedQ); }
+  }, [wantedQ]);
+  const wantedAlbum = params.get("album");
+  useEffect(() => {
+    if (wantedAlbum) { setAlbumId(wantedAlbum); setAppliedAlbum(null); }
+  }, [wantedAlbum]);
+  const current = albumFilters(filters, q);
+  // The results being stepped through in the viewer, when they're a search's.
+  const [searchList, setSearchList] = useState<MediaItem[] | null>(null);
   const [open, setOpen] = useState<MediaItem | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -147,7 +183,8 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
         }
         actions={
           <>
-            {filters.trip && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
+            {filters.trip && !album && <ShareButton targetType="album" targetId={filters.trip} label="Share album" />}
+            <SmartAlbumMenu albums={albums} current={current} onOpen={openAlbum} onSave={() => setSaving(true)} />
             {view === "grid" && (
               <IconButton icon={CheckSquare} label={selecting ? "Stop selecting" : "Select photos"} aria-pressed={selecting}
                 onClick={() => (selecting ? stopSelecting() : setSelecting(true))} />
@@ -163,7 +200,22 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
         }
       />
 
+      <form className="photo-search" role="search" onSubmit={(e) => { e.preventDefault(); setQ(draft.trim()); stopSelecting(); }}>
+        <Search size={16} aria-hidden="true" />
+        <input
+          type="search" aria-label="Search photos" value={draft} onChange={(e) => { setDraft(e.target.value); if (!e.target.value) setQ(""); }}
+          placeholder="Search what's in your photos, like “beach at sunset”"
+        />
+        {q && <IconButton size="sm" icon={X} label="Clear search" onClick={() => { setQ(""); setDraft(""); }} />}
+      </form>
       <PhotoFilters value={filters} onChange={(f) => { setFilters(f); stopSelecting(); }} trips={trips} />
+      {album && (
+        <AlbumBar
+          album={album} current={current}
+          onClose={() => { setAlbumId(null); setAppliedAlbum(null); setFilters({}); setQ(""); setDraft(""); }}
+          onChanged={(a) => { if (!a) { setAlbumId(null); setAppliedAlbum(null); } }}
+        />
+      )}
       {foundTrips > 0 && (
         <Link className="sugg-banner" to="/planning">
           ✨ Your photos suggest {foundTrips} {foundTrips === 1 ? "trip" : "trips"} you haven't made yet. See them in Planning
@@ -194,7 +246,9 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
       )}
 
       <div className="page-fill" style={{ overflow: "hidden" }}>
-        {view === "grid" ? (
+        {view === "grid" && q ? (
+          <SearchResults q={q} filters={filters} onOpen={(m, list) => { setSearchList(list); setOpen(m); }} />
+        ) : view === "grid" ? (
           <LibraryTimeline
             filters={filters}
             onOpen={setOpen}
@@ -217,8 +271,19 @@ export function PhotosPage({ initialTrip }: { initialTrip?: string } = {}) {
           myFamilyId={user?.familyId}
           onClose={() => setOpen(null)}
           onChanged={() => void refresh()}
-          onStep={(dir) => neighbour(qc, filters, months, open, dir).then((next) => { if (next) setOpen(next); return next; })}
+          onStep={(dir) => {
+            if (q && searchList) {
+              const next = searchList[searchList.findIndex((m) => m.id === open.id) + dir] ?? null;
+              if (next) setOpen(next);
+              return Promise.resolve(next);
+            }
+            return neighbour(qc, filters, months, open, dir).then((next) => { if (next) setOpen(next); return next; });
+          }}
         />
+      )}
+
+      {saving && (
+        <SaveAlbumDialog filters={current} onClose={() => setSaving(false)} onSaved={(a) => { setSaving(false); setAlbumId(a.id); setAppliedAlbum(a.id); }} />
       )}
 
       {uploadedIds && (

@@ -374,7 +374,7 @@ export interface SearchResults {
   people: SearchHit[]; trips: SearchHit[]; visits: SearchHit[]; photos: SearchHit[]; documents: SearchHit[];
 }
 
-export type ShareTargetType = "trip" | "album";
+export type ShareTargetType = "trip" | "album" | "smart_album";
 export interface ShareLink {
   id: string; token: string; targetType: ShareTargetType; targetId: string; createdAt: string;
 }
@@ -390,7 +390,13 @@ export interface SharedVisit {
 export interface SharedItineraryItem { id: string; title: string; notes: string; scheduledOn: string | null; seq: number; }
 export interface TripSharePayload { targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[]; }
 export interface AlbumSharePayload { targetType: "album"; trip: SharedTrip; photos: SharedPhoto[]; }
-export type SharePayload = TripSharePayload | AlbumSharePayload;
+/** A smart album, evaluated when the link is opened. */
+export interface SmartAlbumSharePayload { targetType: "smart_album"; album: { name: string }; photos: SharedPhoto[]; }
+export type SharePayload = TripSharePayload | AlbumSharePayload | SmartAlbumSharePayload;
+
+/** A smart album: the library's filters and a smart-search text, kept under a name. */
+export interface SmartAlbumFilters extends Pick<MediaFilters, "person" | "trip" | "visit" | "from" | "to" | "kind" | "noTrip"> { q?: string }
+export interface SmartAlbum { id: string; name: string; filters: SmartAlbumFilters; createdAt: string; updatedAt: string }
 
 export interface Stats {
   items: number;
@@ -873,6 +879,16 @@ export const api = {
     request<Person>(`/api/people/${id}`, { method: "PATCH", body: body(data) }),
   deletePerson: (id: string) => request<void>(`/api/people/${id}`, { method: "DELETE" }),
   listFamilyMembers: () => request<FamilyMember[]>("/api/family-members"),
+
+  // smart search (Immich's machine learning) within the library, and smart albums
+  searchMedia: (q: string, f: MediaFilters = {}, page = 1) =>
+    request<{ items: MediaItem[]; nextPage: number | null }>(`/api/media/search?${queryString({ ...f, q, page } as MediaFilters)}`),
+  listSmartAlbums: () => request<SmartAlbum[]>("/api/smart-albums"),
+  createSmartAlbum: (name: string, filters: SmartAlbumFilters) =>
+    request<SmartAlbum>("/api/smart-albums", { method: "POST", body: body({ name, filters }) }),
+  updateSmartAlbum: (id: string, b: { name?: string; filters?: SmartAlbumFilters }) =>
+    request<SmartAlbum>(`/api/smart-albums/${id}`, { method: "PATCH", body: body(b) }),
+  deleteSmartAlbum: (id: string) => request<void>(`/api/smart-albums/${id}`, { method: "DELETE" }),
 
   // suggestions from photos: for=trip:<id> | visit:<id> | library
   listSuggestions: (target: string) => request<{ items: Suggestion[] }>(`/api/suggestions?for=${encodeURIComponent(target)}`),

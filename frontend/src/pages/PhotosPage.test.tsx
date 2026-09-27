@@ -22,6 +22,12 @@ const h = vi.hoisted(() => ({
   getRelations: vi.fn(async () => []),
   searchEntities: vi.fn(async () => []),
   listSuggestions: vi.fn(async (): Promise<{ items: unknown[] }> => ({ items: [] })),
+  searchMedia: vi.fn(),
+  listSmartAlbums: vi.fn(async (): Promise<unknown[]> => []),
+  createSmartAlbum: vi.fn(async (name: string, filters: object) => ({ id: "sa1", name, filters, createdAt: "", updatedAt: "" })),
+  updateSmartAlbum: vi.fn(),
+  deleteSmartAlbum: vi.fn(async () => undefined),
+  listShares: vi.fn(async () => []),
 }));
 const auth = vi.hoisted(() => ({ user: { familyId: "f1", isAdmin: false } as Record<string, unknown> }));
 vi.mock("../lib/auth", () => ({ useAuth: () => auth }));
@@ -118,4 +124,62 @@ test("trips found in the photos are pointed out, with a link to Planning", async
   const banner = await screen.findByRole("link", { name: /Your photos suggest 2 trips/ });
   expect(banner).toHaveAttribute("href", "/planning");
   expect(h.listSuggestions).toHaveBeenCalledWith("library");
+});
+
+test("searching what's in the photos shows Immich's matches, with More, and the viewer steps through them", async () => {
+  h.searchMedia.mockImplementation(async (_q: string, _f: object, page: number) => page === 1
+    ? { items: [item("sunset-1", "2024-06"), item("sunset-2", "2024-05")], nextPage: 2 }
+    : { items: [item("sunset-3", "2023-01")], nextPage: null });
+  page();
+  await userEvent.type(await screen.findByLabelText("Search photos"), "sunset{Enter}");
+  const grid = await screen.findByRole("list", { name: "Photos of “sunset”" });
+  expect(within(grid).getAllByRole("button")).toHaveLength(2);
+  expect(h.searchMedia).toHaveBeenCalledWith("sunset", {}, 1);
+  await userEvent.click(screen.getByRole("button", { name: "More" }));
+  await waitFor(() => expect(within(grid).getAllByRole("button")).toHaveLength(3));
+  await userEvent.click(within(grid).getByRole("button", { name: "Photo: sunset-1" }));
+  await userEvent.keyboard("{ArrowRight}");
+  expect(await screen.findByRole("dialog", { name: /sunset-2/ })).toBeInTheDocument();
+});
+
+test("/photos?q= opens a search; with machine learning off, it says so", async () => {
+  h.searchMedia.mockRejectedValue(Object.assign(new Error("off"), { status: 409 }));
+  page("/photos?q=beach");
+  expect(await screen.findByText("Smart search is off")).toBeInTheDocument();
+  expect(screen.getByLabelText("Search photos")).toHaveValue("beach");
+});
+
+test("a search and filters saved as a smart album, and a smart album opened", async () => {
+  h.searchMedia.mockResolvedValue({ items: [item("sunset-1", "2024-06")], nextPage: null });
+  page();
+  await userEvent.type(await screen.findByLabelText("Search photos"), "sunset{Enter}");
+  await userEvent.click(screen.getByRole("button", { name: "Smart albums" }));
+  await userEvent.click(await screen.findByRole("menuitem", { name: "Save as smart album…" }));
+  const dialog = await screen.findByRole("dialog", { name: "Save as smart album" });
+  expect(within(dialog).getByLabelText("Name")).toHaveValue("Sunset");
+  await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(h.createSmartAlbum).toHaveBeenCalledWith("Sunset", { q: "sunset" }));
+});
+
+test("/photos?album= opens a smart album with its search and filters", async () => {
+  h.listSmartAlbums.mockResolvedValue([{ id: "sa1", name: "Italy sunsets", filters: { q: "sunset", trip: "t1" }, createdAt: "", updatedAt: "" }]);
+  h.searchMedia.mockResolvedValue({ items: [item("sunset-1", "2024-06")], nextPage: null });
+  page("/photos?album=sa1");
+  const bar = await screen.findByRole("region", { name: "Smart album" });
+  expect(within(bar).getByText("Italy sunsets")).toBeInTheDocument();
+  await waitFor(() => expect(h.searchMedia).toHaveBeenCalledWith("sunset", { trip: "t1" }, 1));
+  expect(screen.getByLabelText("Search photos")).toHaveValue("sunset");
+  // Close it: back to the whole library.
+  await userEvent.click(within(bar).getByRole("button", { name: "Close album" }));
+  expect(await screen.findByText("June 2024")).toBeInTheDocument();
+});
+
+test("a search asked for while the page is open (from the palette) is followed", async () => {
+  h.searchMedia.mockResolvedValue({ items: [item("sunset-1", "2024-06")], nextPage: null });
+  const { Link } = await import("react-router-dom");
+  render(withApp(<MemoryRouter initialEntries={["/photos"]}><Link to="/photos?q=sunset">go</Link><PhotosPage /></MemoryRouter>));
+  expect(await screen.findByText("June 2024")).toBeInTheDocument();
+  await userEvent.click(screen.getByText("go"));
+  expect(await screen.findByRole("list", { name: "Photos of “sunset”" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Search photos")).toHaveValue("sunset");
 });

@@ -36,13 +36,13 @@ export function ShareView() {
 
   const header = (
     <header className="app-header">
-      <span className="brand">{data.targetType === "album" ? "🖼️" : "🗺️"} {data.trip.name}</span>
-      <span className="who">shared {data.targetType} · read-only</span>
+      <span className="brand">{data.targetType === "trip" ? "🗺️" : "🖼️"} {data.targetType === "smart_album" ? data.album.name : data.trip.name}</span>
+      <span className="who">shared {data.targetType === "trip" ? "trip" : "album"} · read-only</span>
       <span className="spacer" />
     </header>
   );
 
-  if (data.targetType === "album") {
+  if (data.targetType === "album" || data.targetType === "smart_album") {
     return (
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
         {header}

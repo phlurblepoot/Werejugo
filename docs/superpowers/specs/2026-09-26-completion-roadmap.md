@@ -11,10 +11,10 @@
 
 | Field | Value |
 |---|---|
-| **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.8 |
-| **Next step** | Build Phase 2.8 ([plan](../plans/2026-09-27-phase-2.8-smart-search.md)): Immich smart search in the palette and on the Photos page (with Werejugo's filters); smart albums as saved filters, shareable by link; then the Milestone 2 wrap-up |
-| **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
+| **Current milestone** | Milestone 3 — Finish every module (on the new design) |
+| **Current phase** | 3.1 |
+| **Next step** | Milestone 2 review: the owner installs Immich ([guide](../../immich-on-unraid.md)), sets `ENCRYPTION_KEY`, tests the preview image `claude-cool-hopper-pku4ne` (it migrates the Milestone 1 database in place), merges PR #2, and deletes the old branch `claude/confident-ramanujan-xDIFr` (the last 1.1 item). Then, with the go-ahead, plan Phase 3.1. |
+| **Blocked on** | The owner's Milestone 2 review |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
 
@@ -314,10 +314,10 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.8 Smart search & smart albums — S
 
-**Status:** In progress · **Plan:** [phase-2.8](../plans/2026-09-27-phase-2.8-smart-search.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.8](../plans/2026-09-27-phase-2.8-smart-search.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Immich smart search inside the command palette ("beach sunset").
-- [ ] Smart albums = saved filters (person, place, date range, trip, search text) that update automatically; shareable by link.
+- [x] Immich smart search inside the command palette ("beach sunset").
+- [x] Smart albums = saved filters (person, place, date range, trip, search text) that update automatically; shareable by link.
 
 **Milestone 2 exit:** each family's photos live in its Immich account but look native in Werejugo; 20k+ photos and videos browse smoothly; faces tag people; trips suggest and sync their photos.
 
@@ -497,6 +497,30 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Note** — Milestone 2 is built and ready for the owner's review (PR #2). Exit criteria, checked:
+  - **Each family's photos live in its Immich account but look native in Werejugo:**
+    - 2.1 gives each family its own Immich account.
+    - 2.2 serves thumbnails, previews, originals and video at Werejugo's own signed links, and syncs photos added in Immich directly.
+    - 2.3 uploads in pieces.
+    - The contract suite (16 tests) passes against a real Immich 3.2.2 in CI.
+  - **20k+ photos and videos browse smoothly:** 2.4, Playwright with 20,007 photos: the first screen in ~0.2 s, about 50 cells in the page at a time, and months fetched as they scroll in.
+  - **Faces tag people:** 2.5, a review queue and automatic tags, including another family's person.
+  - **Trips suggest and sync their photos:** 2.6 (each trip an album in Immich, both ways) and 2.7 (suggestions for trips, places and people, and trips found in the photos).
+  - **Also:** 2.8, smart search and smart albums.
+
+  Last step: an upgrade from Milestone 1. A database built with `main`'s migrations and the dev seed took migrations 0004–0011 cleanly, and the backend then answered the new routes on it without Immich (library, faces, suggestions, smart albums; search explains that Immich is needed). Backend 468/468, frontend 266/266, typecheck and build clean. CI (both suites, the roadmap check and the real-Immich contract) runs on every push.
+
+  For the owner: install Immich with the guide (machine learning on the RTX 5070 powers faces and smart search), set `ENCRYPTION_KEY` on the backend, and connect it in Admin → Immich. Photos uploaded before Milestone 2 aren't carried over (test data), as the README says. Still open: 1.1's last item, deleting `claude/confident-ramanujan-xDIFr`, which the owner does on GitHub.
+- **Done** — Phase 2.8 Smart search & smart albums (PR #2).
+  - **Smart search:** Immich's smart search (what's in the photos: "beach at sunset") is in the command palette ("In your photos", with thumbnails and "All photos of …") and on the Photos page, in Immich's relevance order and within Werejugo's filters. When Immich's machine learning is off, it says so.
+  - **Smart albums:** a search and filters saved under a name, from the Photos page's **Smart albums** menu. They fill themselves as photos arrive, open at `/photos?album=`, can be renamed, updated to the current search, deleted, and shared by a public link. The link shows the family's own photos, evaluated when it's opened.
+  - **Verified:**
+    - Backend 468/468 (6 search and album tests, and isolation cases) and frontend 266/266.
+    - The contract passes against the real Immich without machine learning: the refusal is well-formed and says why.
+    - Playwright through nginx with the stand-in: 20 checks, including the palette, a person filter, saving, a new photo filling the album, the public link logged out, rename, delete, and phone layout.
+- **Note** — Found in 2.8:
+  - **Public trip and album links showed photos hidden from the library.** They no longer do, and smart albums follow the same rule. Test added.
+  - **The Photos page** only read `?q=` when it first opened, so "All photos of …" from the palette, on the Photos page itself, didn't search. It now follows the address, for `?album=` too.
 - **Note** — Planning 2.8:
   - Smart search needs Immich's machine learning, which CI's Immich doesn't run. The contract checks the refusal instead, and the stand-in imitates both states.
   - Found: a public album link shows photos hidden from the library. They're left out of public links from 2.8.
