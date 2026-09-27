@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.3 |
-| **Next step** | Build Phase 2.3 ([plan](../plans/2026-09-27-phase-2.3-uploads-at-scale.md)): chunked resumable uploads with an upload tray, background hand-off to Immich, duplicates (including ones in Immich's trash) and Live Photo clips handled |
+| **Current phase** | 2.4 |
+| **Next step** | Plan and build Phase 2.4: a virtualized library grid that stays fast at 20k+ photos, filters, lightbox, the Photos map with clustering, and a photo picker for any item that browses the whole library |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -281,9 +281,9 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.3 Uploads at scale — M
 
-**Status:** In progress · **Plan:** [phase-2.3](../plans/2026-09-27-phase-2.3-uploads-at-scale.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
+**Status:** Done · **Plan:** [phase-2.3](../plans/2026-09-27-phase-2.3-uploads-at-scale.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Resumable chunked uploads (Cloudflare-safe) with per-file progress, retry and background hand-off to Immich; iPhone HEIC/Live Photos, RAW and video via Immich; duplicate detection surfaced ("already in your library").
+- [x] Resumable chunked uploads (Cloudflare-safe) with per-file progress, retry and background hand-off to Immich; iPhone HEIC/Live Photos, RAW and video via Immich; duplicate detection surfaced ("already in your library").
 
 #### 2.4 Library UI — M
 
@@ -495,6 +495,24 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 Newest first. Entry types: **Done** (a phase or milestone finished), **Changed** (the plan was edited: items added, dropped or reordered), **Decided** (an owner decision, also recorded in §2), **Note** (anything a future session needs to know). Each entry names the phase and links the PR or commit where one exists.
 
 ### 2026-09-27
+
+- **Done** — Phase 2.3 Uploads at scale (PR #2).
+  - **Uploads in pieces:** photos and videos go up in 8 MB pieces (Cloudflare-safe), three files at a time, up to `MAX_UPLOAD_GB` (20 by default). A dropped piece is retried on its own. After a reload, choosing the same file again sends only the rest.
+  - **Upload tray:** at the bottom of every page (above the tab bar on phones). It shows each file's progress and outcome, with Retry, Choose file and Cancel.
+  - **Background hand-off:** once the bytes are in, a job hands the file to Immich, so the person can leave. A photo added for a place or person is linked by the server when it arrives, and a new place's photos no longer hold its editor open.
+  - **Duplicates** say "Already in your library"; one that was in Immich's trash comes back out.
+  - **Immich trouble:** a file Immich refuses fails with Immich's reason. When Immich is unreachable, the job tries 3 more times, then keeps the bytes for Retry.
+  - **Formats:** HEIC, RAW and video go to Immich as they are. The 5-minute sync drops Live Photo clips once Immich pairs and hides them.
+  - **Cleanup:** a daily job removes abandoned uploads.
+  - **Verified:**
+    - Backend 372/372 and frontend 216/216.
+    - Playwright through the real nginx config, the backend's job queue and the stand-in: 21 checks, including a dropped piece, a reload mid-video that resumed from 16 MB, and phone layout.
+    - The contract test against a real Immich 3.2.2 in CI: trashed duplicates and restore, a video clip, an AVIF photo, and the hidden-asset search.
+- **Note** — Found in 2.3:
+  - **Memory:** Node's `fetch` (so the Immich SDK's upload) holds a whole request body in memory; a 600 MB video peaked at 720 MB. Uploads to Immich are now streamed with `node:http` (133 MB for the same file).
+  - **The locked folder:** the contract test against the real Immich showed a search for its locked folder is refused (it needs the PIN-unlocked session), which would have failed every 5-minute sync. The sync looks for hidden assets only; photos moved to the locked folder leave at the nightly full sync.
+  - **nginx:** a location ending in `/` made nginx answer `POST /api/media/uploads` with a 301. Running the browser checks through the real config found it.
+  - **iPhones:** Safari's picker usually sends a JPEG copy and only the still of a Live Photo. The README and the Unraid guide point iPhone users to Immich's app for full quality.
 
 - **Done** — Phase 2.2 Media references & seamless serving (PR #2). Photos and videos now live in each family's Immich account; a `media` row is a reference (`immich_asset_id`) plus a cache of date, place, size, caption and length.
   - **Uploads:** they go to Immich (EXIF date and place are read at once for suggestions). Duplicates come back as "Already in your library"; no Immich connection is a clear message; Immich being down is a clear error.
