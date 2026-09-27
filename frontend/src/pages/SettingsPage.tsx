@@ -17,6 +17,7 @@ import {
   SegmentedControl, Spinner, cx, useConfirm, type MenuEntry,
 } from "../components/kit";
 import { errorText } from "./AuthCard";
+import { ImmichCard } from "../components/settings/ImmichCard";
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -27,11 +28,12 @@ export function SettingsPage() {
         <div className="settings-stack">
           <AccountCard />
           <FamilyCard />
+          <ImmichCard />
           <AppearanceCard />
           {user?.isAdmin && (
             <Card title="Server" description="You're the server admin.">
               <p className="er-sub">
-                Families, invites for new families, everyone's accounts, backups and the audit log are in{" "}
+                Families, invites for new families, everyone's accounts, the Immich connection, backups and the audit log are in{" "}
                 <Link to="/admin">Admin</Link>.
               </p>
             </Card>

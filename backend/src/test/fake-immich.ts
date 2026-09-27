@@ -53,7 +53,7 @@ const keyDto = (k: ApiKey) => ({ id: k.id, name: k.name, permissions: k.permissi
 const fail = (reply: FastifyReply, statusCode: number, message: string) =>
   reply.code(statusCode).send({ message, error: { 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden" }[statusCode] ?? "Error", statusCode });
 
-export async function startFakeImmich(opts: { version?: FakeImmich["version"] } = {}): Promise<FakeImmich> {
+export async function startFakeImmich(opts: { version?: FakeImmich["version"]; port?: number; adminKey?: string } = {}): Promise<FakeImmich> {
   const users = new Map<string, User>();
   const keys = new Map<string, ApiKey>();
   const sessions = new Map<string, string>(); // token -> userId
@@ -72,6 +72,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"] } 
   };
   const admin = mkUser("admin@immich.test", "Immich Admin", "admin-password", true);
   const adminKey = mkKey(admin.id, "werejugo-tests", ["all"]);
+  if (opts.adminKey) adminKey.secret = opts.adminKey;
 
   const app = Fastify({ logger: false });
 
@@ -196,7 +197,7 @@ export async function startFakeImmich(opts: { version?: FakeImmich["version"] } 
     return reply.code(204).send();
   });
 
-  await app.listen({ host: "127.0.0.1", port: 0 });
+  await app.listen({ host: "127.0.0.1", port: opts.port ?? 0 });
   const addr = app.server.address();
   const port = typeof addr === "object" && addr ? addr.port : 0;
 

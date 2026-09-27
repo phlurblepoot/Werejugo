@@ -57,9 +57,14 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 | `DATABASE_URL` | Postgres connection string | `postgres://werejugo:change-me-in-production@localhost:5432/werejugo` |
 | `JWT_SECRET` | Signs login tokens. **Required in production**, at least 32 characters | — |
 | `FILE_SIGNING_SECRET` | Signs photo/document links | derived from `JWT_SECRET` |
+| `ENCRYPTION_KEY` | Encrypts the Immich keys Werejugo stores (and, later, document files). At least 32 characters (`openssl rand -hex 32`). Needed to turn on Immich. **Keep a copy**: a backup restored without it needs the Immich keys entered again | — |
 | `STORAGE_DIR` | Photos, videos, documents (browsable tree) | `/app/storage` |
 | `UPLOADS_DIR` | Custom pin icons | `/app/uploads` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `http://localhost:8080` |
+
+## Photos (Immich)
+
+Each family's photos and videos live in its own account on an [Immich](https://immich.app) server next to Werejugo; Werejugo shows them in its own pages and Immich stays off the internet. Install Immich with [docs/immich-on-unraid.md](docs/immich-on-unraid.md), set `ENCRYPTION_KEY` on the backend, then connect it in **Admin → Immich** (address + an Immich admin API key) and **Connect all families**. Werejugo supports Immich 3.2 up to (not including) 4.0.
 
 ## Modules
 

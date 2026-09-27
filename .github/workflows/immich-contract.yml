@@ -81,6 +81,7 @@ jobs:
         working-directory: backend
         env:
           IMMICH_TEST_URL: http://localhost:2283
+          IMMICH_CONTRACT_REQUIRE_REAL: "1"
         run: npx vitest run src/lib/immich/contract.test.ts
       - name: Immich logs
         if: failure()

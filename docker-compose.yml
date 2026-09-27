@@ -26,6 +26,8 @@ services:
       # Required: compose refuses to start without it. Generate: openssl rand -hex 32
       JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env - generate one with openssl rand -hex 32}"
       FILE_SIGNING_SECRET: ${FILE_SIGNING_SECRET:-}
+      # Encrypts stored Immich keys. Needed to connect Immich; keep a copy. openssl rand -hex 32
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       BACKEND_PORT: ${BACKEND_PORT:-4000}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}

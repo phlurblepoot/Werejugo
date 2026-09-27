@@ -109,6 +109,40 @@ export interface AdminUser {
   isYou: boolean;
 }
 
+export type ImmichFamilyState = "none" | "created" | "linked" | "error";
+
+/** Admin → Immich: the connection to the Immich server and each family's account. Keys never come back. */
+export interface ImmichAdmin {
+  encryptionReady: boolean;
+  encryptionProblem: string | null;
+  configured: boolean;
+  url: string | null;
+  adminKeySet: boolean;
+  updatedAt: string | null;
+  check: { ok: boolean; version: string | null; supported: boolean | null; error: string | null; at: string } | null;
+  supportedRange: string;
+  families: Array<{
+    id: string;
+    name: string;
+    state: ImmichFamilyState;
+    mode: "created" | "linked" | null;
+    immichEmail: string | null;
+    lastError: string | null;
+    lastOkAt: string | null;
+  }>;
+  results?: Array<{ id: string; name: string; ok: boolean; error?: string }>;
+}
+
+/** Is Immich on for my family? Owners also get the login for using Immich directly. */
+export interface ImmichStatus {
+  enabled: boolean;
+  state: ImmichFamilyState;
+  url?: string;
+  email?: string;
+  mode?: "created" | "linked";
+  canSetPassword?: boolean;
+}
+
 export interface AuditEntry {
   id: string;
   at: string;
@@ -640,6 +674,17 @@ export const api = {
   adminViewFamily: (familyId: string) =>
     request<{ token: string }>("/api/admin/view-family", { method: "POST", body: body({ familyId }) }),
   adminReturn: () => request<{ token: string }>("/api/admin/return", { method: "POST" }),
+  immichAdmin: () => request<ImmichAdmin>("/api/admin/immich"),
+  saveImmichServer: (url: string, adminKey?: string) =>
+    request<ImmichAdmin>("/api/admin/immich", { method: "PUT", body: body(adminKey ? { url, adminKey } : { url }) }),
+  checkImmich: () => request<ImmichAdmin>("/api/admin/immich/check", { method: "POST" }),
+  connectImmichFamily: (familyId: string) => request<ImmichAdmin>(`/api/admin/immich/families/${familyId}/connect`, { method: "POST" }),
+  linkImmichFamily: (familyId: string, apiKey: string) =>
+    request<ImmichAdmin>(`/api/admin/immich/families/${familyId}/link`, { method: "POST", body: body({ apiKey }) }),
+  disconnectImmichFamily: (familyId: string) => request<ImmichAdmin>(`/api/admin/immich/families/${familyId}`, { method: "DELETE" }),
+  connectAllImmich: () => request<ImmichAdmin>("/api/admin/immich/connect-all", { method: "POST" }),
+  immichStatus: () => request<ImmichStatus>("/api/immich"),
+  setImmichPassword: (password: string) => request<{ ok: true }>("/api/immich/password", { method: "POST", body: body({ password }) }),
   auditLog: (before?: string) =>
     request<AuditEntry[]>(`/api/admin/audit${before ? `?before=${encodeURIComponent(before)}` : ""}`),
 

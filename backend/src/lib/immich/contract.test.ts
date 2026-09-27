@@ -14,6 +14,9 @@ const REAL = process.env.IMMICH_TEST_URL && process.env.IMMICH_TEST_ADMIN_KEY
   ? { url: normalizeImmichUrl(process.env.IMMICH_TEST_URL), adminKey: process.env.IMMICH_TEST_ADMIN_KEY }
   : null;
 
+// The CI job sets this, so a missing key can't quietly fall back to the stand-in.
+if (process.env.IMMICH_CONTRACT_REQUIRE_REAL && !REAL) throw new Error("IMMICH_TEST_URL and IMMICH_TEST_ADMIN_KEY must be set");
+
 let fake: FakeImmich | null = null;
 let url = "";
 let adminKey = "";

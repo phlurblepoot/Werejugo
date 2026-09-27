@@ -202,9 +202,11 @@ button.kit-chip-body:hover:not(:disabled) { background: none; }
 
   .page-header { padding: 8px var(--space-4); padding-top: calc(8px + var(--safe-top)); gap: var(--space-2); }
   .ph-title h1 { font-size: 18px; }
-  .ph-views { order: 3; flex: 1 0 100%; }
-  .ph-views .kit-segmented { width: 100%; }
-  .ph-views .kit-segment { flex: 1; }
+  /* Fill the row; if the segments don't fit (e.g. Admin's five tabs), scroll sideways instead of clipping. */
+  .ph-views { order: 3; flex: 1 0 100%; overflow-x: auto; scrollbar-width: none; }
+  .ph-views::-webkit-scrollbar { display: none; }
+  .ph-views .kit-segmented { min-width: 100%; }
+  .ph-views .kit-segment { flex: 1 0 auto; white-space: nowrap; }
   .ph-actions { gap: 4px; }
   .ph-search { display: inline-flex; }
 

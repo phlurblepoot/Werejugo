@@ -157,3 +157,24 @@
 .trip-head h2 { flex: 1; margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .trip-meta { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin: 4px 0 var(--space-3); }
 .trip-meta .trip-status { width: auto; flex: 0 0 auto; }
+
+/* ---- Immich (Admin → Immich, Settings → Photos) ---- */
+.immich-callout { display: flex; gap: var(--space-2); align-items: flex-start; padding: 10px 12px; border-radius: var(--radius-md); margin-bottom: var(--space-3); font-size: var(--text-sm); }
+.immich-callout svg { flex-shrink: 0; margin-top: 2px; }
+.immich-callout-warn { background: var(--color-warning-soft); color: var(--color-warning); }
+.immich-callout-warn strong { color: inherit; }
+.immich-status { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 var(--space-3); font-size: var(--text-sm); }
+.immich-status.ok { color: var(--color-success); }
+.immich-status.bad { color: var(--color-danger); }
+.immich-status .er-sub { color: var(--color-text-muted); }
+.immich-form { display: grid; gap: var(--space-3); max-width: 560px; }
+.immich-form > .kit-btn { justify-self: start; }
+.immich-email { font-family: var(--font-mono, ui-monospace, monospace); }
+.immich-error { color: var(--color-danger); }
+.immich-login { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 var(--space-3); font-size: var(--text-sm); }
+.immich-login dt { color: var(--color-text-muted); }
+.immich-login dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .immich-login { grid-template-columns: 1fr; }
+  .immich-login dd { margin-bottom: 6px; }
+}

@@ -12,8 +12,8 @@
 | Field | Value |
 |---|---|
 | **Current milestone** | Milestone 2 — Photos on Immich |
-| **Current phase** | 2.1 |
-| **Next step** | Build Phase 2.1: `ENCRYPTION_KEY` + secret box → Immich adapter and stand-in Immich → admin Immich settings, health and provisioning → owner's Immich login → contract tests against a real Immich in CI → Unraid install guide (NVIDIA) |
+| **Current phase** | 2.2 |
+| **Next step** | Plan and build Phase 2.2: `media` becomes references to Immich assets, pg-boss jobs, library sync from each family's Immich account, and proxied thumbnails/previews/originals/video with cacheable signed URLs |
 | **Blocked on** | Nothing (the owner hasn't installed Immich yet: development uses a stand-in built from Immich's API spec, and CI tests against a real Immich) |
 | **Last updated** | 2026-09-27 |
 <!-- status:end -->
@@ -263,12 +263,12 @@ Each phase gets its own detailed implementation plan in `docs/superpowers/plans/
 
 #### 2.1 Immich connector & provisioning — M
 
-**Status:** In progress · **Plan:** [phase-2.1](../plans/2026-09-27-phase-2.1-immich-connector.md) · **PR:** —
+**Status:** Done · **Plan:** [phase-2.1](../plans/2026-09-27-phase-2.1-immich-connector.md) · **PR:** [#2](https://github.com/phlurblepoot/Werejugo/pull/2)
 
-- [ ] Admin setup (URL + admin key), version check, health on the admin page; per-family Immich user + API key creation (or link existing); keys encrypted at rest.
-- [ ] Adapter module; fixtures-based unit tests; contract tests against a real Immich in CI (a nightly job if too slow for every PR).
-- [ ] Unraid guide for installing Immich alongside Werejugo (GPU acceleration for face recognition optional).
-- [ ] A family can also use Immich directly (its web page or app): an owner sets the family's Immich password in Settings → Family. (added 2026-09-27)
+- [x] Admin setup (URL + admin key), version check, health on the admin page; per-family Immich user + API key creation (or link existing); keys encrypted at rest.
+- [x] Adapter module; fixtures-based unit tests; contract tests against a real Immich in CI (a nightly job if too slow for every PR).
+- [x] Unraid guide for installing Immich alongside Werejugo (GPU acceleration for face recognition optional).
+- [x] A family can also use Immich directly (its web page or app): an owner sets the family's Immich password in Settings → Family. (added 2026-09-27)
 
 #### 2.2 Media references & seamless serving — M
 
@@ -496,6 +496,29 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Done** — Phase 2.1 Immich connector & provisioning (PR #2).
+  - **Admin → Immich:** the admin enters Immich's address and an admin API key. Werejugo checks them live (Immich answers, the key belongs to an admin and has the needed permissions) and stores the key encrypted with the new `ENCRYPTION_KEY`. The page shows the version against the supported range (3.2 up to 4.0) and each family's state.
+  - **Family accounts:**
+    - Every family gets its own Immich account and key: one at a time, "Connect all", or automatically when a family is created.
+    - A half-finished setup resumes; a rejected or unreadable key is replaced.
+    - Existing accounts can be linked instead (never an Immich admin, never twice).
+    - Disconnecting revokes Werejugo's key and leaves the account and its photos in Immich.
+  - **Settings → Photos (Immich):** owners see their family's Immich login and can set its password to use Immich directly.
+  - **Adapter:** all Immich calls go through `lib/immich/client.ts` (the official SDK, pinned to 3.2.2), tested against a stand-in Immich.
+  - **Contract tests:** the same tests run in CI against a real Immich 3.2.2 (`immich-contract.yml`, which fails if it ever falls back to the stand-in).
+  - **Unraid guide:** `docs/immich-on-unraid.md`, with NVIDIA acceleration for the owner's RTX 5070.
+  - **Verified:**
+    - Backend 322/322, frontend 189/189.
+    - Contract tests 7/7 against real Immich 3.2.2 in CI.
+    - Playwright against the stand-in (desktop and phone): connect, wrong key, connect all, disconnect and reconnect, the audit log, and an owner setting the Immich password then signing in to Immich with it. No console errors or overflow.
+  - **Phone fix:** Admin's tab row now scrolls instead of clipping.
+- **Note** — The owner asked whether an enhanced Immich fork is worth using. Research (2026-09-27) recommends **stock Immich**:
+  - **Noodle Gallery** (open-noodle/gallery) is the only active, credible fork. It's API-compatible with 3.2.2 for Werejugo's calls.
+  - Its extras (shared spaces, pets, video trim, S3, trip recaps) live mostly in its own UI.
+  - It removes two upstream 3.2 features Werejugo can use: cross-user face "cluster groups" and the new structured search.
+  - It depends on one AI-assisted maintainer, and switching back deletes the fork's data.
+
+  The other forks are one-person experiments. For later phases: 2.5 should use upstream 3.2 **cluster groups** to match faces across families' accounts (linked people), and 2.8 should use 3.2's **structured search** (filters, AND/OR, search within albums).
 - **Changed** — Started Milestone 2 at Phase 2.1 ([plan](../plans/2026-09-27-phase-2.1-immich-connector.md)). The owner hasn't installed Immich yet, and this sandbox can't pull Immich's images. So development runs against a stand-in Immich built from Immich 3.2.2's published API spec, and CI runs the same tests against a real Immich 3.2.2. Supported range: Immich 3.2 up to (not including) 4.0. The Unraid guide comes first in 2.1 so the owner can install Immich while the rest is built.
 - **Changed** — Items added from the owner's answers: 2.1 a family can use Immich directly; 2.2 library sync of everything in the family's Immich account; 2.4 a photo picker on every item that browses the whole library; 2.7 suggestions for existing items (photos for places, missing places, people from faces). 3.3's document key becomes the shared `ENCRYPTION_KEY` introduced in 2.1.
 - **Decided** — Photos are uploaded through Werejugo, and Werejugo also reads everything in the family's Immich account (including photos added in Immich directly) and uses its people, places and dates to suggest trips, places and people, for existing items and new ones. The photo picker browses the whole Immich library (§2).

@@ -43,7 +43,9 @@ Log entry format (newest date first, under a `### YYYY-MM-DD` heading):
 - **Every new route needs a case in `routes/tenant-isolation.test.ts`** (or an `EXEMPT` entry with a reason) — the suite fails on any registered route it doesn't know.
 - Throw `HttpError`s (`lib/errors.ts`) and parse bodies with zod `.parse()`; the global error handler turns them (and Postgres input errors) into 400/404/409. Dates use `ymd`/`optionalYmd` from `lib/validate.ts`; coordinates use `lib/geojson.ts`.
 - Files live under `families/<familyId>/…` in `STORAGE_DIR`, with never-reused names (`lib/storage.ts`).
-- Schema changes are new migrations after `0001_baseline.sql` (now up to `0003_one_map.sql`); never edit an applied migration. Data migrations get a test in `src/db/migrations.test.ts` (run the SQL on old-shape data in a rolled-back transaction).
+- **Immich goes through `backend/src/lib/immich/client.ts`** (the official `@immich/sdk`, pinned to the version in `lib/immich/version.ts`); nothing else imports the SDK or calls Immich. Keys Werejugo stores are sealed with `lib/secretbox.ts` (`ENCRYPTION_KEY`) and never returned by a route.
+- **Tests use the stand-in Immich** (`src/test/fake-immich.ts`); any new Immich call gets a case in `lib/immich/contract.test.ts`, which CI (`immich-contract.yml`) also runs against a real Immich. Keep the stand-in's shapes and error statuses identical to the real ones.
+- Schema changes are new migrations after `0001_baseline.sql` (now up to `0004_immich.sql`); never edit an applied migration. Data migrations get a test in `src/db/migrations.test.ts` (run the SQL on old-shape data in a rolled-back transaction).
 
 ## Frontend conventions
 
@@ -82,6 +84,7 @@ cd ../frontend && npx vite --port 5173                # UI on :5173, proxies /ap
 
 - Log in as `demo@werejugo.dev` (server admin, owner of The Wanderers) or `smith@werejugo.dev` (owner of The Smiths, a contributor on the Wanderers' "Lake Tahoe 2025"); password `password123` for both.
 - `npm start` / the server itself does not migrate: run `migrate.ts` (and `seed.ts`) first, as the Docker image does.
+- No Immich server? `cd backend && npm run fake-immich` starts the stand-in on :2283 (in memory); connect it in Admin → Immich with the key it prints, and set `ENCRYPTION_KEY` for the backend. To run the contract tests against a real Immich: `IMMICH_TEST_URL=http://host:2283 IMMICH_TEST_ADMIN_KEY=… npx vitest run src/lib/immich/contract.test.ts`.
 - Chromium for Playwright is at `/opt/pw-browsers`. External map tiles may not load in the sandbox.
 
 Known baseline (2026-09-26, end of Milestone 1): backend 288/288 tests pass, frontend 180/180; typecheck and build clean.
