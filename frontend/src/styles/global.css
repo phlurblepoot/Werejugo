@@ -343,6 +343,12 @@ textarea { resize: vertical; min-height: 72px; }
 .sailing-date { color: var(--color-text); white-space: nowrap; }
 .sailing-title { color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sailing-dep { color: var(--color-text-muted); white-space: nowrap; }
+/* Matching sailings for a past cruise: whole-row buttons, the title first. */
+button.sailing-row {
+  width: 100%; grid-template-columns: 1fr auto; text-align: left; background: none; border: none;
+  border-bottom: 1px solid var(--color-border); border-radius: 0; min-height: 36px;
+}
+button.sailing-row .sailing-title { color: var(--color-text); }
 
 /* ---- Comments ---- */
 .comment { padding: 8px 0; border-bottom: 1px solid var(--color-border); }

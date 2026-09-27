@@ -3,7 +3,7 @@ import { addUser, bearer, buildTestApp, closeTestApp, type TestCtx } from "../te
 import { startFakeWeb, type FakeWeb } from "../test/fake-web.js";
 import { config } from "../config.js";
 import { query } from "../db/pool.js";
-import { findCruise, getSailingDetail, searchCruiseLines, searchCruiseShips } from "./cruiseLookup.js";
+import { findCruise, getSailingDetail, matchItinerary, searchCruiseLines, searchCruiseShips } from "./cruiseLookup.js";
 import { searchPorts } from "./places.js";
 
 let ctx: TestCtx;
@@ -129,5 +129,50 @@ describe("the cruise routes", () => {
     expect((await post("/api/lookup/cruise/find", { shipUrl: "https://example.com/ships/x" })).json().warnings).toEqual([
       expect.stringMatching(/^Couldn't find/),
     ]);
+  });
+});
+
+describe("past cruises: the same itinerary on another sailing", () => {
+  const PORTS = [
+    { name: "Miami", lng: -80.17, lat: 25.77 }, { name: "Cozumel", lng: -86.95, lat: 20.51 },
+    { name: "Roatán", lng: -86.53, lat: 16.32 }, { name: "Costa Maya", lng: -87.69, lat: 18.73 },
+    { name: "Miami", lng: -80.17, lat: 25.77 },
+  ];
+
+  test("the ports in the same order, on the ship or its sister ships, best first, with the days to move it by", async () => {
+    const r = await matchItinerary({ line: "Royal Caribbean", ship: "Symphony of the Seas", ports: PORTS, date: "2025-03-16" });
+    expect(r.matches.map((m) => [m.sailing.id, m.sailing.ship, m.score])).toEqual([
+      ["9101", "Wonder of the Seas", 1],
+      ["9002", "Symphony of the Seas", 0.8],
+    ]);
+    const best = r.matches[0];
+    expect(best.shiftDays).toBe(-728); // 14 March 2027 → 16 March 2025
+    expect(best.ports.map((p) => p.label)).toEqual(["Miami", "Cozumel", "Roatan", "Costa Maya", "Miami"]);
+    expect(best.path.length).toBeGreaterThan(5);
+  });
+
+  test("the ship's own sailing is enough when it matches exactly (its sister ships aren't asked)", async () => {
+    const own = [{ name: "Miami", lng: -80.17, lat: 25.77 }, { name: "Cozumel", lng: -86.95, lat: 20.51 }, { name: "Roatan", lng: -86.53, lat: 16.32 }, { name: "Miami", lng: -80.17, lat: 25.77 }];
+    const r = await matchItinerary({ line: "Royal Caribbean", ship: "Symphony of the Seas", ports: own, date: "2024-12-29" });
+    expect(r.matches[0]).toMatchObject({ score: 1, shiftDays: -729, sailing: { id: "9002" } }); // 28 Dec 2026 → 29 Dec 2024
+    expect(web.calls.some((c) => c.includes("Wonder-of-the-Seas"))).toBe(false);
+  });
+
+  test("without ports: sailings of the same length from the same port, nearest in season first", async () => {
+    const r = await matchItinerary({ ship: "Symphony of the Seas", line: "Royal Caribbean", departurePort: "Miami", nights: 7, date: "2025-11-10" });
+    expect(r.matches.map((m) => m.sailing.id)).toEqual(["9001", "9002", "9101", "9102"]);
+    expect(r.matches.every((m) => m.score < 1)).toBe(true);
+  });
+
+  test("the route, and nothing found", async () => {
+    const res = await ctx.app.inject({
+      method: "POST", url: "/api/lookup/cruise/match", headers: bearer(ctx.token),
+      payload: { line: "Royal Caribbean", ship: "Symphony of the Seas", ports: PORTS, date: "2025-03-16" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().matches[0].sailing.id).toBe("9101");
+    const none = await matchItinerary({ line: "Carnival Cruise Line", ship: "Carnival Breeze", ports: PORTS, date: "2025-03-16" });
+    expect(none.matches).toEqual([]);
+    expect(none.warnings).toEqual(["No sailing of Carnival Breeze or its sister ships goes to these ports. Build the route from the ports instead."]);
   });
 });

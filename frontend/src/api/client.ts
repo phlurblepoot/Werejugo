@@ -228,6 +228,17 @@ export interface PathSettings {
   byLine?: Record<string, PathStyle>;
 }
 
+/** A sailing with the same itinerary as a past cruise (see api.matchCruise). */
+export interface ItineraryMatch {
+  sailing: { id: string; title: string; dateISO: string | null; ship: string; shipUrl: string };
+  ports: SailingDetail["ports"];
+  path: number[][];
+  /** 1 = the same ports in the same order. */
+  score: number;
+  /** Days from the sailing's start to the cruise's (negative: earlier). */
+  shiftDays: number;
+}
+
 /** A cruise's details from CruiseMapper, kept on the visit (`properties.cruise`) so they're never looked up again. */
 export interface CruiseDetails {
   line: string | null;
@@ -281,6 +292,8 @@ export interface Item {
   color: string | null;
   icon: string | null;
   occurredOn: string | null;
+  /** The last day, for something that lasts several (a cruise). */
+  occurredEnd?: string | null;
   geometry: Geometry | null;
   waypoints: Waypoint[];
   photos: Photo[];
@@ -1019,6 +1032,9 @@ export const api = {
     request<Array<{ name: string; url: string }>>(
       `/api/lookup/cruise/ships?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line ?? "")}`,
     ),
+  /** A past cruise: the same itinerary on another sailing of the ship or its sister ships. */
+  matchCruise: (data: { ship?: string; shipUrl?: string; line?: string; ports?: Array<{ name?: string; lng: number; lat: number }>; departurePort?: string; nights?: number; date: string }) =>
+    request<{ matches: ItineraryMatch[]; warnings: string[] }>("/api/lookup/cruise/match", { method: "POST", body: body(data) }),
   /** One sailing's ports and track; `date` (its first day) dates the port days. */
   getSailingDetail: (id: string, date?: string | null) =>
     request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id, date: date ?? null }) }),

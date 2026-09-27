@@ -345,6 +345,7 @@ const EXEMPT: Record<string, string> = {
   "GET /api/lookup/cruise/ships": "external lookup",
   "POST /api/lookup/cruise/diagnose": "external lookup",
   "POST /api/lookup/cruise/find": "external lookup",
+  "POST /api/lookup/cruise/match": "external lookup",
   "POST /api/lookup/cruise/sailing": "external lookup",
   "POST /api/lookup/flight": "external lookup",
   "POST /api/routes/road": "a line through the points given, from a routing server (no family data)",

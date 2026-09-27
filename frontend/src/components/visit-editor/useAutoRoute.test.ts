@@ -10,7 +10,7 @@ import type { VisitDraft } from "./useVisitDraft";
 
 const stop = (lng: number, lat: number) => ({ label: `${lng}`, kind: "stop" as const, lng, lat, seq: 0 });
 const draft = (patch: Partial<VisitDraft>): VisitDraft => ({
-  kind: "drive", title: "", notes: "", occurredOn: "", themeId: null, tripId: null, color: "", icon: "",
+  kind: "drive", title: "", notes: "", occurredOn: "", occurredEnd: "", themeId: null, tripId: null, color: "", icon: "",
   pin: {} as VisitDraft["pin"], path: {} as VisitDraft["path"], point: null, stops: [], routePath: null, route: null,
   cruiseLine: "", ship: "", cruise: null, baseProperties: {}, ...patch,
 });

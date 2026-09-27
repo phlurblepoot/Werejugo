@@ -6,6 +6,7 @@ import {
   diagnoseCruise,
   findCruise,
   getSailingDetail,
+  matchItinerary,
   searchCruiseLines,
   searchCruiseShips,
 } from "../services/cruiseLookup.js";
@@ -43,6 +44,18 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     const parsed = z.object({ id: z.string().regex(/^\d+$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "numeric sailing id required" });
     return getSailingDetail(parsed.data.id, parsed.data.date);
+  });
+
+  // A past cruise: the same itinerary on another sailing (the ship's, or a sister ship's).
+  app.post("/api/lookup/cruise/match", async (req) => {
+    const b = z.object({
+      ship: z.string().max(200).optional(), shipUrl: z.string().url().optional(), line: z.string().max(200).optional(),
+      ports: z.array(z.object({ name: z.string().max(200).optional(), lng: z.number().min(-540).max(540), lat: z.number().min(-90).max(90) })).max(40).optional(),
+      departurePort: z.string().max(200).optional(),
+      nights: z.number().int().min(1).max(200).optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }).refine((d) => Boolean(d.ship || d.shipUrl), { message: "ship or shipUrl required" }).parse(req.body);
+    return matchItinerary(b);
   });
 
   // Autocomplete for cruise lines and ships (ships require a cruise line).

@@ -14,6 +14,8 @@ export interface VisitDraft {
   title: string;
   notes: string;
   occurredOn: string;
+  /** A cruise's last day. */
+  occurredEnd: string;
   themeId: string | null;
   tripId: string | null;
   color: string;
@@ -46,6 +48,7 @@ function makeInitial(item: Item | null, kind: ItemKind, pin?: PinSettings, path?
     title: item?.title ?? "",
     notes: item?.notes ?? "",
     occurredOn: item?.occurredOn ?? "",
+    occurredEnd: item?.occurredEnd ?? "",
     themeId: item?.themeId ?? null,
     tripId: item?.tripId ?? null,
     color: item?.color ?? defaultColor(kind, pin),
@@ -148,6 +151,7 @@ export function useVisitDraft(item: Item | null, pin?: PinSettings, path?: PathS
       color: draft.color,
       icon: draft.icon,
       occurredOn: draft.occurredOn || null,
+      ...(draft.kind === "cruise" ? { occurredEnd: draft.occurredEnd || null } : {}),
       geometry,
       waypoints,
       properties,

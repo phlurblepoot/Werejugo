@@ -550,3 +550,124 @@ export async function diagnoseCruise(opts: { url?: string; query?: string; selec
     snippet: $("body").text().replace(/\s+/g, " ").trim().slice(0, 800),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Past cruises: the same itinerary on another sailing
+// ---------------------------------------------------------------------------
+
+export interface ItineraryPort { name?: string; lng: number; lat: number }
+export interface ItineraryMatch {
+  sailing: { id: string; title: string; dateISO: string | null; ship: string; shipUrl: string };
+  ports: SailingDetail["ports"];
+  path: number[][];
+  /** 1 = the same ports in the same order; less = fewer of them in that order. */
+  score: number;
+  /** Days from the sailing's start to the person's (negative: earlier). */
+  shiftDays: number;
+}
+
+const MATCH_KM = 30;
+const MIN_SCORE = 0.5;
+const MAX_SISTERS = 8;
+const MAX_DETAILS = 10;
+
+const nightsOf = (title: string) => Number(title.match(/(\d+)[\s-]*nights?/i)?.[1] ?? NaN);
+const dayNumber = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86_400_000;
+/** Days apart in the year, ignoring the year (itineraries follow the seasons). */
+const seasonGap = (a: string, b: string) => {
+  const d = Math.abs(dayNumber(`2001${a.slice(4)}`) - dayNumber(`2001${b.slice(4)}`));
+  return Math.min(d, 365 - d);
+};
+
+function kmBetween(a: { lng: number; lat: number }, b: { lng: number; lat: number }): number {
+  const r = Math.PI / 180;
+  const h = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
+  return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function samePort(a: ItineraryPort, b: { label: string; lng: number; lat: number }): boolean {
+  if (kmBetween(a, b) <= MATCH_KM) return true;
+  const x = fold(a.name ?? "");
+  const y = fold(b.label);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+}
+
+/** How many of `mine` the sailing visits in the same order (longest common subsequence). */
+function inOrder(mine: ItineraryPort[], theirs: SailingDetail["ports"]): number {
+  const t = Array.from({ length: mine.length + 1 }, () => new Array<number>(theirs.length + 1).fill(0));
+  for (let i = 1; i <= mine.length; i++) {
+    for (let j = 1; j <= theirs.length; j++) {
+      t[i][j] = samePort(mine[i - 1], theirs[j - 1]) ? t[i - 1][j - 1] + 1 : Math.max(t[i - 1][j], t[i][j - 1]);
+    }
+  }
+  return t[mine.length][theirs.length];
+}
+
+/**
+ * A past cruise: CruiseMapper lists only upcoming sailings, but ships sail the
+ * same itineraries for years. Look through the ship's sailings, then (unless one
+ * matches exactly) its sister ships' on the same line, for the same ports in the
+ * same order. With no ports, sailings of the same length from the same port
+ * count, nearest in season first. Best matches first, each with its track and
+ * the days to move it by to the person's date.
+ */
+export async function matchItinerary(opts: {
+  ship?: string; shipUrl?: string; line?: string; ports?: ItineraryPort[]; departurePort?: string; nights?: number; date: string;
+}): Promise<{ matches: ItineraryMatch[]; warnings: string[] }> {
+  ensureOn();
+  const found = await findCruise({ ship: opts.ship, shipUrl: opts.shipUrl, line: opts.line });
+  if (!found.shipUrl) return { matches: [], warnings: found.warnings };
+  const ports = (opts.ports ?? []).filter((p) => Number.isFinite(p.lng) && Number.isFinite(p.lat));
+  const departure = opts.departurePort ?? ports[0]?.name ?? null;
+
+  type Candidate = { sailing: CruiseSailing; ship: string; shipUrl: string; own: boolean };
+  const candidatesOf = (list: CruiseSailing[], ship: string, shipUrl: string, own: boolean): Candidate[] =>
+    list
+      .filter((s) => s.id && s.dateISO)
+      .filter((s) => !departure || !s.departurePort || samePortName(departure, s.departurePort))
+      .filter((s) => !opts.nights || !Number.isFinite(nightsOf(s.title)) || Math.abs(nightsOf(s.title) - opts.nights) <= 1)
+      .map((sailing) => ({ sailing, ship, shipUrl, own }));
+
+  const scored: ItineraryMatch[] = [];
+  let fetched = 0;
+  async function score(cands: Candidate[]) {
+    // Nearest in season first, so the most likely ones are the ones fetched.
+    cands.sort((a, b) => Number(b.own) - Number(a.own) || seasonGap(a.sailing.dateISO!, opts.date) - seasonGap(b.sailing.dateISO!, opts.date));
+    for (const c of cands) {
+      if (fetched >= MAX_DETAILS) break;
+      fetched++;
+      const detail = await getSailingDetail(c.sailing.id, c.sailing.dateISO);
+      const s = ports.length >= 2
+        ? Math.round((inOrder(ports, detail.ports) / Math.max(ports.length, detail.ports.length)) * 100) / 100
+        : 0.5; // no ports to compare: only the length and departure port matched
+      if (s < MIN_SCORE) continue;
+      scored.push({
+        sailing: { id: c.sailing.id, title: c.sailing.title, dateISO: c.sailing.dateISO, ship: c.ship, shipUrl: c.shipUrl },
+        ports: detail.ports, path: detail.path, score: s,
+        shiftDays: Math.round(dayNumber(opts.date) - dayNumber(c.sailing.dateISO!)),
+      });
+    }
+  }
+
+  await score(candidatesOf(found.sailings, found.shipName, found.shipUrl, true));
+  if (!scored.some((m) => m.score >= 0.99)) {
+    const line = found.lineName ?? opts.line;
+    const sisters = line ? (await lineShips(line)).filter((s) => s.url !== found.shipUrl).slice(0, MAX_SISTERS) : [];
+    const cands: Candidate[] = [];
+    for (const s of sisters) cands.push(...candidatesOf((await shipPage(s.url)).sailings, s.name, s.url, false));
+    await score(cands);
+  }
+
+  scored.sort((a, b) => b.score - a.score || seasonGap(a.sailing.dateISO!, opts.date) - seasonGap(b.sailing.dateISO!, opts.date));
+  const matches = scored.slice(0, 5);
+  return {
+    matches,
+    warnings: matches.length ? [] : [`No sailing of ${found.shipName || "that ship"} or its sister ships goes to these ports. Build the route from the ports instead.`],
+  };
+}
+
+function samePortName(a: string, b: string): boolean {
+  const x = fold(a.split(/[(,]/)[0]);
+  const y = fold(b.split(/[(,]/)[0]);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+}

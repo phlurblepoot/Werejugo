@@ -3,11 +3,12 @@ import type { PlaceSuggestion } from "../api/client";
 
 interface Props {
   placeholder?: string;
+  inputId?: string;
   search: (q: string) => Promise<PlaceSuggestion[]>;
   onSelect: (s: PlaceSuggestion) => void;
 }
 
-export function PlaceSearch({ placeholder, search, onSelect }: Props) {
+export function PlaceSearch({ placeholder, inputId, search, onSelect }: Props) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -42,6 +43,7 @@ export function PlaceSearch({ placeholder, search, onSelect }: Props) {
   return (
     <div style={{ position: "relative" }}>
       <input
+        id={inputId}
         value={q}
         placeholder={placeholder ?? "Search…"}
         onChange={(e) => setQ(e.target.value)}

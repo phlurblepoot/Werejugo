@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, type CruiseFindResult, type CruiseSailing } from "../../api/client";
+import { api, type CruiseFindResult, type CruiseSailing, type ItineraryMatch } from "../../api/client";
 import { lineMetres } from "../../lib/routing";
 import type { VisitDraft } from "./useVisitDraft";
 
@@ -37,6 +37,7 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
   const [lookupImage, setLookupImage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [problem, setProblem] = useState<CruiseProblem | null>(null);
+  const [matches, setMatches] = useState<ItineraryMatch[] | null>(null);
   const [pinBusy, setPinBusy] = useState(false);
 
   /** Turned off (409) says so; not answering (503) offers Try again. */
@@ -137,6 +138,53 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
     }
   }
 
+  /** A past cruise: sailings with the same itinerary (from its ports, or its length and first port). */
+  async function findSameItinerary() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const ports = draft.stops.length >= 2 ? draft.stops.map((s) => ({ name: s.label, lng: s.lng, lat: s.lat })) : undefined;
+      const nights = draft.occurredOn && draft.occurredEnd
+        ? Math.round((Date.parse(draft.occurredEnd) - Date.parse(draft.occurredOn)) / DAY_MS) || undefined
+        : undefined;
+      const r = await api.matchCruise({
+        ship: draft.ship.trim() || undefined, shipUrl: shipUrl ?? result?.shipUrl ?? undefined, line: draft.cruiseLine.trim() || undefined,
+        ports, departurePort: ports ? undefined : draft.stops[0]?.label, nights, date: draft.occurredOn,
+      });
+      setMatches(r.matches);
+      setWarnings(r.warnings);
+    } catch (e) {
+      trouble(e, () => void findSameItinerary());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Use a matched sailing's ports and track, moved to this cruise's dates. */
+  function applyMatch(m: ItineraryMatch) {
+    const offsetMs = m.shiftDays * DAY_MS;
+    const path = m.path.length >= 2 ? m.path : null;
+    const lastDay = m.ports[m.ports.length - 1]?.dateISO;
+    set({
+      stops: m.ports.map((p, i) => ({
+        label: p.label, kind: p.kind, lng: p.lng, lat: p.lat, seq: i,
+        arriveAt: shiftIso(p.arriveAt ?? null, offsetMs),
+        departAt: shiftIso(p.departAt ?? (p.dateISO && !p.arriveAt ? `${p.dateISO}T00:00:00.000Z` : null), offsetMs),
+      })),
+      routePath: path,
+      route: path ? { source: "cruisemapper", distanceM: lineMetres(path) } : null,
+      cruise: {
+        line: draft.cruiseLine || null, ship: draft.ship || null, shipUrl: shipUrl ?? result?.shipUrl ?? null,
+        shipImage: result?.image ?? null, lineLogo: result?.lineLogo ?? null,
+        sailingId: m.sailing.id, sailingTitle: m.sailing.title || null, sailingDate: m.sailing.dateISO,
+        matchedBy: "itinerary", shiftDays: m.shiftDays,
+      },
+      ...(draft.title.trim() ? {} : { title: `${draft.ship || m.sailing.ship} — ${m.sailing.title}`.trim() }),
+      ...(!draft.occurredEnd && lastDay ? { occurredEnd: new Date(Date.parse(lastDay) + offsetMs).toISOString().slice(0, 10) } : {}),
+    });
+    setMatches(null);
+  }
+
   async function useImageAsPin(url: string) {
     setPinBusy(true);
     try {
@@ -150,7 +198,8 @@ export function useCruiseLookup(draft: VisitDraft, set: Setter) {
   }
 
   return {
-    busy, result, lineConfirmed, shipConfirmed, reuse, lookupImage, warnings, problem, pinBusy,
+    busy, result, lineConfirmed, shipConfirmed, reuse, lookupImage, warnings, problem, matches, pinBusy,
+    findSameItinerary, applyMatch,
     setReuse, onLineText, onLinePick, onShipText, onShipPick, find, pickSailing, addPort, useImageAsPin,
   };
 }
