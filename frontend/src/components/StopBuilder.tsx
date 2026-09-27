@@ -82,13 +82,13 @@ export function StopBuilder({ stops, onChange, source, label, dated, startDate, 
       {stops.length > 0 && (
         <div style={{ marginTop: 8 }}>
           {stops.map((s, i) => (
-            <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4, gap: 4 }}>
-              <span style={{ flex: 1, fontSize: 13 }}>
+            <div key={i} className="row stop-row">
+              <span className="stop-label">
                 {i + 1}. {s.label}
                 {!dated && formatWaypointTime(s) ? <span style={{ color: "var(--muted)" }}> · {formatWaypointTime(s)}</span> : null}
               </span>
               {dated && (
-                <input type="date" aria-label={`Day at ${s.label}`} value={dayOf(s)} style={{ maxWidth: 150 }} onChange={(e) => setDay(i, e.target.value)} />
+                <input type="date" aria-label={`Day at ${s.label}`} value={dayOf(s)} onChange={(e) => setDay(i, e.target.value)} />
               )}
               <button type="button" className="ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
               <button type="button" className="ghost" disabled={i === stops.length - 1} onClick={() => move(i, 1)}>↓</button>

@@ -215,6 +215,12 @@ textarea { resize: vertical; min-height: 72px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; }
+/* A stop in a route: its name takes the room, the day and the buttons only what they need. */
+.stop-row { align-items: center; margin-bottom: 4px; gap: 4px; }
+.stop-row > * { flex: none; }
+.stop-row > .stop-label { flex: 1; min-width: 0; font-size: 13px; }
+.stop-row > input[type="date"] { width: 150px; }
+.stop-row > button { padding-left: 10px; padding-right: 10px; }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .swatch {
@@ -583,7 +589,10 @@ button.primary.is-success { background: var(--color-success) !important; border-
   .photo-grid-lib { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 3px; }
 
   .first-run-card { width: calc(100vw - 32px); bottom: calc(var(--tabbar-h) + 12px + var(--safe-bottom)); }
-  .timeline-bar { bottom: calc(12px + var(--safe-bottom)); }
+  /* The slider gets a row of its own: the buttons, date and chip above it. */
+  .timeline-bar { bottom: calc(12px + var(--safe-bottom)); width: calc(100% - 24px); flex-wrap: wrap; row-gap: 2px; border-radius: var(--radius-lg); padding: 8px 12px 6px; }
+  .timeline-track { order: 5; flex-basis: 100%; }
+  .timeline-date { min-width: 0; margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

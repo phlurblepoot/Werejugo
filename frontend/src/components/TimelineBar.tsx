@@ -18,8 +18,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const BUCKETS = 48;
 
 /**
- * Marks along the timeline between two dates: each year's start over a long
- * span, each month's (every few, if many) over a short one. `at` is 0–1.
+ * Marks along the timeline between two dates: years' starts over a long span
+ * (round ones when there are many), months' over a short one (every third when
+ * over a year). `at` is 0–1.
  */
 export function timelineTicks(from: string, to: string): Array<{ at: number; label: string }> {
   const a = toDay(from);
@@ -29,7 +30,9 @@ export function timelineTicks(from: string, to: string): Array<{ at: number; lab
   const [fy, fm] = from.split("-").map(Number);
   const [ty, tm] = to.split("-").map(Number);
   if (span > 730) {
-    for (let y = fy + 1; y <= ty; y++) out.push({ at: (toDay(`${y}-01-01`) - a) / span, label: String(y) });
+    // At most about eight: every year, or every 2nd, 5th, 10th… (round years).
+    const step = [1, 2, 5, 10, 20, 50].find((n) => (ty - fy) / n <= 8) ?? 100;
+    for (let y = fy + 1; y <= ty; y++) if (y % step === 0) out.push({ at: (toDay(`${y}-01-01`) - a) / span, label: String(y) });
   } else {
     const months = (ty - fy) * 12 + (tm - fm);
     const every = months > 12 ? 3 : 1;

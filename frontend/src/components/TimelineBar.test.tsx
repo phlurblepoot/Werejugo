@@ -12,6 +12,9 @@ test("ticks: years over a long span, months over a short one", () => {
   expect(months.map((t) => t.label)).toEqual(["Feb", "Mar", "Apr", "May", "Jun"]);
   expect(months[0].at).toBeGreaterThan(0);
   expect(months[months.length - 1].at).toBeLessThan(1);
+  // Many years: round ones only, so the labels don't run into each other on a phone.
+  expect(timelineTicks("2000-03-01", "2024-06-01").map((t) => t.label)).toEqual(["2005", "2010", "2015", "2020"]);
+  expect(timelineTicks("2014-03-01", "2024-06-01").map((t) => t.label)).toEqual(["2016", "2018", "2020", "2022", "2024"]);
 });
 
 test("undated items: counted on a chip that shows or hides them", async () => {
