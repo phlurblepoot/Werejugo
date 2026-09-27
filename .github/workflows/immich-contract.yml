@@ -52,7 +52,15 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - name: Start Immich
-        run: docker compose -f ci/immich/docker-compose.yml up -d
+        # The registry sometimes rate-limits pulls (toomanyrequests): try again after a pause.
+        run: |
+          for i in 1 2 3 4; do
+            docker compose -f ci/immich/docker-compose.yml pull && break
+            [ "$i" = 4 ] && exit 1
+            echo "Pull failed (attempt $i); retrying in $((i * 30)) s"
+            sleep $((i * 30))
+          done
+          docker compose -f ci/immich/docker-compose.yml up -d
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci

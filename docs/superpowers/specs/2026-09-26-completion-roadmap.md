@@ -497,6 +497,7 @@ Newest first. Entry types: **Done** (a phase or milestone finished), **Changed**
 
 ### 2026-09-27
 
+- **Note** — CI: the Immich contract job retries pulling Immich's images (up to 4 times, with a pause). One run failed before any test ran because the container registry rate-limited the pull (`toomanyrequests`).
 - **Note** — Milestone 2 is built and ready for the owner's review (PR #2). Exit criteria, checked:
   - **Each family's photos live in its Immich account but look native in Werejugo:**
     - 2.1 gives each family its own Immich account.
