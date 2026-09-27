@@ -79,6 +79,7 @@ async function snapshotA(): Promise<string> {
     trip_invites: "SELECT i.* FROM trip_invites i JOIN trips t ON t.id = i.trip_id WHERE t.family_id = $1",
     person_links: "SELECT l.* FROM person_links l JOIN people p ON p.id = l.person_a WHERE p.family_id = $1",
     activity: "SELECT a.* FROM activity a JOIN trips t ON t.id = a.trip_id WHERE t.family_id = $1",
+    family_immich: "SELECT * FROM family_immich WHERE family_id = $1",
   };
   const out: Record<string, unknown> = {};
   for (const [name, sql] of Object.entries(tables)) {
@@ -115,6 +116,9 @@ const CASES: Case[] = [
   c("GET /api/visits/:id/comments", () => `/api/visits/${A.visit}/comments`, 404),
   c("POST /api/visits/:id/comments", () => `/api/visits/${A.visit}/comments`, 404, () => ({ body: "hi" })),
   c("DELETE /api/comments/:id", () => `/api/comments/${A.comment}`, 404),
+
+  // Immich: B sees only its own connection state
+  c("GET /api/immich", () => "/api/immich", "clean"),
 
   // Trips, itinerary, blackouts
   c("GET /api/trips", () => "/api/trips", "clean"),
@@ -257,6 +261,14 @@ const EXEMPT: Record<string, string> = {
   "POST /api/admin/view-family": "server admin only, audited (admin.test.ts)",
   "POST /api/admin/return": "server admin only (admin.test.ts)",
   "GET /api/admin/audit": "server admin only (admin.test.ts)",
+  "GET /api/admin/immich": "server admin only (immich.test.ts)",
+  "PUT /api/admin/immich": "server admin only, audited (immich.test.ts)",
+  "POST /api/admin/immich/check": "server admin only (immich.test.ts)",
+  "POST /api/admin/immich/connect-all": "server admin only, audited (immich.test.ts)",
+  "POST /api/admin/immich/families/:id/connect": "server admin only, audited (immich.test.ts)",
+  "POST /api/admin/immich/families/:id/link": "server admin only, audited (immich.test.ts)",
+  "DELETE /api/admin/immich/families/:id": "server admin only, audited (immich.test.ts)",
+  "POST /api/immich/password": "acts on the caller's own family only; no id to aim at another (immich.test.ts)",
   "POST /api/media": "creates in the caller's family; the file goes in its own folder (media.test.ts)",
   "POST /api/import": "creates in the caller's family; onto another family's trip is 400 (import.test.ts)",
   "POST /api/icons": "creates in the caller's family",

@@ -12,6 +12,8 @@ export const BACKUP_TABLES = [
   "itinerary_items", "packing_lists", "packing_items", "blackout_periods", "share_links",
   "invites", "password_resets", "audit_log",
   "trip_members", "trip_invites", "person_links", "activity",
+  // Immich connection; its keys stay sealed with ENCRYPTION_KEY inside the archive.
+  "immich_server", "family_immich",
 ] as const;
 
 /** Tables older backups may contain that no longer exist; restore skips them. */

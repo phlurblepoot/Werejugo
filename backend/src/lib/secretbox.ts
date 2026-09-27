@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "node:crypto";
+import { config } from "../config.js";
 
 /**
  * Encrypts secrets Werejugo has to store (Immich API keys now, document files
@@ -65,4 +66,17 @@ export function createSecretBox(encryptionKey: string | undefined): SecretBox {
       }
     },
   };
+}
+
+let current: SecretBox | null = null;
+
+/** The server's box, from ENCRYPTION_KEY. */
+export function secretBox(): SecretBox {
+  current ??= createSecretBox(config.encryptionKey);
+  return current;
+}
+
+/** Tests only: pretend ENCRYPTION_KEY is `key` (undefined = not set); null restores the real one. */
+export function useSecretBoxForTests(key: string | undefined | null): void {
+  current = key === null ? null : createSecretBox(key);
 }

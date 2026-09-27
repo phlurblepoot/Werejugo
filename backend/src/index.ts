@@ -41,6 +41,9 @@ import { familyRoutes } from "./routes/family.js";
 import { familyExportRoutes } from "./routes/family-export.js";
 import { downloadRoutes } from "./routes/downloads.js";
 import { adminRoutes } from "./routes/admin.js";
+import { adminImmichRoutes, familyImmichRoutes } from "./routes/immich.js";
+import { checkServer } from "./lib/immich/provision.js";
+import { SUPPORTED_RANGE } from "./lib/immich/version.js";
 
 export interface RegisteredRoute {
   method: string;
@@ -137,6 +140,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(familyExportRoutes);
   await app.register(downloadRoutes);
   await app.register(adminRoutes);
+  await app.register(adminImmichRoutes);
+  await app.register(familyImmichRoutes);
 
   return app;
 }
@@ -144,6 +149,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 async function main(): Promise<void> {
   const app = await buildApp();
   await app.listen({ host: "0.0.0.0", port: config.port });
+  // Say whether Immich is there and supported; never stop the server over it.
+  checkServer().then((c) => {
+    if (!c) return;
+    if (!c.ok) app.log.warn(`Immich: ${c.error}`);
+    else if (!c.supported) app.log.warn(`Immich ${c.version} isn't a supported version (supported: ${SUPPORTED_RANGE}); things may break`);
+    else app.log.info(`Immich ${c.version} connected`);
+  }).catch((e) => app.log.warn(`Immich check failed: ${e instanceof Error ? e.message : e}`));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

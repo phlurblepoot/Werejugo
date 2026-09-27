@@ -14,6 +14,8 @@ export const config = {
   databaseUrl: required("DATABASE_URL", "postgres://werejugo:change-me-in-production@localhost:5432/werejugo"),
   jwtSecret: secrets.jwtSecret,
   fileSigningSecret: secrets.fileSigningSecret,
+  /** Seals stored secrets (Immich keys; document files in 3.3). Optional until Immich is turned on. */
+  encryptionKey: process.env.ENCRYPTION_KEY,
   /** Problems worth logging at startup (e.g. a weak secret outside production). */
   startupWarnings: secrets.warnings,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "30d",

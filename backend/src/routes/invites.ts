@@ -6,6 +6,7 @@ import { createFamilyWithOwner, createUser, EmailTakenError, publicUser } from "
 import { findUsableInvite } from "../lib/links-onetime.js";
 import { audit } from "../lib/audit.js";
 import { hashToken } from "../lib/tokens.js";
+import { provisionNewFamily } from "../lib/immich/provision.js";
 
 const acceptSchema = z.object({
   email: z.string().email(),
@@ -61,8 +62,10 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
           actorId: u.id, action: invite.kind === "family" ? "invite.family_created" : "invite.member_joined",
           familyId: u.family_id, target: u.email, details: { inviteId: invite.id, role: u.role },
         }, client);
-        return u;
+        return { ...u, newFamily: invite.kind === "family" };
       });
+      // A new family gets its Immich account in the background (if Immich is set up).
+      if (user.newFamily) provisionNewFamily(user.family_id, req.log);
       return reply.send({ token: signToken(reply, user), user: publicUser(user) });
     } catch (err) {
       if (err instanceof Error && err.message === "GONE") return reply.code(404).send({ error: GONE });
