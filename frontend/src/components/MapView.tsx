@@ -4,10 +4,10 @@ import type { Item } from "../api/client";
 import { API_URL } from "../api/client";
 import { MAP_STYLE_URL } from "../lib/config";
 import { glyphFor, isImageIcon } from "../lib/icons";
-import { buildRoutePath, type LngLat } from "../lib/geo";
+import { boundsOf, buildRoutePath, type LngLat } from "../lib/geo";
 import { formatWaypointTime } from "../lib/waypoint";
 import { composeImageTile, imagePatternId, isPatternStyle, makePatternImage, patternId } from "../lib/path";
-import { formatDate } from "../lib/dates";
+import { setMapCentre } from "../lib/mapCentre";
 
 export interface ItemStyle {
   color: string;
@@ -42,6 +42,8 @@ interface Props {
   onSelectItem: (id: string) => void;
   onMovePoint: (item: Item, lng: number, lat: number) => void;
   onMoveWaypoint: (item: Item, index: number, lng: number, lat: number) => void;
+  /** When this changes (the filters), the map frames what it shows. */
+  frameKey?: string;
 }
 
 function absoluteUrl(url: string): string {
@@ -49,18 +51,6 @@ function absoluteUrl(url: string): string {
 }
 
 const styleFor = (styleUrl?: string | null) => styleUrl || MAP_STYLE_URL;
-
-/** Every coordinate of the given places (points, route vertices and stops). */
-function coordsOf(items: Item[]): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  for (const i of items) {
-    const g = i.geometry;
-    if (g?.type === "Point") out.push(g.coordinates as [number, number]);
-    else if (g?.type === "LineString") out.push(...(g.coordinates as Array<[number, number]>));
-    for (const w of i.waypoints) out.push([w.lng, w.lat]);
-  }
-  return out;
-}
 
 export function MapView(props: Props) {
   const { styleUrl, items, selectedItemId, pickMode, editMode, visitedGeo } = props;
@@ -92,6 +82,8 @@ export function MapView(props: Props) {
     map.on("load", () => renderAll());
     // Re-cluster markers as the viewport changes.
     map.on("moveend", () => {
+      const c = map.getCenter();
+      setMapCentre(c.lng, c.lat);
       if (mapRef.current?.isStyleLoaded()) renderMarkers(mapRef.current);
     });
 
@@ -118,19 +110,21 @@ export function MapView(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleUrl]);
 
-  // Frame the places once, when they first arrive (unless one is being opened).
-  const framed = useRef(false);
+  // Frame the places when they first arrive, and again whenever the filters change
+  // (`frameKey`), unless a place is being opened.
+  const framed = useRef<string | null>(null);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || framed.current || items.length === 0) return;
-    framed.current = true;
+    const key = props.frameKey ?? "";
+    if (!map || items.length === 0 || framed.current === key) return;
+    const first = framed.current === null;
+    framed.current = key;
     if (selectedItemId) return;
-    const cs = coordsOf(items);
-    if (!cs.length) return;
-    const b = cs.reduce((bb, c) => bb.extend(c), new maplibregl.LngLatBounds(cs[0], cs[0]));
-    map.fitBounds(b, { padding: 60, maxZoom: 9, duration: 0 });
+    const b = boundsOf(items);
+    if (!b) return;
+    map.fitBounds(b, { padding: 60, maxZoom: 9, duration: first ? 0 : 600 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [items, props.frameKey]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -376,9 +370,12 @@ export function MapView(props: Props) {
     const el = buildBadge(style);
     const wp = waypointIndex !== null ? item.waypoints[waypointIndex] : null;
     const wpDate = wp ? formatWaypointTime(wp) || undefined : undefined;
+    // One click opens the place's details (no popup as well); hovering names it.
+    el.title = [item.title, wp?.label, wpDate].filter(Boolean).join(" · ");
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", el.title);
     const marker = new maplibregl.Marker({ element: el, draggable: dataRef.current.editMode && item.canEdit !== false })
       .setLngLat(lngLat)
-      .setPopup(buildPopup(item, wp?.label, wpDate))
       .addTo(map);
 
     let dragged = false;
@@ -405,19 +402,6 @@ export function MapView(props: Props) {
       if (!dragged) handlers.onSelectItem(item.id);
     });
     return marker;
-  }
-
-  function buildPopup(item: Item, label?: string, date?: string): maplibregl.Popup {
-    const photo = item.photos[0];
-    const html =
-      (photo
-        ? `<img src="${absoluteUrl(photo.url)}" style="width:100%;max-height:140px;object-fit:cover;border-radius:4px;margin-bottom:6px;" />`
-        : "") +
-      `<div class="title">${escapeHtml(item.title)}</div>` +
-      (label ? `<div class="sub">${escapeHtml(label)}</div>` : "") +
-      (date ? `<div class="sub">${escapeHtml(date)}</div>` : item.occurredOn ? `<div class="sub">${escapeHtml(formatDate(item.occurredOn))}</div>` : "") +
-      (item.photos.length > 1 ? `<div class="sub">${item.photos.length} photos</div>` : "");
-    return new maplibregl.Popup({ offset: 18, maxWidth: "260px" }).setHTML(html);
   }
 
   function buildBadge(style: ItemStyle): HTMLDivElement {
@@ -461,8 +445,3 @@ function firstCoord(item: Item): LngLat | null {
   return null;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
-}

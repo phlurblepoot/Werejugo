@@ -102,6 +102,40 @@ test("the library: runs of photos away from home, in no trip, become trips to ma
   expect(await forLibrary(scope)).toEqual([]);
 });
 
+test("the library: a run of photos with some at sea (no place name) and days in port is a cruise to make", async () => {
+  await homeLife();
+  const at = (d: string, h: number) => `2023-03-${d}T${String(h).padStart(2, "0")}:00:00Z`;
+  const ids = [
+    await photo({ at: at("03", 14), where: { lat: 25.776, lng: -80.18 }, city: "Miami", country: "United States" }),
+    await photo({ at: at("03", 21), where: { lat: 25.1, lng: -80.9 } }),
+    await photo({ at: at("04", 10), where: { lat: 23.9, lng: -83.4 } }),
+    await photo({ at: at("04", 16), where: { lat: 22.4, lng: -85.2 } }),
+    await photo({ at: at("05", 9), where: { lat: 20.51, lng: -86.95 }, city: "Cozumel", country: "Mexico" }),
+    await photo({ at: at("05", 12), where: { lat: 20.214, lng: -87.465 }, city: "Tulum", country: "Mexico" }),
+    await photo({ at: at("07", 10), where: { lat: 18.73, lng: -87.69 }, city: "Mahahual", country: "Mexico" }),
+    await photo({ at: at("08", 12), where: { lat: 21.9, lng: -84.6 } }),
+    await photo({ at: at("09", 8), where: { lat: 25.77, lng: -80.18 }, city: "Miami", country: "United States" }),
+  ];
+  const [cruise] = await forLibrary(scope);
+  expect(cruise).toMatchObject({
+    kind: "new-cruise", startDate: "2023-03-03", endDate: "2023-03-09", count: 9,
+    stops: ["Miami", "Cozumel", "Costa Maya", "Miami"], name: "Cruise from Miami, March 2023",
+  });
+  expect(cruise.key).toMatch(/^new-cruise:2023-03-03:2023-03-09:/);
+
+  // Making it: the trip with its photos, and the cruise on it, its ports and a trail from the photos.
+  const made = (await post("/api/suggestions/apply", { key: cruise.key })).json();
+  expect(made).toMatchObject({ attached: 9, visitId: expect.any(String), tripId: expect.any(String) });
+  expect((await query("SELECT count(*)::int AS n FROM media WHERE trip_id = $1", [made.tripId])).rows[0].n).toBe(9);
+  const v = (await get(`/api/visits/${made.visitId}`)).json();
+  expect(v).toMatchObject({ kind: "cruise", tripId: made.tripId, title: "Miami → Cozumel → Costa Maya → Miami", occurredOn: "2023-03-03", occurredEnd: "2023-03-09" });
+  expect(v.waypoints.map((w: Json) => [w.label, w.kind])).toEqual([["Miami", "origin"], ["Cozumel", "port"], ["Costa Maya", "port"], ["Miami", "destination"]]);
+  expect(v.geometry.type).toBe("LineString");
+  expect(v.properties.route).toEqual({ source: "photos", distanceM: expect.any(Number) });
+  expect(ids).toHaveLength(9);
+  expect(await forLibrary(scope)).toEqual([]);
+});
+
 test("the library with no clear home: everywhere counts, still split by gaps", async () => {
   await series(6, "2019-03-03T09:00:00Z", LISBON, { city: "Lisbon" });
   await series(6, "2019-03-20T09:00:00Z", LISBON, { city: "Lisbon" });

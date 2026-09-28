@@ -29,8 +29,16 @@ export const config = {
   maxUploadBytes: Math.round(Number(process.env.MAX_UPLOAD_GB || 20) * 1024 ** 3),
   storageDir: process.env.STORAGE_DIR ?? "/app/storage",
   aerodataboxKey: process.env.AERODATABOX_RAPIDAPI_KEY ?? "",
-  nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",
-  nominatimUserAgent: process.env.NOMINATIM_USER_AGENT ?? "Werejugo/0.1",
+  /** AeroDataBox's address (tests point it at a stand-in). */
+  aerodataboxUrl: (process.env.AERODATABOX_URL || "https://aerodatabox.p.rapidapi.com").replace(/\/+$/, ""),
+  /** Place search (Photon): the public server, or your own. */
+  photonUrl: (process.env.PHOTON_URL || "https://photon.komoot.io").replace(/\/+$/, ""),
+  /** Road routes for road trips: any OSRM server. */
+  routingUrl: (process.env.ROUTING_URL || "https://routing.openstreetmap.de/routed-car").replace(/\/+$/, ""),
+  /** How Werejugo introduces itself to the services it asks (Photon, road routing). */
+  userAgent: process.env.WEREJUGO_USER_AGENT || "Werejugo (self-hosted family travel map; https://github.com/phlurblepoot/Werejugo)",
+  /** CruiseMapper's address (tests point it at a stand-in). */
+  cruiseMapperUrl: (process.env.CRUISEMAPPER_URL || "https://www.cruisemapper.com").replace(/\/+$/, ""),
   cruiseLookupEnabled: (process.env.CRUISE_LOOKUP_ENABLED ?? "true") === "true",
   cruiseUserAgent:
     process.env.CRUISE_USER_AGENT ??

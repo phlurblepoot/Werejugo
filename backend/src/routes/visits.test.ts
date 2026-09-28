@@ -55,3 +55,27 @@ test("bad input is a 400 with a reason, never a server error", async () => {
   expect((await post({ ...base, occurredOn: "" })).statusCode).toBe(201);
   expect((await ctx.app.inject({ method: "GET", url: "/api/visits/not-a-uuid", headers: auth() })).statusCode).toBe(404);
 });
+
+test("a create sent twice with the same client key (a retry) makes one place", async () => {
+  const clientKey = "6f1b2c1e-2a7b-4a7e-9d51-0c4a1f0e9b11";
+  const payload = {
+    kind: "cruise", title: "Retry cruise", clientKey,
+    waypoints: [{ label: "Miami", lng: -80.17, lat: 25.77 }, { label: "Nassau", lng: -77.34, lat: 25.08 }],
+  };
+  const [a, b] = await Promise.all([
+    ctx.app.inject({ method: "POST", url: "/api/visits", headers: auth(), payload }),
+    ctx.app.inject({ method: "POST", url: "/api/visits", headers: auth(), payload }),
+  ]);
+  expect([a.statusCode, b.statusCode].sort()).toEqual([200, 201]);
+  expect(a.json().id).toBe(b.json().id);
+  expect(a.json().waypoints).toHaveLength(2);
+  expect(b.json().waypoints).toHaveLength(2);
+  const again = await ctx.app.inject({ method: "POST", url: "/api/visits", headers: auth(), payload });
+  expect(again.statusCode).toBe(200);
+  expect(again.json().id).toBe(a.json().id);
+  const all = (await ctx.app.inject({ method: "GET", url: "/api/visits", headers: auth() })).json() as Array<{ title: string }>;
+  expect(all.filter((v) => v.title === "Retry cruise")).toHaveLength(1);
+  // Not a UUID: a 400.
+  const bad = await ctx.app.inject({ method: "POST", url: "/api/visits", headers: auth(), payload: { ...payload, clientKey: "nope" } });
+  expect(bad.statusCode).toBe(400);
+});

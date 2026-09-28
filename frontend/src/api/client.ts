@@ -228,6 +228,37 @@ export interface PathSettings {
   byLine?: Record<string, PathStyle>;
 }
 
+/** A sailing with the same itinerary as a past cruise (see api.matchCruise). */
+export interface ItineraryMatch {
+  sailing: { id: string; title: string; dateISO: string | null; ship: string; shipUrl: string };
+  ports: SailingDetail["ports"];
+  path: number[][];
+  /** 1 = the same ports in the same order. */
+  score: number;
+  /** Days from the sailing's start to the cruise's (negative: earlier). */
+  shiftDays: number;
+}
+
+/** A cruise's details from CruiseMapper, kept on the visit (`properties.cruise`) so they're never looked up again. */
+export interface CruiseDetails {
+  line: string | null;
+  ship: string | null;
+  shipUrl: string | null;
+  shipImage: string | null;
+  lineLogo: string | null;
+  sailingId: string | null;
+  sailingTitle: string | null;
+  sailingDate: string | null;
+  /** How the sailing was chosen: its own date, or the same itinerary on another date (then moved by shiftDays). */
+  matchedBy: "date" | "itinerary" | null;
+  shiftDays: number;
+}
+
+/** Where a route's line came from, and how long it is (kept in `properties.route`). */
+export type RouteSource = "cruisemapper" | "sea" | "road" | "great-circle" | "photos" | "straight";
+export interface RouteInfo { source: RouteSource; distanceM?: number | null }
+export interface RouteLine { source: RouteSource; path: number[][]; distanceM: number }
+
 export interface FamilySettings {
   pin?: PinSettings;
   path?: PathSettings;
@@ -261,6 +292,8 @@ export interface Item {
   color: string | null;
   icon: string | null;
   occurredOn: string | null;
+  /** The last day, for something that lasts several (a cruise). */
+  occurredEnd?: string | null;
   geometry: Geometry | null;
   waypoints: Waypoint[];
   photos: Photo[];
@@ -317,7 +350,7 @@ export interface ActivityEntry {
 }
 
 /** A suggestion from photos (lib/suggest.ts on the server); the sentence is written here. */
-export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip";
+export type SuggestionKind = "trip-photos" | "trip-place" | "trip-person" | "visit-photos" | "new-trip" | "new-cruise";
 export interface Suggestion {
   key: string;
   kind: SuggestionKind;
@@ -334,6 +367,8 @@ export interface Suggestion {
   endDate?: string;
   /** A new trip's suggested name. */
   name?: string;
+  /** A cruise found in photos: its ports, in order. */
+  stops?: string[];
 }
 export interface TripAlbum { name: string; assetCount: number; syncedAt: string | null; error: string | null }
 export interface TripPerson { id: string; displayName: string; familyId: string; familyName: string; mine: boolean; avatarUrl: string | null; }
@@ -386,9 +421,15 @@ export interface SharedPhoto { id: string; url: string; thumbUrl: string | null;
 export interface SharedVisit {
   id: string; kind: ItemKind; title: string; notes: string; color: string | null; icon: string | null;
   occurredOn: string | null; geometry: Geometry | null; photos: SharedPhoto[];
+  /** Its theme, and its own pin and trail choices (pin, path, cruiseLine). */
+  themeId?: string | null; properties?: Record<string, unknown>;
 }
 export interface SharedItineraryItem { id: string; title: string; notes: string; scheduledOn: string | null; seq: number; }
-export interface TripSharePayload { targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[]; }
+export interface TripSharePayload {
+  targetType: "trip"; trip: SharedTrip; visits: SharedVisit[]; itinerary: SharedItineraryItem[]; photos: SharedPhoto[];
+  /** The family's pin and trail defaults, and the themes its places use: the shared map looks as it does at home. */
+  style?: Pick<FamilySettings, "pin" | "path">; themes?: Theme[];
+}
 export interface AlbumSharePayload { targetType: "album"; trip: SharedTrip; photos: SharedPhoto[]; }
 /** A smart album, evaluated when the link is opened. */
 export interface SmartAlbumSharePayload { targetType: "smart_album"; album: { name: string }; photos: SharedPhoto[]; }
@@ -428,10 +469,13 @@ export interface CustomIcon {
 
 export interface LookupResult {
   title: string;
-  waypoints: Array<{ label: string; lng: number; lat: number; kind: string }>;
+  /** Local wall-clock times at each airport, written as UTC. */
+  waypoints: Array<{ label: string; lng: number; lat: number; kind: string; arriveAt?: string; departAt?: string }>;
   path: number[][];
   warnings: string[];
   image?: string | null;
+  /** A flight number's: the day it left (local). */
+  date?: string;
 }
 
 export interface PlaceSuggestion {
@@ -792,7 +836,8 @@ export const api = {
   // visits ("places"; the client calls them items)
   // The one map: every place my family may see (its own and on trips shared with it).
   listVisits: () => request<Item[]>("/api/visits"),
-  createItem: (data: Partial<Item>) => request<Item>("/api/visits", { method: "POST", body: body(data) }),
+  /** `clientKey`: the editor's key for this new place, so a retry returns it instead of making another. */
+  createItem: (data: Partial<Item> & { clientKey?: string }) => request<Item>("/api/visits", { method: "POST", body: body(data) }),
   updateItem: (id: string, data: Partial<Item>) =>
     request<Item>(`/api/visits/${id}`, { method: "PATCH", body: body(data) }),
   deleteItem: (id: string) => request<void>(`/api/visits/${id}`, { method: "DELETE" }),
@@ -972,6 +1017,8 @@ export const api = {
   createTheme: (data: Partial<Theme>) =>
     request<Theme>("/api/themes", { method: "POST", body: body(data) }),
   deleteTheme: (id: string) => request<void>(`/api/themes/${id}`, { method: "DELETE" }),
+  updateTheme: (id: string, data: Partial<Theme>) =>
+    request<Theme>(`/api/themes/${id}`, { method: "PATCH", body: body(data) }),
 
   // icons / uploads
   listIcons: () => request<{ builtin: string[]; custom: CustomIcon[] }>("/api/icons"),
@@ -991,8 +1038,6 @@ export const api = {
   // lookups
   lookupFlight: (data: Record<string, unknown>) =>
     request<LookupResult>("/api/lookup/flight", { method: "POST", body: body(data) }),
-  lookupCruise: (data: Record<string, unknown>) =>
-    request<LookupResult>("/api/lookup/cruise", { method: "POST", body: body(data) }),
   findCruise: (data: { line?: string; ship?: string; shipUrl?: string }) =>
     request<CruiseFindResult>("/api/lookup/cruise/find", { method: "POST", body: body(data) }),
   searchCruiseLines: (q: string) =>
@@ -1001,16 +1046,31 @@ export const api = {
     request<Array<{ name: string; url: string }>>(
       `/api/lookup/cruise/ships?q=${encodeURIComponent(q)}&line=${encodeURIComponent(line ?? "")}`,
     ),
-  getSailingDetail: (id: string) =>
-    request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id }) }),
+  /** A cruise from my photos between two days: its ports, a trail on water, and the photos used (422 with why when there's too little to go on). */
+  cruiseFromPhotos: (from: string, to: string) =>
+    request<{ ports: Waypoint[]; path: number[][]; distanceM: number; photoIds: string[]; seaPhotos: number }>(
+      "/api/cruises/from-photos", { method: "POST", body: body({ from, to }) }),
+  /** A past cruise: the same itinerary on another sailing of the ship or its sister ships. */
+  matchCruise: (data: { ship?: string; shipUrl?: string; line?: string; ports?: Array<{ name?: string; lng: number; lat: number }>; departurePort?: string; nights?: number; date: string }) =>
+    request<{ matches: ItineraryMatch[]; warnings: string[] }>("/api/lookup/cruise/match", { method: "POST", body: body(data) }),
+  /** One sailing's ports and track; `date` (its first day) dates the port days. */
+  getSailingDetail: (id: string, date?: string | null) =>
+    request<SailingDetail>("/api/lookup/cruise/sailing", { method: "POST", body: body({ id, date: date ?? null }) }),
+  /** A line through the points along roads (503 with the reason when there's none). */
+  routeRoad: (points: [number, number][]) =>
+    request<RouteLine>("/api/routes/road", { method: "POST", body: body({ points }) }),
+  /** A line through the points across water. */
+  routeSea: (points: [number, number][]) =>
+    request<RouteLine>("/api/routes/sea", { method: "POST", body: body({ points }) }),
   resolvePort: (q: string) =>
     request<PlaceSuggestion>(`/api/geo/resolve?q=${encodeURIComponent(q)}`),
   searchAirports: (q: string) =>
     request<PlaceSuggestion[]>(`/api/geo/airports?q=${encodeURIComponent(q)}`),
   searchPorts: (q: string) =>
     request<PlaceSuggestion[]>(`/api/geo/ports?q=${encodeURIComponent(q)}`),
-  searchPlaces: (q: string) =>
-    request<PlaceSuggestion[]>(`/api/geo/search?q=${encodeURIComponent(q)}`),
+  /** Place search as you type; `near` ([lng, lat]) puts places near it first. */
+  searchPlaces: (q: string, near?: [number, number] | null) =>
+    request<PlaceSuggestion[]>(`/api/geo/search?q=${encodeURIComponent(q)}${near ? `&near=${near[0].toFixed(3)},${near[1].toFixed(3)}` : ""}`),
 
   // documents
   listDocuments: (f: DocumentFilters = {}) => {

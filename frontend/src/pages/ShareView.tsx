@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, API_URL, type Item, type SharePayload, type SharedPhoto, type Theme } from "../api/client";
+import { api, API_URL, type Item, type SharePayload, type SharedPhoto } from "../api/client";
 import { resolveItemStyle } from "../lib/style";
 import { MapView } from "../components/MapView";
 import { EmptyState, Spinner } from "../components/ui";
 
-const NO_THEMES = new Map<string, Theme>();
 const noop = () => {};
 
 function PhotoWall({ photos }: { photos: SharedPhoto[] }) {
@@ -53,10 +52,12 @@ export function ShareView() {
 
   // trip share — render the visits on a map
   const items: Item[] = data.visits.map((v) => ({
-    id: v.id, kind: v.kind, title: v.title, notes: v.notes, themeId: null, tripId: data.trip.id,
+    id: v.id, kind: v.kind, title: v.title, notes: v.notes, themeId: v.themeId ?? null, tripId: data.trip.id,
     color: v.color, icon: v.icon, occurredOn: v.occurredOn, geometry: v.geometry, waypoints: [], photos: v.photos,
-    createdBy: null, createdByName: null, createdAt: "",
+    properties: v.properties ?? {}, createdBy: null, createdByName: null, createdAt: "",
   }));
+  // The family's look: its defaults and the themes its places use.
+  const themesById = new Map((data.themes ?? []).map((t) => [t.id, t]));
 
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}>
@@ -65,7 +66,7 @@ export function ShareView() {
         <MapView
           items={items}
           selectedItemId={null}
-          getStyle={(item) => resolveItemStyle(item, NO_THEMES)}
+          getStyle={(item) => resolveItemStyle(item, themesById, data.style)}
           pickMode={false}
           editMode={false}
           onPick={noop}

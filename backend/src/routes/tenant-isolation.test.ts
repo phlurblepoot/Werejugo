@@ -98,14 +98,14 @@ async function snapshotA(): Promise<string> {
 }
 let before = "";
 
-type Outcome = 400 | 403 | 404 | 503 | "clean";
+type Outcome = 400 | 403 | 404 | 422 | 503 | "clean";
 interface Case {
   /** The registered route this covers, e.g. "GET /api/visits/:id". */
   route: string;
   /** What family B sends. Ids are filled in lazily (the fixture runs first). */
   url: () => string;
   payload?: () => object;
-  /** 400/403/404/503 exactly, or "clean": any 2xx whose body mentions nothing of family A. */
+  /** 400/403/404/422/503 exactly, or "clean": any 2xx whose body mentions nothing of family A. */
   expect: Outcome;
   note?: string;
 }
@@ -197,6 +197,7 @@ const CASES: Case[] = [
   c("GET /api/suggestions", () => `/api/suggestions?for=trip:${A.trip}`, 404),
   c("GET /api/suggestions", () => `/api/suggestions?for=visit:${A.visit}`, 404, undefined, "their place"),
   c("GET /api/suggestions", () => "/api/suggestions?for=library", "clean"),
+  c("POST /api/cruises/from-photos", () => "/api/cruises/from-photos", 422, () => ({ from: "2024-06-01", to: "2024-06-03" }), "only my photos: theirs from those days aren't used"),
   c("POST /api/suggestions/apply", () => "/api/suggestions/apply", 404, () => ({ key: `trip-photos:${A.trip}` })),
   c("POST /api/suggestions/apply", () => "/api/suggestions/apply", 404, () => ({ key: `trip-person:${A.trip}:${A.person}` }), "their person on their trip"),
   c("POST /api/suggestions/dismiss", () => "/api/suggestions/dismiss", 404, () => ({ key: `visit-photos:${A.visit}` })),
@@ -343,11 +344,13 @@ const EXEMPT: Record<string, string> = {
   "GET /api/geo/search": "external lookup",
   "GET /api/lookup/cruise/lines": "external lookup",
   "GET /api/lookup/cruise/ships": "external lookup",
-  "POST /api/lookup/cruise": "external lookup",
   "POST /api/lookup/cruise/diagnose": "external lookup",
   "POST /api/lookup/cruise/find": "external lookup",
+  "POST /api/lookup/cruise/match": "external lookup",
   "POST /api/lookup/cruise/sailing": "external lookup",
   "POST /api/lookup/flight": "external lookup",
+  "POST /api/routes/road": "a line through the points given, from a routing server (no family data)",
+  "POST /api/routes/sea": "a line through the points given, worked out locally (no family data)",
 };
 
 describe("family B can't reach family A's data", () => {

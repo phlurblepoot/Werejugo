@@ -30,8 +30,8 @@ export const BASE_PIN = {
 };
 
 /**
- * Resolve an item's full pin style, layering (lowest → highest precedence):
- * base → family default → per-kind default → theme → per-item override.
+ * Resolve an item's full pin and trail style. Highest first, for every part:
+ * the item's own → its theme → its cruise line's → its kind's → the family's → the base.
  */
 export function resolveItemStyle(item: Item, themesById: Map<string, Theme>, settings?: FamilySettings): ItemStyle {
   const base = KIND_DEFAULTS[item.kind] ?? KIND_DEFAULTS.place;
@@ -50,7 +50,7 @@ export function resolveItemStyle(item: Item, themesById: Map<string, Theme>, set
   const pLine = lineName ? (path?.byLine?.[lineName] ?? {}) : {};
   const itemPath = (item.properties?.path ?? {}) as PathStyle;
   const pathStyle = itemPath.style ?? pLine.style ?? pKind.style ?? pFam.style ?? "solid";
-  const lineColor = itemPath.color ?? pLine.color ?? pKind.color ?? pFam.color ?? theme?.lineColor ?? base.lineColor;
+  const lineColor = itemPath.color ?? theme?.lineColor ?? pLine.color ?? pKind.color ?? pFam.color ?? base.lineColor;
   const lineWidth = itemPath.width ?? pLine.width ?? pKind.width ?? pFam.width ?? (isPatternStyle(pathStyle) ? 9 : base.lineWidth);
   const pathImageUrl = itemPath.imageUrl ?? pLine.imageUrl ?? pKind.imageUrl ?? pFam.imageUrl;
 
@@ -66,6 +66,24 @@ export function resolveItemStyle(item: Item, themesById: Map<string, Theme>, set
     borderWidth: itemPin.borderWidth ?? lineS.borderWidth ?? kindS.borderWidth ?? fam.borderWidth ?? BASE_PIN.borderWidth,
     borderColor: itemPin.borderColor ?? lineS.borderColor ?? kindS.borderColor ?? fam.borderColor ?? BASE_PIN.borderColor,
   };
+}
+
+/**
+ * What an item of this kind (with this theme and cruise line) gets when it
+ * doesn't choose for itself: the editor saves only what differs from this.
+ * `pathStyle`: the item's own trail style, which sets the default width.
+ */
+export function inheritedStyle(
+  kind: ItemKind,
+  opts: { themeId?: string | null; cruiseLine?: string; pathStyle?: string },
+  themesById: Map<string, Theme>,
+  settings?: FamilySettings,
+): ItemStyle {
+  const pseudo = {
+    kind, themeId: opts.themeId ?? null, color: null, icon: null,
+    properties: { ...(opts.cruiseLine ? { cruiseLine: opts.cruiseLine } : {}), ...(opts.pathStyle ? { path: { style: opts.pathStyle } } : {}) },
+  } as unknown as Item;
+  return resolveItemStyle(pseudo, themesById, settings);
 }
 
 /** The default size/shape/border for a kind, from settings (per-kind → family → base). */

@@ -61,3 +61,19 @@ test("an unknown token is 404", async () => {
   const res = await ctx.app.inject({ method: "GET", url: "/api/share/nope" });
   expect(res.statusCode).toBe(404);
 });
+
+test("a trip share carries the family's map look: its defaults, its themes, each place's own style", async () => {
+  await query("UPDATE families SET settings = $2 WHERE id = $1", [ctx.familyId, {
+    pin: { byKind: { place: { color: "#123456" } } }, path: { default: { style: "dashed" } }, map: { styleUrl: "https://tiles.example/s.json" }, note: "private",
+  }]);
+  const theme = (await query<{ id: string }>("INSERT INTO themes (family_id, name, kind, icon, color, line_color) VALUES ($1, 'Ruins', 'place', 'landmark', '#aa5500', '#aa5500') RETURNING id", [ctx.familyId])).rows[0].id;
+  await query(
+    `INSERT INTO visits (family_id, trip_id, kind, title, theme_id, properties, geom) VALUES ($1, $2, 'place', 'Forum', $3, $4, ST_SetSRID(ST_MakePoint(12.48, 41.89), 4326))`,
+    [ctx.familyId, tripId, theme, { pin: { size: 36 }, cruise: { ship: "private-ish" } }]);
+  const b = (await ctx.app.inject({ method: "GET", url: `/api/share/${tripToken}` })).json();
+  expect(b.style).toEqual({ pin: { byKind: { place: { color: "#123456" } } }, path: { default: { style: "dashed" } } });
+  expect(b.themes).toEqual([expect.objectContaining({ id: theme, color: "#aa5500", icon: "landmark", lineColor: "#aa5500" })]);
+  const forum = b.visits.find((v: { title: string }) => v.title === "Forum");
+  expect(forum).toMatchObject({ themeId: theme, properties: { pin: { size: 36 } } });
+  expect(forum.properties.cruise).toBeUndefined();
+});

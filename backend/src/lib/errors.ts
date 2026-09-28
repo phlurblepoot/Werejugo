@@ -3,7 +3,8 @@ import { ZodError } from "zod";
 
 /** An error with an HTTP status that is safe to show to the user. */
 export class HttpError extends Error {
-  constructor(public readonly statusCode: number, message: string) {
+  /** `extra` goes in the response beside `error` (such as `blocked: true`). */
+  constructor(public readonly statusCode: number, message: string, public readonly extra?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -12,6 +13,8 @@ export const badRequest = (message = "Invalid request") => new HttpError(400, me
 export const forbidden = (message = "You can't do that") => new HttpError(403, message);
 export const notFound = (message = "Not found") => new HttpError(404, message);
 export const conflict = (message = "That already exists") => new HttpError(409, message);
+/** An outside service Werejugo needs isn't answering (say what to do instead). */
+export const unavailable = (message = "Try again in a moment") => new HttpError(503, message);
 
 // Postgres error codes that mean "the input was wrong", not "the server broke".
 const PG_BAD_INPUT = new Set(["22P02", "22007", "22008", "22003", "22001", "23514", "23502"]);
@@ -35,7 +38,7 @@ export function installErrorHandling(app: FastifyInstance): void {
   });
 
   app.setErrorHandler((err: FastifyError | Error, req, reply) => {
-    if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message });
+    if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message, ...err.extra });
     if (err instanceof ZodError) return reply.code(400).send({ error: err.flatten() });
 
     const pgCode = (err as { code?: unknown }).code;

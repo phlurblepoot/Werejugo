@@ -1,6 +1,6 @@
 import pg from "pg";
 
-// Ensure the test database exists, then run migrations against it.
+// Ensure the test database exists, run migrations against it, and load the reference data.
 export async function setup(): Promise<void> {
   const url = new URL(process.env.DATABASE_URL!);
   const dbName = url.pathname.slice(1);
@@ -24,5 +24,8 @@ export async function setup(): Promise<void> {
     await pool.query("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
     await migrate();
   }
+  // The bundled airports and ports (skipped when unchanged since the last run).
+  const { loadReferenceData } = await import("../db/reference.js");
+  await loadReferenceData();
   await pool.end();
 }

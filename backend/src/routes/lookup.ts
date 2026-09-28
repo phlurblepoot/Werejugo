@@ -1,13 +1,13 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { requireAuth } from "../lib/auth.js";
+import { requireAdmin, requireAuth } from "../lib/auth.js";
+import { ymd } from "../lib/validate.js";
 import { lookupFlightByCodes, lookupFlightByNumber } from "../services/flightLookup.js";
 import {
   diagnoseCruise,
   findCruise,
   getSailingDetail,
-  lookupCruiseByPorts,
-  lookupCruiseByShip,
+  matchItinerary,
   searchCruiseLines,
   searchCruiseShips,
 } from "../services/cruiseLookup.js";
@@ -15,12 +15,11 @@ import { findPort, searchAirports, searchPorts, searchPlaces } from "../services
 
 const flightSchema = z.union([
   z.object({ codes: z.array(z.string().min(2).max(5)).min(2) }),
-  z.object({ flightNumber: z.string().min(2).max(10), date: z.string() }),
-]);
-
-const cruiseSchema = z.union([
-  z.object({ ports: z.array(z.string().min(1)).min(1) }),
-  z.object({ ship: z.string().min(2) }),
+  z.object({
+    // An airline's code and a number: "BA178", "WN 1234", "U2 8123".
+    flightNumber: z.string().regex(/^[A-Za-z0-9]{2,3}\s?\d{1,4}[A-Za-z]?$/, "A flight number looks like BA178"),
+    date: ymd,
+  }),
 ]);
 
 export async function lookupRoutes(app: FastifyInstance): Promise<void> {
@@ -32,14 +31,6 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     const b = parsed.data;
     const result =
       "codes" in b ? await lookupFlightByCodes(b.codes) : await lookupFlightByNumber(b.flightNumber, b.date);
-    return result;
-  });
-
-  app.post("/api/lookup/cruise", async (req, reply) => {
-    const parsed = cruiseSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
-    const b = parsed.data;
-    const result = "ports" in b ? await lookupCruiseByPorts(b.ports) : await lookupCruiseByShip(b.ship);
     return result;
   });
 
@@ -55,9 +46,21 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
 
   // Full itinerary for one sailing (ports on their dates + the real sailed route).
   app.post("/api/lookup/cruise/sailing", async (req, reply) => {
-    const parsed = z.object({ id: z.string().regex(/^\d+$/) }).safeParse(req.body);
+    const parsed = z.object({ id: z.string().regex(/^\d+$/), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "numeric sailing id required" });
-    return getSailingDetail(parsed.data.id);
+    return getSailingDetail(parsed.data.id, parsed.data.date);
+  });
+
+  // A past cruise: the same itinerary on another sailing (the ship's, or a sister ship's).
+  app.post("/api/lookup/cruise/match", async (req) => {
+    const b = z.object({
+      ship: z.string().max(200).optional(), shipUrl: z.string().url().optional(), line: z.string().max(200).optional(),
+      ports: z.array(z.object({ name: z.string().max(200).optional(), lng: z.number().min(-540).max(540), lat: z.number().min(-90).max(90) })).max(40).optional(),
+      departurePort: z.string().max(200).optional(),
+      nights: z.number().int().min(1).max(200).optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }).refine((d) => Boolean(d.ship || d.shipUrl), { message: "ship or shipUrl required" }).parse(req.body);
+    return matchItinerary(b);
   });
 
   // Autocomplete for cruise lines and ships (ships require a cruise line).
@@ -72,7 +75,7 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
 
   // Diagnostic: shows what this server actually receives from CruiseMapper, so the
   // scraper can be tuned to the real HTML. POST { "query": "symphony" } or { "url": "..." }.
-  app.post("/api/lookup/cruise/diagnose", async (req) => {
+  app.post("/api/lookup/cruise/diagnose", { preHandler: requireAdmin }, async (req) => {
     const b = (req.body ?? {}) as { url?: string; query?: string; selector?: string; raw?: boolean; maxLen?: number };
     return diagnoseCruise({ url: b.url, query: b.query, selector: b.selector, raw: b.raw, maxLen: b.maxLen });
   });
@@ -90,10 +93,13 @@ export async function lookupRoutes(app: FastifyInstance): Promise<void> {
     return searchPorts(q);
   });
 
+  // As you type (Photon); `near=lng,lat` (the map's centre) puts nearby places first.
   app.get("/api/geo/search", async (req) => {
-    const q = (req.query as { q?: string }).q ?? "";
-    if (q.length < 3) return [];
-    return searchPlaces(q);
+    const { q = "", near } = req.query as { q?: string; near?: string };
+    if (q.trim().length < 3) return [];
+    const [lng, lat] = (near ?? "").split(",").map(Number);
+    const ok = Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+    return searchPlaces(q, ok ? { near: { lng, lat } } : {});
   });
 
   // Resolve a single port/place name to coordinates (dataset, then geocoder).

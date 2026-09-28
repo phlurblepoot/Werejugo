@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MEDIA_ACCEPT } from "../shared/MediaUploader";
-import { api, type Photo } from "../../api/client";
+import { api, type MediaDto, type Photo } from "../../api/client";
 import { MediaThumb } from "../MediaThumb";
 import { MediaUploader } from "../shared/MediaUploader";
 
@@ -11,11 +11,21 @@ interface Props {
   existing: Photo[];
   staged: StagedPhoto[];
   onStaged: (staged: StagedPhoto[]) => void;
-  onExistingChanged: () => void;           // refresh after add/delete on a saved visit
+  /** A saved visit's photos changed (added or removed): refresh the map, keeping the editor open. */
+  onPhotosChanged?: () => void;
 }
 
-export function VisitPhotos({ visitId, existing, staged, onStaged, onExistingChanged }: Props) {
+export function VisitPhotos({ visitId, existing, staged, onStaged, onPhotosChanged }: Props) {
   const [local, setLocal] = useState<Photo[]>(existing);
+
+  // A saved visit's upload: shown here straight away.
+  function uploaded(m: MediaDto) {
+    setLocal((prev) => prev.some((p) => p.id === m.id) ? prev : [...prev, {
+      id: m.id, url: m.url, thumbUrl: m.thumbUrl, videoUrl: m.videoUrl, originalUrl: m.originalUrl,
+      mediaType: m.kind, caption: m.caption, seq: prev.length,
+    }]);
+    onPhotosChanged?.();
+  }
 
   function addFiles(files: FileList) {
     const next = Array.from(files).map((file) => ({ file, caption: "", preview: URL.createObjectURL(file) }));
@@ -28,6 +38,7 @@ export function VisitPhotos({ visitId, existing, staged, onStaged, onExistingCha
   async function deleteExisting(id: string) {
     await api.deletePhoto(id);
     setLocal((prev) => prev.filter((p) => p.id !== id));
+    onPhotosChanged?.();
   }
   async function saveCaption(id: string, caption: string) {
     setLocal((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
@@ -59,7 +70,7 @@ export function VisitPhotos({ visitId, existing, staged, onStaged, onExistingCha
 
       {visitId ? (
         // Saved visit: upload + link immediately via the shared component.
-        <MediaUploader multiple linkTo={`visit:${visitId}`} label="+ Add photos" onUploaded={onExistingChanged} />
+        <MediaUploader multiple linkTo={`visit:${visitId}`} label="+ Add photos" onUploaded={uploaded} />
       ) : (
         <>
           <input data-testid="visit-photo-input" type="file" accept={MEDIA_ACCEPT} multiple style={{ marginTop: 8 }}

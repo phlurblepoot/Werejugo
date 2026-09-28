@@ -1,4 +1,4 @@
-import { api, type CruiseSailing } from "../../api/client";
+import { api, type CruiseSailing, type ItineraryMatch } from "../../api/client";
 import { Autocomplete } from "../Autocomplete";
 import { StopBuilder } from "../StopBuilder";
 import { useCruiseLookup } from "./useCruiseLookup";
@@ -9,8 +9,19 @@ interface Props {
   set: (patch: Partial<VisitDraft>) => void;
 }
 
+const PORT_INPUT = "cruise-port-search";
+
+/** "Same ports", "4 of 5 ports in order", or (no ports to compare) "Same length, from Miami". */
+function matchLabel(m: ItineraryMatch, ports: number): string {
+  if (!ports) return `Same length, from ${m.ports[0]?.label ?? "the same port"}`;
+  if (m.score >= 0.99) return "Same ports";
+  return `${Math.round(m.score * Math.max(ports, m.ports.length))} of ${Math.max(ports, m.ports.length)} ports in order`;
+}
+
 export function CruiseForm({ draft, set }: Props) {
   const c = useCruiseLookup(draft, set);
+  const today = new Date().toISOString().slice(0, 10);
+  const past = !!draft.occurredOn && draft.occurredOn < today;
 
   return (
     <>
@@ -35,7 +46,14 @@ export function CruiseForm({ draft, set }: Props) {
             onText={c.onShipText}
             onPick={(item) => c.onShipPick(item.name, item.url)}
           />
-          <input type="date" value={draft.occurredOn} onChange={(e) => set({ occurredOn: e.target.value })} title="Sail date" style={{ maxWidth: 150 }} />
+        </div>
+        <div className="row" style={{ marginTop: 6, gap: 8 }}>
+          <label style={{ flex: 1 }}>Sailed
+            <input type="date" value={draft.occurredOn} onChange={(e) => set({ occurredOn: e.target.value })} />
+          </label>
+          <label style={{ flex: 1 }}>Back
+            <input type="date" value={draft.occurredEnd} min={draft.occurredOn || undefined} onChange={(e) => set({ occurredEnd: e.target.value })} />
+          </label>
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 13, color: "var(--text)" }}>
           <input type="checkbox" style={{ width: "auto" }} checked={c.reuse} onChange={(e) => c.setReuse(e.target.checked)} />
@@ -46,6 +64,34 @@ export function CruiseForm({ draft, set }: Props) {
         </button>
 
         {c.result?.shipName && <div style={{ marginTop: 6, fontSize: 13 }}>Found: <strong>{c.result.shipName}</strong></div>}
+
+        {past && (
+          <div className="past-cruise" role="region" aria-label="A past cruise" style={{ marginTop: 10 }}>
+            <div className="sub">CruiseMapper only lists sailings from now on. For a cruise in the past:</div>
+            <div className="row" style={{ marginTop: 6, gap: 6, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => void c.findSameItinerary()} disabled={c.busy || !draft.ship.trim()}>
+                Find the same itinerary
+              </button>
+              <button type="button" onClick={() => document.getElementById(PORT_INPUT)?.focus()}>Build from ports</button>
+              <button type="button" onClick={() => void c.buildFromPhotos()} disabled={c.busy}>Build from my photos</button>
+            </div>
+            <div className="sub" style={{ marginTop: 4 }}>
+              {draft.stops.length >= 2
+                ? "Looks for a sailing of this ship, or its sister ships, visiting these ports in this order."
+                : "Add the ports below first for the best match, or it looks for sailings of the same length from the same port."}
+            </div>
+            {c.matches && c.matches.length > 0 && (
+              <div className="sailing-list" style={{ marginTop: 6 }} aria-label="Matching sailings">
+                {c.matches.map((m) => (
+                  <button key={m.sailing.id} type="button" className="sailing-row" onClick={() => c.applyMatch(m)}>
+                    <span className="sailing-title">{m.sailing.ship} · {m.sailing.title}</span>
+                    <span className="sailing-dep">{matchLabel(m, draft.stops.length >= 2 ? draft.stops.length : 0)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {c.result && c.result.sailings.length > 0 && (
           <div style={{ marginTop: 8 }}>
@@ -74,6 +120,13 @@ export function CruiseForm({ draft, set }: Props) {
         )}
       </div>
 
+      {c.problem && (
+        <div className="warnings" role="alert">
+          {c.problem.message}
+          {c.problem.retry && <button type="button" style={{ marginLeft: 8 }} onClick={c.problem.retry}>Try again</button>}
+        </div>
+      )}
+
       {c.warnings.length > 0 && (
         <div className="warnings">{c.warnings.map((w, i) => <div key={i}>• {w}</div>)}</div>
       )}
@@ -92,7 +145,15 @@ export function CruiseForm({ draft, set }: Props) {
         </div>
       )}
 
-      <StopBuilder stops={draft.stops} onChange={(stops) => set({ stops, routePath: null })} source="ports" label="Ports of call (in order)" />
+      <StopBuilder
+        stops={draft.stops}
+        onChange={(stops) => set({ stops, routePath: null })}
+        source="ports"
+        label="Ports of call (in order)"
+        dated
+        startDate={draft.occurredOn}
+        inputId={PORT_INPUT}
+      />
     </>
   );
 }

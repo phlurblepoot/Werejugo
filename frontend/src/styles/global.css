@@ -215,6 +215,12 @@ textarea { resize: vertical; min-height: 72px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; }
+/* A stop in a route: its name takes the room, the day and the buttons only what they need. */
+.stop-row { align-items: center; margin-bottom: 4px; gap: 4px; }
+.stop-row > * { flex: none; }
+.stop-row > .stop-label { flex: 1; min-width: 0; font-size: 13px; }
+.stop-row > input[type="date"] { width: 150px; }
+.stop-row > button { padding-left: 10px; padding-right: 10px; }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .swatch {
@@ -343,6 +349,12 @@ textarea { resize: vertical; min-height: 72px; }
 .sailing-date { color: var(--color-text); white-space: nowrap; }
 .sailing-title { color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sailing-dep { color: var(--color-text-muted); white-space: nowrap; }
+/* Matching sailings for a past cruise: whole-row buttons, the title first. */
+button.sailing-row {
+  width: 100%; grid-template-columns: 1fr auto; text-align: left; background: none; border: none;
+  border-bottom: 1px solid var(--color-border); border-radius: 0; min-height: 36px;
+}
+button.sailing-row .sailing-title { color: var(--color-text); }
 
 /* ---- Comments ---- */
 .comment { padding: 8px 0; border-bottom: 1px solid var(--color-border); }
@@ -404,6 +416,13 @@ textarea { resize: vertical; min-height: 72px; }
   padding: 8px 14px; box-shadow: var(--shadow-lg);
 }
 .timeline-date { font-variant-numeric: tabular-nums; font-size: var(--text-sm); min-width: 88px; text-align: right; }
+.timeline-track { flex: 1; position: relative; min-width: 0; padding: 14px 0 12px; }
+.timeline-track input[type="range"] { width: 100%; margin: 0; position: relative; }
+.timeline-density { position: absolute; left: 0; right: 0; top: 0; height: 14px; display: flex; align-items: flex-end; gap: 1px; pointer-events: none; }
+.timeline-density span { flex: 1; background: var(--color-accent); opacity: 0.45; border-radius: 1px 1px 0 0; }
+.timeline-ticks { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; pointer-events: none; }
+.timeline-ticks span { position: absolute; transform: translateX(-50%); font-size: 10px; line-height: 12px; color: var(--color-text-muted); white-space: nowrap; }
+.timeline-bar .chip { white-space: nowrap; }
 
 .map-edit-banner {
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5;
@@ -570,10 +589,19 @@ button.primary.is-success { background: var(--color-success) !important; border-
   .photo-grid-lib { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 3px; }
 
   .first-run-card { width: calc(100vw - 32px); bottom: calc(var(--tabbar-h) + 12px + var(--safe-bottom)); }
-  .timeline-bar { bottom: calc(12px + var(--safe-bottom)); }
+  /* The slider gets a row of its own: the buttons, date and chip above it. */
+  .timeline-bar { bottom: calc(12px + var(--safe-bottom)); width: calc(100% - 24px); flex-wrap: wrap; row-gap: 2px; border-radius: var(--radius-lg); padding: 8px 12px 6px; }
+  .timeline-track { order: 5; flex-basis: 100%; }
+  .timeline-date { min-width: 0; margin-left: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .confetti { display: none; }
 }
+
+/* A cruise line with a look of its own, under Cruise in the legend. */
+.legend-sub { padding-left: 16px; font-size: var(--text-xs); cursor: default; }
+/* Editing a theme in "Themes & icons". */
+.theme-edit { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 8px; margin-bottom: 8px; }
+.style-own, .style-inherited { margin: -4px 0 10px; }

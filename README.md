@@ -62,6 +62,8 @@ Outside production a missing `JWT_SECRET` only logs a warning; with `NODE_ENV=pr
 | `UPLOADS_DIR` | Custom pin icons, and photos and videos while they upload (each is removed once Immich has it). Leave room for the largest batch you'll upload | `/app/uploads` |
 | `MAX_UPLOAD_GB` | The largest single photo or video that can be uploaded | `20` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `http://localhost:8080` |
+| `PHOTON_URL` | Place search as you type ([Photon](https://photon.komoot.io); answers are cached). Self-host it to keep searches in the house | `https://photon.komoot.io` |
+| `ROUTING_URL` | Road routes for road trips (any [OSRM](https://project-osrm.org) server), asked only when a drive's stops change | `https://routing.openstreetmap.de/routed-car` |
 
 ## Photos (Immich)
 
@@ -85,6 +87,18 @@ Each family's photos and videos live in its own account on an [Immich](https://i
 **Uploading:** files go up in 8 MB pieces (well under Cloudflare's 100 MB request limit), three at a time, with each file's progress in the upload panel at the bottom of the screen. A dropped connection is retried on its own; after a reload, choose the same file again and it continues where it stopped. Once a file is in, Werejugo hands it to Immich in the background, so you can leave the page; a photo added to a place or person is linked to it when it arrives. A file already in the library says "Already in your library" (and comes back out of Immich's trash if it was deleted). iPhone HEIC and Live Photos, camera RAW files and videos go to Immich as they are. On an iPhone, Safari usually sends a JPEG copy and only the still of a Live Photo; for full quality, back the phone up with Immich's own app (the photos then appear in Werejugo through the sync).
 
 > **Upgrading from Milestone 1:** photos uploaded before Immich was added aren't carried over (the milestone ran on test data). Their files stay in the `storage` folder under `families/<id>/…/photos` and `families/<id>/loose/`; delete those folders once you no longer need them.
+
+## Map data
+
+Werejugo ships its own lists of places to pick from, loaded into the database at start-up (only when they change):
+
+- **Ports:** about 15,000. They come from the World Port Index (NGA Pub. 150, public domain; via [tayljordan/ports](https://github.com/tayljordan/ports), MIT), UN/LOCODE ports (UNECE) and [searoute-ts](https://github.com/mayurrawte/searoute-ts)'s port list, merged with Werejugo's own list of cruise ports. Ports seen on CruiseMapper sailings (private islands and the like) are added as they're found.
+- **Airports:** every airport with an IATA code (about 9,000), from [OurAirports](https://ourairports.com/data/) (public domain).
+
+- **Sea routes:** a cruise's line between ports follows water, worked out on Werejugo's own server. It's routed on a world map of land and water (0.05°, about 5 km) drawn from [Natural Earth](https://www.naturalearthdata.com)'s coastlines (public domain), with Eurostat's shipping-lane network (from [searoute-ts](https://github.com/mayurrawte/searoute-ts), EUPL-1.2 data) drawn in, so canals and narrow straits stay open and routes lean towards real lanes.
+- **Road routes** for road trips come from an OSRM server (`ROUTING_URL`), and are stored with the trip.
+
+`cd backend && npx tsx scripts/build-reference-data.ts` rebuilds the ports and airports, and `npx tsx scripts/build-sea-mask.ts` the land and water map (`backend/src/data/`), from their pinned sources.
 
 ## Modules
 

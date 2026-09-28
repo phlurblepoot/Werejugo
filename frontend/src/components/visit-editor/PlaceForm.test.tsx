@@ -18,3 +18,9 @@ test("shows the current coordinates and a pick button", () => {
   fireEvent.click(screen.getByText(/Pick on map/));
   expect(onPick).toHaveBeenCalled();
 });
+
+test("place search puts places near this one first", async () => {
+  render(<PlaceForm point={[-74, 40.7]} onSelect={() => {}} onPick={() => {}} onPhotoLocation={() => {}} />);
+  fireEvent.change(screen.getByPlaceholderText(/Search a place/), { target: { value: "pizza" } });
+  await vi.waitFor(() => expect(searchPlaces).toHaveBeenCalledWith("pizza", [-74, 40.7]));
+});

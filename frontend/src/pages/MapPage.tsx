@@ -5,7 +5,8 @@ import { BarChart3, FileUp, Map as MapIcon, Palette, SlidersHorizontal } from "l
 import { api, type Item, type Photo, type Theme } from "../api/client";
 import { useAuth } from "../lib/auth";
 import { resolveItemStyle } from "../lib/style";
-import { buildRoutePath, type LngLat } from "../lib/geo";
+import type { LngLat } from "../lib/geo";
+import { computeRoute } from "../lib/routing";
 import { loadCountries, visitedCountryIds, type CountryCollection } from "../lib/countries";
 import { applyFilters, isMine, readFilters, writeFilters, yearsOf, type MapFilters } from "../lib/mapFilters";
 import { MapView } from "../components/MapView";
@@ -54,13 +55,21 @@ export function MapPage() {
 
   const [timelineOn, setTimelineOn] = useState(false);
   const [timelineCursor, setTimelineCursor] = useState<string | null>(null);
+  // While the timeline plays, places without a date stay on the map unless hidden.
+  const [showUndated, setShowUndated] = useState(true);
   const filterKey = params.toString();
   const filteredItems = useMemo(() => {
     const matching = applyFilters(items, filters, myFamilyId);
     if (!timelineOn || !timelineCursor) return matching;
-    return matching.filter((i) => i.occurredOn && i.occurredOn <= timelineCursor);
+    return matching.filter((i) => (i.occurredOn ? i.occurredOn <= timelineCursor : showUndated));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, filterKey, myFamilyId, timelineOn, timelineCursor]);
+  }, [items, filterKey, myFamilyId, timelineOn, timelineCursor, showUndated]);
+  // The filters (not the open place): when they change, the map frames what's left.
+  const frameKey = useMemo(() => {
+    const p = new URLSearchParams(params);
+    p.delete("visit");
+    return p.toString();
+  }, [params]);
   // The legend counts what every other filter leaves, so a hidden kind can be switched back on.
   const legendItems = useMemo(
     () => applyFilters(items, { ...filters, kinds: [] }, myFamilyId),
@@ -130,20 +139,26 @@ export function MapPage() {
 
   // Pick-on-map coordination
   const [pickActive, setPickActive] = useState(false);
-  const pickResolver = useRef<((c: [number, number]) => void) | null>(null);
-  function requestPick(): Promise<[number, number]> {
+  const pickResolver = useRef<((c: [number, number] | null) => void) | null>(null);
+  function requestPick(): Promise<[number, number] | null> {
     setPickActive(true);
     return new Promise((resolve) => {
       pickResolver.current = resolve;
     });
   }
-  function handlePick(lng: number, lat: number) {
-    if (pickResolver.current) {
-      pickResolver.current([lng, lat]);
-      pickResolver.current = null;
-    }
+  function endPick(at: [number, number] | null) {
+    pickResolver.current?.(at);
+    pickResolver.current = null;
     setPickActive(false);
   }
+  const handlePick = (lng: number, lat: number) => endPick([lng, lat]);
+  // Escape (or the banner's Cancel) ends picking without a spot.
+  useEffect(() => {
+    if (!pickActive) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") endPick(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pickActive]);
 
   const refreshItems = () => qc.invalidateQueries({ queryKey: ["visits"] });
 
@@ -154,8 +169,12 @@ export function MapPage() {
   async function moveItemWaypoint(item: Item, index: number, lng: number, lat: number) {
     const waypoints = item.waypoints.map((w, i) => (i === index ? { ...w, lng, lat } : w));
     const coords = waypoints.map((w) => [w.lng, w.lat] as LngLat);
-    const path = buildRoutePath(item.kind, coords);
-    await api.updateItem(item.id, { waypoints, geometry: { type: "LineString", coordinates: path } });
+    // Along roads for a drive, across water for a cruise (a moved port ends a CruiseMapper track).
+    const { path, route, note } = await computeRoute(item.kind, coords);
+    await api.updateItem(item.id, {
+      waypoints, geometry: { type: "LineString", coordinates: path }, properties: { ...item.properties, route },
+    });
+    if (note) toast(note, "info");
     refreshItems();
   }
 
@@ -222,6 +241,7 @@ export function MapPage() {
         <MapView
           styleUrl={settings?.map?.styleUrl}
           items={filteredItems}
+          frameKey={frameKey}
           selectedItemId={selectedItemId}
           getStyle={(item) => resolveItemStyle(item, themesById, settings)}
           pickMode={pickActive}
@@ -250,9 +270,16 @@ export function MapPage() {
             <span>No places yet — hit <strong>+ Add to map</strong> to drop your first memory.</span>
           </div>
         )}
-        <Legend items={legendItems} kindFilter={filters.kinds} onToggleKind={toggleKind} />
+        <Legend items={legendItems} kindFilter={filters.kinds} onToggleKind={toggleKind} settings={settings} />
         {timelineOn && (
-          <TimelineBar items={items} cursor={timelineCursor} onCursor={setTimelineCursor} onClose={() => setTimelineOn(false)} />
+          <TimelineBar
+            items={items}
+            cursor={timelineCursor}
+            onCursor={setTimelineCursor}
+            onClose={() => setTimelineOn(false)}
+            showUndated={showUndated}
+            onShowUndated={setShowUndated}
+          />
         )}
       </div>
 
@@ -263,6 +290,8 @@ export function MapPage() {
           trips={trips}
           customIcons={customIcons}
           onRequestPick={requestPick}
+          onCancelPick={() => endPick(null)}
+          onPhotosChanged={refreshItems}
           onClose={() => setEditorOpen(false)}
           onSaved={handleItemSaved}
           onIconsChanged={() => qc.invalidateQueries({ queryKey: ["icons"] })}
@@ -286,6 +315,7 @@ export function MapPage() {
       {panel === "appearance" && (
         <SettingsPanel
           settings={settings ?? {}}
+          canEdit={user?.role === "owner"}
           customIcons={customIcons}
           onClose={() => setPanel(null)}
           onSaved={() => { setPanel(null); qc.invalidateQueries({ queryKey: ["settings"] }); }}

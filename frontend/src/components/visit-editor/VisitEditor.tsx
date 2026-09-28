@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  api, type CustomIcon, type Item, type LookupResult,
+  api, type CustomIcon, type Item,
   type PathSettings, type PinSettings, type Theme,
 } from "../../api/client";
 import { ITEM_KINDS, KIND_LABELS } from "../../lib/style";
@@ -12,13 +12,20 @@ import { DriveForm } from "./DriveForm";
 import { AppearanceTab } from "./AppearanceTab";
 import { VisitPhotos, type StagedPhoto } from "./VisitPhotos";
 import { useUploads } from "../../lib/uploads/UploadsProvider";
+import { useAutoRoute } from "./useAutoRoute";
+import { newId } from "../../lib/newId";
+import { formatDistance } from "../../lib/routing";
 
 interface Props {
   item: Item | null;
   themes: Theme[];
   trips: { id: string; name: string }[];
   customIcons: CustomIcon[];
-  onRequestPick: () => Promise<[number, number]>;
+  /** Pick a spot on the map; null when picking was cancelled. */
+  onRequestPick: () => Promise<[number, number] | null>;
+  onCancelPick?: () => void;
+  /** A saved place's photos changed (refresh the map; the editor stays open). */
+  onPhotosChanged?: () => void;
   onClose: () => void;
   onSaved: () => void;
   onIconsChanged?: () => void;
@@ -29,29 +36,31 @@ interface Props {
 export function VisitEditor(props: Props) {
   const { item, themes, trips, customIcons, onRequestPick, onClose, onSaved } = props;
   const editing = Boolean(item);
-  const { draft, set, setKind, applyTheme, validate, buildPayload } = useVisitDraft(item, props.pinSettings, props.pathSettings);
+  const { draft, set, setKind, applyTheme, validate, buildPayload, inherited } = useVisitDraft(item, props.pinSettings, props.pathSettings, themes);
   const [tab, setTab] = useState<"details" | "appearance">("details");
   const [staged, setStaged] = useState<StagedPhoto[]>([]);
-  const savedId = item?.id ?? null; // non-null only when editing an existing visit
+  // Set once the place exists (editing, or after the first save): later saves update it.
+  const [savedId, setSavedId] = useState<string | null>(item?.id ?? null);
+  // This new place's key: a create that's sent again (a retry) returns it instead of making another.
+  const [clientKey] = useState(newId);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorField, setErrorField] = useState<"title" | "location" | null>(null);
-  const [flightResult, setFlightResult] = useState<LookupResult | null>(null);
 
   const isPoint = POINT_KINDS.includes(draft.kind);
   const uploads = useUploads();
+  const { routing, note: routeNote } = useAutoRoute(draft, set);
+  const routeLabel = { road: "by road", sea: "by sea", cruisemapper: "as sailed", photos: "from your photos", "great-circle": "", straight: "in straight lines" };
 
   async function pickOnMap() {
     setPicking(true);
-    try { const [lng, lat] = await onRequestPick(); set({ point: [lng, lat] }); }
-    finally { setPicking(false); }
-  }
-
-  function applyFlight(r: LookupResult) {
-    setFlightResult(r);
-    if (r.title && !draft.title) set({ title: r.title });
-    set({ stops: r.waypoints.map((w, i) => ({ label: w.label, kind: (w.kind as any) ?? "stop", lng: w.lng, lat: w.lat, seq: i })) });
+    try {
+      const at = await onRequestPick();
+      if (at) set({ point: at });
+    } finally {
+      setPicking(false);
+    }
   }
 
   async function save() {
@@ -61,7 +70,8 @@ export function VisitEditor(props: Props) {
     setBusy(true);
     try {
       const payload = buildPayload();
-      const saved = editing && item ? await api.updateItem(item.id, payload) : await api.createItem(payload);
+      const saved = savedId ? await api.updateItem(savedId, payload) : await api.createItem({ ...payload, clientKey });
+      setSavedId(saved.id);
       // Staged photos upload in the background (the upload tray shows them);
       // the server links each one to the place when it arrives.
       if (staged.length) {
@@ -78,7 +88,10 @@ export function VisitEditor(props: Props) {
   if (picking) {
     return (
       <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 1100 }}>
-        <div className="warnings">Click on the map to set the location…</div>
+        <div className="warnings pick-banner" role="status">
+          Click on the map to set the location…
+          <button type="button" onClick={() => props.onCancelPick?.()}>Cancel</button>
+        </div>
       </div>
     );
   }
@@ -120,15 +133,18 @@ export function VisitEditor(props: Props) {
                 onPhotoLocation={(lat, lng, date) => { set({ point: [lng, lat] }); if (date && !draft.occurredOn) set({ occurredOn: date }); }}
               />
             ) : draft.kind === "flight" ? (
-              <FlightForm onResult={applyFlight} />
+              <FlightForm draft={draft} set={set} />
             ) : draft.kind === "cruise" ? (
               <CruiseForm draft={draft} set={set} />
             ) : (
               <DriveForm stops={draft.stops} onChange={(stops) => set({ stops, routePath: null })} />
             )}
 
-            {draft.kind === "flight" && flightResult && flightResult.warnings.length > 0 && (
-              <div className="warnings">{flightResult.warnings.map((w, i) => <div key={i}>• {w}</div>)}</div>
+            {!isPoint && (routing || routeNote || draft.route?.distanceM) && (
+              <div className="sub route-summary" role="status">
+                {routing ? "Finding the route…" : draft.route?.distanceM ? `${formatDistance(draft.route.distanceM)} ${routeLabel[draft.route.source]}`.trim() : null}
+                {!routing && routeNote && <div className="warnings">{routeNote}</div>}
+              </div>
             )}
 
             {draft.kind !== "cruise" && (
@@ -156,18 +172,18 @@ export function VisitEditor(props: Props) {
               existing={item?.photos ?? []}
               staged={staged}
               onStaged={setStaged}
-              onExistingChanged={onSaved}
+              onPhotosChanged={props.onPhotosChanged}
             />
           </>
         ) : (
-          <AppearanceTab draft={draft} set={set} applyTheme={applyTheme} themes={themes} customIcons={customIcons} onIconsChanged={props.onIconsChanged} />
+          <AppearanceTab draft={draft} set={set} applyTheme={applyTheme} inherited={inherited} themes={themes} customIcons={customIcons} onIconsChanged={props.onIconsChanged} />
         )}
 
         {error && !errorField && <div className="error-text">{error}</div>}
 
         <div className="modal-actions">
           <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+          <button className="primary" onClick={save} disabled={busy || routing}>{busy ? "Saving…" : routing ? "Finding the route…" : "Save"}</button>
         </div>
       </div>
     </div>

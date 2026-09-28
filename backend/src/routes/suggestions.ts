@@ -10,7 +10,7 @@ import { uuid } from "../lib/validate.js";
 /** Suggestions from photos (lib/suggest.ts): for a trip, a place, or the whole library. */
 
 // The photos' ids stay on the server; the browser gets the count and a few thumbnails.
-const dto = ({ mediaIds: _ids, ...s }: Suggestion) => s;
+const dto = ({ mediaIds: _ids, plan: _plan, ...s }: Suggestion) => s;
 const keySchema = z.string().min(3).max(200);
 
 export async function suggestionRoutes(app: FastifyInstance): Promise<void> {
